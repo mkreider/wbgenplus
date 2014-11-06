@@ -1,0 +1,48 @@
+<wbdevice>
+   
+   <codegen>
+      <generate language="vhdl"  documentation="yes" test="yes"></generate>
+      <generate language="c"     documentation="yes" test="yes"></generate>
+      <generate language="c++"   documentation="yes" test="yes"></generate>
+   </codegen>
+   
+   <generics>
+      <item name="channels"   type="uint">1</item>
+      <item name="fifo_depth" type="uint">64</item>
+      <item name="auto_msg"   type="bool">false</item>
+   </generics>
+    
+   <masterinterface name="irq_master">
+      <properties>
+         <interface  data="32" adr="32" type="pipelined"></interface>
+      </properties>
+   </masterinterface>     
+
+   <slaveinterface name="control_slave">
+      <properties>
+         <component  name="MyDevice" addressbits="auto" vendorID="GSI" deviceID="0x01234567" version="1" date="auto"></component>
+         <interface  data="32" adr="32" type="pipelined"></interface>
+      </properties>
+      <registers>
+         <range name="Control" first="auto" instances="single">
+           <reg   name="ACTIVE" read="yes" write="yes"  access="atomic" mask="f_1hotmsk(generics:channels)" comment="Turns trigger channels on or off"></reg>
+           <reg   name="STATUS" read="yes" write="no"   access="atomic" mask="interface:width" comment="Shows which channels contain Timestamps">
+               <field name="ID"        submask="0x000000ff"></field>
+               <field name="VALID"     submask="0x00000100"></field>
+               <field name="ERROR"     submask="0x00000200"></field>
+               <field name="CH_FLAGS"  submask="0xFFFF0000"></field>
+           </reg>
+           <reg   name="CHSEL"  read="yes" write="yes"  access="simple" mask="f_1hotmsk(f_logceil(generics:channels))" comment="Selects/Shows active channel"></reg>
+         </range>
+         <range name="Data" first="0x100" type="multi_select" value="Control:CHSEL" instances="generics:channels" > 
+           <fifo  name="TIMESTAMP_LO" read="yes" write="no"   mask="0xffffffff" comment="Low word of active channels Timestamp"></fifo>
+           <fifo  name="TIMESTAMP_HI" read="yes" write="no"   mask="0xffffffff" comment="High word of active channels Timestamp"></fifo>
+         </range>
+         <range name="Dummy" first="0x200" type="multi_offset" value="0x10" instances="generics:channels"> 
+           <fifo  name="TEST_LO" read="no" write="yes"   mask="0xffffffff" comment="Write Low word of dummy data"></fifo>
+           <fifo  name="TEST_HI" read="no" write="yes"   mask="0x0000ffff" comment="Write High word of dummy data"></fifo>
+         </range>
+      </registers>
+   </slaveinterface>
+    
+</wbdevice>
