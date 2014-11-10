@@ -82,11 +82,11 @@ class VhdlStr(object):
   
       
   
-    def fsmPageSel(self, pageSel):
+    def fsmPageSel(self, name, pageSel):
         if(pageSel == ""):
             return "\n"
         else:    
-            return self.wbsPageSelect % pageSel
+            return self.wbsPageSelect % (name, pageSel)
   
     def fsmRead(self, regList, name):
         s = []    
@@ -98,11 +98,11 @@ class VhdlStr(object):
                     ind = '(v_page)'
                 else:
                     ind = ""
-                #"when c_%s => r_%s_out.dat(r_%s'range) <= r_%s; %s\n"            
-                s.append(self.wbRead % (elem[0] + elem[1], name, elem[0]+ind, elem[0]+ind, elem[4]))
+                #  wbRead      = "when c_%s => r_%s_out.dat(r_%s.%s'range) <= r_%s.%s; %s\n"          
+                s.append(self.wbRead % (elem[0] + elem[1], name, name, elem[0]+ind, name, elem[0]+ind, elem[4]))
         return s
 
-    def fsmWrite(self, regList):
+    def fsmWrite(self, regList, name):
         s = []    
         #print "W ------------------------------ " 
         for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
@@ -111,38 +111,46 @@ class VhdlStr(object):
                     ind = '(v_page)'
                 else:
                     ind = ""
-                s.append(self.wbWrite % (elem[0] + elem[1], elem[0]+ind, elem[0]+ind, self.wrModes[elem[1]], elem[4]))
+                        
+                #wbWrite     = "when c_%s => r_%s.%s <= f_wb_wr(r_%s.%s, v_dat_i, v_sel, \"%s\"); %s\n"
+                s.append(self.wbWrite % (elem[0] + elem[1], name, elem[0]+ind, name, elem[0]+ind, self.wrModes[elem[1]], elem[4]))
         return s     
     
     def regs(self, regList, qty = 0):
-       s = []
-       m = []
+       recordelements   = []
+       types            = []
+       m                = []
        for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
            if(elem[0] != nextElem[0]):
                if(elem[3].find('m') > -1):
-                   m = self.multireg(elem, self.pages)
-                   #print "%s is a multi" % elem[0]
-                   #print m                         
-                   s += m                   
+                   types            += self.multitype(elem, self.pages)
+                   recordelements   += self.multielement(elem, self.pages)                    
                else:    
-                   s.append(self.reg(elem))
-       return s           
+                   recordelements.append(self.reg(elem))
+       return [types, recordelements]           
     
     def reg(self, (name, suf, msk, rw, desc, adr)):
         (idxHi, idxLo) = mskWidth(msk);        
-        s = self.signalSlv % ('r_' + name, idxHi-idxLo, 0, desc)        
+        s = self.signalSlv % (name, idxHi-idxLo, 0, desc)        
         return s
-        
-    def multireg(self, (name, suf, msk, rw, desc, adr), qty = 1):
+    
+
+    def multitype(self, (name, suf, msk, rw, desc, adr), qty = 1):
         s = []        
         (idxHi, idxLo) = mskWidth(msk);
         s.append('\n')        
         s.append(self.slvSubType % (name, idxHi-idxLo, 0)) #shift mask to LSB
-        #TODO: make it work without this shift!
         s.append(self.slvArrayType % (name, name))
-        print name, type(name), qty, type(qty)       
-        s.append(self.signalSlvArray % ('r_' + name, name, qty-1, desc))
-        #print s        
+        return s 
+    
+    def multielement(self, (name, suf, msk, rw, desc, adr), qty = 1):
+        s = []        
+        (idxHi, idxLo) = mskWidth(msk);
+        s.append('\n')        
+        if(type(qty) == int):
+            s.append(self.signalSlvArray % (name, name, (qty-1), desc))
+        else:
+            s.append(self.signalSlvArray % (name, name, qty + '-1', desc))
         return s    
               
     
@@ -150,14 +158,14 @@ class VhdlStr(object):
         s = self.constRegAdr % (name + suf, adr, adr, rw, msk, desc)        
         return s
     
-    def resets(self, regList):
+    def resets(self, regList, name):
        s = []
        for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
            if(elem[0] != nextElem[0]):
                if(elem[3].find('m') > -1):
-                   s.append("r_" + elem[0] + " <= (others =>(others => '0'));\n")                  
+                   s.append("r_" + name + '.' + elem[0] + " <= (others =>(others => '0'));\n")                  
                else:    
-                   s.append("r_" + elem[0] + " <= (others => '0');\n")
+                   s.append("r_" + name + '.' + elem[0] + " <= (others => '0');\n")
        return s
     
     wrModes = {'_GET'   : 'owr',
@@ -167,7 +175,7 @@ class VhdlStr(object):
                '_RW '   : 'owr'}    
     
     header      = ["-- File Name : %s\n",       # fileName
-                   "-- Design Unit Name : %s\n",    # unitName
+                   "-- Design Unit Name : %s\n",    # autoUnitName
                    "-- Revision : %s\n",            # Revision
                    "-- Author : %s\n",              # Author
                    "-- Created: %s\n"]              # Date        
@@ -175,26 +183,35 @@ class VhdlStr(object):
     libraries   = ["library ieee;\n",
                    "use ieee.std_logic_1164.all;\n",
                    "use ieee.numeric_std.all;\n",
-                   "use work.wishbone_pkg.all;\n\n"]
+                   "use work.wishbone_pkg.all;\n"]
                    
     
     nl          = "\n"
     snl          = ";\n"
     lnl         = "\n)\n"    
 
-    entityStart = "entity %s is\n" # unitName
-    entityGenStart = "generic(\n"
-    entityGenEnd = ");\n" 
-    componentStart = "component %s is\ngeneric(\n" # unitName
+
+    packageStart = "package %s_pkg is\n\n" # autoUnitName
+    componentStart = "component %s is\n" # autoUnitName
+    componentMid   = "Port(\n"    
+    componentEnd   = [");\n",
+                      "end component;\n\n"] 
+    packageBodyStart = "package body %s_pkg is\n" # autoUnitName 
+    packageEnd = "end %s_pkg;\n" # autoUnitName    
+    
+    entityStart = "entity %s is\n" # autoUnitName
+    genStart = "generic(\n"
+    genEnd = ");\n" 
+     
     entityMid   = "Port(\n"
     entityEnd   = ");\nend %s;\n\n"
     
-    archDecl    = "architecture rtl of %s is\n\n" # unitName
+    archDecl    = "architecture rtl of %s is\n\n" # autoUnitName
     archStart   = "\n\nbegin\n\n"
-    archEnd     = "end rtl;\n" # unitName
+    archEnd     = "end rtl;\n" # autoUnitName
     
-    #genport     = "%s : %s := %s" #name, type, default
-    signalSlv   = "signal %s : std_logic_vector(%u downto %u); %s\n" #name, idxHi, idxLo, desc
+    genport     = "g_%s : %s := %s%s -- %s\n" #name, type, default
+    signalSlv   = "%s : std_logic_vector(%u downto %u); %s\n" #name, idxHi, idxLo, desc
     signalSl    = "signal %s : std_logic; %s\n" #name, desc
     constRegAdr = "constant c_%s : natural := 16#%x#; -- 0x%02X, %s, _0x%08x %s\n" #name, adrVal, adrVal, rw, msk, desc
   
@@ -236,11 +253,11 @@ class VhdlStr(object):
                     "   r_%s_out.err    <= '0';\n",
                     "   r_%s_out.dat    <= (others => '0');\n" ] 
     
-    wbsPageSelect   = "v_page := to_integer(unsigned(r_%s));\n\n"    
+    wbsPageSelect   = "v_page := to_integer(unsigned(r_%s.%s));\n\n"    
     
     slvSubType      = "subtype t_slv_%s is std_logic_vector(%u downto %u);\n"
     slvArrayType    = "type    t_slv_%s_array is array(natural range <>) of t_slv_%s;\n"
-    signalSlvArray  = "signal %s : t_slv_%s_array(%u downto 0); %s\n"
+    signalSlvArray  = "%s : t_slv_%s_array(%s downto 0); %s\n"
       
 
     wbs2 = ["if(v_en = '1') then\n",
@@ -261,13 +278,27 @@ class VhdlStr(object):
             "   end if; -- clk edge\n",
             "end process;\n\n"]
 
-    wbWrite     = "when c_%s => r_%s <= f_wb_wr(r_%s, v_dat_i, v_sel, \"%s\"); %s\n"
+    wbWrite     = "when c_%s => r_%s.%s <= f_wb_wr(r_%s.%s, v_dat_i, v_sel, \"%s\"); %s\n"
     
-    wbRead      = "when c_%s => r_%s_out.dat(r_%s'range) <= r_%s; %s\n"
+    wbRead      = "when c_%s => r_%s_out.dat(r_%s.%s'range) <= r_%s.%s; %s\n"
     
     wbOthers    = "when others => r_%s_out.ack <= '0'; r_%s_out.err <= '1';\n"
 
-
+    sdbtemplate = ['constant c_%s_sdb : t_sdb_device := (',
+                   'abi_class => x"%s", -- %s',
+                   'abi_ver_major => x"%s",\n',
+                   'abi_ver_minor => x"%s",\n',
+                   'wbd_endian    => c_sdb_%s,\n',
+                   'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n',
+                   'sdb_component => (\n',
+                   'addr_first    => x"%s",\n',
+                   'addr_last     => x"%s",\n',
+                   'product => (\n',
+                   'vendor_id     => x"%s", -- %s\n',
+                   'device_id     => x"%s",\n',
+                   'version       => x"%s",\n',
+                   'date          => x"%s",\n',
+                   'name          => "%s")));\n']
     #def addGen(self, name, gtype, value, desc):
         #self.genList.append([name, gtype, value, desc])
 
@@ -289,6 +320,7 @@ class wbsIf():
         self.regs       = []        
         self.portList   = []
         self.regList    = []
+        self.recordList = []
         self.adrList    = []
         self.fsm        = []
         self.name       = name        
@@ -340,8 +372,15 @@ class wbsIf():
                 self.addReg(name, '_SET', msk, rw.translate(None, 'r'), "--> " + desc, adr, offs) 
 
   
+    def renderPortStub(self):
+        a = []        
+        a.append(self.v.slaveIf[0] % self.name)
+        a.append(self.v.slaveIf[1] % self.name)
+        self.portList = a # no need to indent, we'll do it later with all IF lists together  
+  
     def renderPorts(self):
         a = []        
+        a.append("%s_regs_o : out t_%s_regs;\n" % (self.name, self.name))        
         a.append(self.v.slaveIf[0] % self.name)
         a.append(self.v.slaveIf[1] % self.name)
         self.portList = a # no need to indent, we'll do it later with all IF lists together      
@@ -354,13 +393,13 @@ class wbsIf():
             hdr0.append(self.v.wbs0[i])
         hdr0 = iN(hdr0, 1)
         rstaux = "r_%s_out <= ('0', '0', '0', '0', '0', x\"00000000\");\n" % self.name
-        rst = adjBlockByMarks(self.v.resets(self.regs) + [rstaux], ['<='], 4)       
+        rst = adjBlockByMarks(self.v.resets(self.regs, self.name) + [rstaux], ['<='], 4)       
         
         hdr1 = []        
         hdr1.append(self.v.wbs1[0])
         hdr1.append(self.v.wbs1[1]) 
         hdr1.append(self.v.wbs1[2] % self.name)
-        hdr1.append(self.v.wbs1[3] % (self.name, '%u downto %u' % (self.adrBits-1, self.adrBits-2)))
+        hdr1.append(self.v.wbs1[3] % (self.name, '%u downto %u' % (self.adrBits-1, 2)))
         hdr1.append(self.v.wbs1[4] % self.name)
         hdr1.append(self.v.wbs1[5] % (self.name, self.name, self.name))
         hdr1.append(self.v.wbs1[6] % self.name)
@@ -369,7 +408,7 @@ class wbsIf():
             hdr1.append(self.v.wbs1[i] % self.name)
         
         hdr1    = iN(hdr1, 3)
-        psel    = iN([self.v.fsmPageSel(self.pageSelect)], 4)
+        psel    = iN([self.v.fsmPageSel(self.name, self.pageSelect)], 4)
         
         hdr2    = []   
         hdr2.append(self.v.wbs2[0])
@@ -379,7 +418,7 @@ class wbsIf():
         hdr2.append(self.v.wbs2[4])
         hdr2 = iN(hdr2, 4)
         
-        wr      = self.v.fsmWrite(self.regs)        
+        wr      = self.v.fsmWrite(self.regs, self.name)        
         swr     = adjBlockByMarks(wr, ['=>', '<=', 'v_dat_i'], 7)    
         mid0    = iN([self.v.wbOthers % (self.name, self.name)], 7)
         mid1    = iN(self.v.wbs3, 5)
@@ -389,9 +428,19 @@ class wbsIf():
         
         self.fsmList = hdr0 + rst + hdr1 + psel +  hdr2 + swr + mid0 + mid1 + srd + mid0 + ftr
     
+    def renderRecords(self):
+        a = []
+        (types, records) = self.v.regs(self.regs)
+        a += types     
+        a.append("type t_%s_regs is record\n" % self.name)
+        a += (iN(records, 1))
+        a.append("end record t_%s_regs;\n\n" % self.name)    
+        self.recordList = a
+    
     def renderRegs(self):
-        a = self.v.regs(self.regs)
+        a = []        
         a.append("signal r_%s_out : t_wishbone_slave_out; --> WB output buffer register\n" % self.name)
+        a.append("signal r_%s : t_%s_regs;\n" % (self.name, self.name))
         self.regList = a # no need to indent, we'll do it later with all IF lists together
 
         
@@ -408,6 +457,7 @@ class wbsIf():
         self.renderPorts()
         self.renderAdr()
         print "%s regs: %u" % (self.name, len(self.regs))
+        self.renderRecords()        
         self.renderRegs()
         self.renderFsm()
         print "%s regs: %u" % (self.name, len(self.regList))   
@@ -479,9 +529,11 @@ def commentBox(ifType, ifName):
 def mergeIfLists(slaveList=[], masterList = []):
     uglyPortList    = ["clk_sys_i : in  std_logic;\n",
                        "rst_n_i   : in  std_logic;\n\n"]    
+    recordList      = []                   
     uglyRegList     = []
     uglyAdrList     = []     
     fsmList         = [] 
+    genList         = []
     
     print len(slaveList)
     for slave in slaveList:
@@ -500,7 +552,9 @@ def mergeIfLists(slaveList=[], masterList = []):
         uglyRegList  += "\n"
         fsmList      += iN(commentBox("WBS FSM", slave.name), 1)
         fsmList      += slave.fsmList   
-        fsmList      += "\n\n"    
+        fsmList      += "\n\n"
+        recordList   += iN(commentLine("WBS Register Records", slave.name), 1) 
+        recordList   += adjBlockByMarks(slave.recordList, [ ':', '--> '], 1)
         
     for master in masterList:
         uglyPortList += master.portList
@@ -514,155 +568,286 @@ def mergeIfLists(slaveList=[], masterList = []):
                 
     adrList     = iN(commentBox("", "WB Adress Map"), 1) + ['\n']\
                 + uglyAdrList
-    #Todo: missing generics 
-    return [portList, regList, adrList, fsmList]           
-
-xmlIn = "testme.xml"
-
-xmldoc = minidom.parse(xmlIn)        
-
-genIntD = dict()
-ifList = []
-#def parseXML():
-unitName = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('unitname')
-author = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
-version = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('version')
-date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
-
-genericsParent = xmldoc.getElementsByTagName('generics')
-if len(genericsParent) != 1:
-    print "There must be exactly 1 generics tag!"
-else:
-    print "Found generics" 
-genericsList = genericsParent[0].getElementsByTagName('item')
-for generic in genericsList:
-    genName = generic.getAttribute('name')
-    genType = generic.getAttribute('type')
-    genVal  = generic.getAttribute('value')
-    genDesc = generic.getAttribute('comment')
-    if genTypes.has_key(genType):
-        genType = genTypes[genType]               
-        if(genType == 'natural'):
-            aux = parseNumeral(genVal)
-            if(not aux):            
-                print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
-            else:        
-                genVal = aux
-                genIntD[genName] = genVal
-        else:
-            print "%s is not a valid !!type"    
-    else:
-        print "%s is not a valid type" % generic.getAttribute('type')
-
-slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
-for slaveIf in slaveIfList:
-      
-    name    = slaveIf.getAttribute('name')
-    ifWidth = parseNumeral(slaveIf.getAttribute('data'))
-    pages   = slaveIf.getAttribute('pages')
-    #check integer generic list    
-    for key in genIntD.iterkeys():
-        if(pages.find(key) > -1):
-            val = genIntD[key]
-            pages = pages.replace(key, *str(val)) 
-    
-    aux = parseNumeral(pages)
-    if(not aux):            
-        print "Pages' numeric value <%s> is invalid" % (pages)
-        pages = 0
-    else:        
-        pages = aux
-
-    tmpSlave = wbsIf(name, 0, 32, '', pages)  
-            
-            
-    #get child nodes
-    slaveIfChildren = slaveIf.childNodes
-    #sdb record
-    sdb = slaveIf.getElementsByTagName('sdb')
-    vendId  = sdb[0].getAttribute('vendorID')
-    prodId  = sdb[0].getAttribute('productID')
-
-    
-    selector = ""
-    #name, adr, pages, selector
-    #registers
-    registerList = slaveIf.getElementsByTagName('reg')
-    for reg in registerList:
-        regname = reg.getAttribute('name')
-        regdesc = reg.getAttribute('comment')
-               
                 
-        
-        if reg.hasAttribute('address'):            
-            regadr = reg.getAttribute('address')            
-            aux = parseNumeral(regadr)
-            if(not aux):            
-                print "Slave <%s>: Register <%s>'s supplied address <%x> is invalid, defaulting to auto" % (name, regname, regadr)
-                    
-        
-        regrwmf    = str()
-        if reg.hasAttribute('read'):
-            if reg.getAttribute('read') == 'yes':            
-                regrwmf += 'r'    
-        if reg.hasAttribute('write'):        
-            if reg.getAttribute('write') == 'yes':
-                regrwmf += 'w'
-        if reg.hasAttribute('paged'):
-            if reg.getAttribute('paged') == 'yes':
-                regrwmf += 'm'
-        if reg.hasAttribute('selector'):            
-            if reg.getAttribute('selector') == 'yes':            
-                if(selector == ""):            
-                    selector = regname
-                    
-                #else:
-                    #Error, we can't have more than one pageselector!
-        if reg.hasAttribute('mask'):      
-            regmsk    = reg.getAttribute('mask')
-            
-            #check integer generic list
-            for key in genIntD.iterkeys():
-                if(regmsk.find(key) > -1):
-                    val = genIntD[key]
-                    print type(regmsk), type(key), key, type(val), val
-                    regmsk = regmsk.replace(key, str(val))            
-            print "Mask b4: %s" % regmsk
-            #check conversion function list
-            idxCmp = regmsk.find('f_makeMask(')            
-            if(idxCmp > -1):
-                regmsk = regmsk.replace('f_makeMask(', '')
-                regmsk = regmsk.rstrip(')') #FIXME: this is extremely presumptious!
-            print "Mask after: %s" % regmsk 
-                        
-                #mask valid
-            aux = parseNumeral(regmsk)
-            
-            print "Mask aux: %u" % aux
-            if(not aux):
-                aux = 2^ int(ifWidth) -1
-                print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, aux)
-            if(idxCmp > -1):            
-                regmsk = 2**aux-1 
-            else:
-                regmsk = aux                        
-        else:        
-            print "Slave <%s>: No mask for Register <%s> supplied, defaulting to %x" % (name, regname, 2**ifWidth-1)
-            regmsk = 2**ifWidth-1
-        
-     
-        if (reg.getAttribute('atomic')):
-            tmpSlave.addAtomicReg(regname, regmsk, regrwmf, regdesc)
-        else:        
-            tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc)
-        #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")    
-    print "changing slave sel to %s and pages to %s" % (selector, pages)    
-    tmpSlave.pageSelect = selector    
-    tmpSlave.pages      = pages    
-    tmpSlave.renderAll()    
-    ifList.append(tmpSlave)       
+    if( len(genMiscD) > 0):
+        #last element is len(genMiscD) + len(genIntD) -1         
+        lastIdx = len(genMiscD) + len(genIntD) -1  
+    else:
+        #last element is len(genIntD) -1
+        lastIdx = len(genIntD) -1  
+    
+    idx = 0    
+    for genName in genIntD.iterkeys():
+        (genType, genVal, genDesc) = genIntD[genName]
+        if(idx == lastIdx):
+            lineEnd = ''
+        else:
+            lineEnd = ';'
+        genList.append(VhdlStr.genport % (genName, genType, genVal, lineEnd, genDesc))
+        idx += 1
+    for genName in genMiscD.iterkeys():
+        if(idx == lastIdx):
+            lineEnd = ''
+        else:
+            lineEnd = ';'
+        (genType, genVal, genDesc) = genMiscD[genName]
+        genList.append(VhdlStr.genport % (genName, genType, genVal, lineEnd, genDesc))
+        idx += 1
+    genList = adjBlockByMarks(genList, [':', ':=', '--'], 1)             
+    #Todo: missing generics 
+    return [portList, recordList, regList, adrList, fsmList, genList]           
 
-(portList, regList, adrList, fsmList) = mergeIfLists(ifList)
+def parseXML(xmlIn):
+    xmldoc      = minidom.parse(xmlIn)   
+    global unitName
+    global author 
+    global version
+    
+    unitName = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('unitname')
+    author   = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
+    version  = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('version')
+
+    
+    genericsParent = xmldoc.getElementsByTagName('generics')
+    if len(genericsParent) != 1:
+        print "There must be exactly 1 generics tag!"
+    else:
+        print "Found generics" 
+    genericsList = genericsParent[0].getElementsByTagName('item')
+    for generic in genericsList:
+        genName = generic.getAttribute('name')
+        genType = generic.getAttribute('type')
+        genVal  = generic.getAttribute('value')
+        genDesc = generic.getAttribute('comment')
+        if genTypes.has_key(genType):
+            genType = genTypes[genType]               
+            if(genType == 'natural'):
+                aux = parseNumeral(genVal)
+                if(not aux):            
+                    print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
+                else:        
+                    genVal = aux
+                    genIntD[genName] = [ genType , genVal, genDesc ]
+            else:
+                genMiscD[genName] = [ genType , genVal, genDesc ]    
+        else:
+            print "%s is not a valid type" % generic.getAttribute('type')
+    
+    slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
+    for slaveIf in slaveIfList:
+          
+        name    = slaveIf.getAttribute('name')
+        ifWidth = parseNumeral(slaveIf.getAttribute('data'))
+        pages   = slaveIf.getAttribute('pages')
+        #check integer generic list
+        print "PAGES0: %s\n" % pages
+        for genName in genIntD.iterkeys():
+            if(pages.find(genName) > -1):
+                (genType, genVal, genDesc) = genIntD[genName]
+                print "Val: %s\n" % genVal                
+                pages = pages.replace(genName, str(genVal))
+                
+        print "PAGES: %s\n" % pages 
+        aux = parseNumeral(pages)
+        if(not aux):            
+            print "Pages' numeric value <%s> is invalid" % (pages)
+            pages = 0
+        else:        
+            pages = aux
+    
+        tmpSlave = wbsIf(name, 0, 32, '', pages)  
+                
+                
+        #get child nodes
+        slaveIfChildren = slaveIf.childNodes
+        #sdb record
+        sdb = slaveIf.getElementsByTagName('sdb')
+        vendId  = sdb[0].getAttribute('vendorID')
+        prodId  = sdb[0].getAttribute('productID')
+    
+        
+        selector = ""
+        #name, adr, pages, selector
+        #registers
+        registerList = slaveIf.getElementsByTagName('reg')
+        for reg in registerList:
+            regname = reg.getAttribute('name')
+            regdesc = reg.getAttribute('comment')
+                   
+                    
+            
+            if reg.hasAttribute('address'):            
+                regadr = reg.getAttribute('address')            
+                aux = parseNumeral(regadr)
+                if(not aux):            
+                    print "Slave <%s>: Register <%s>'s supplied address <%x> is invalid, defaulting to auto" % (name, regname, regadr)
+                        
+            
+            regrwmf    = str()
+            if reg.hasAttribute('read'):
+                if reg.getAttribute('read') == 'yes':            
+                    regrwmf += 'r'    
+            if reg.hasAttribute('write'):        
+                if reg.getAttribute('write') == 'yes':
+                    regrwmf += 'w'
+            if reg.hasAttribute('paged'):
+                if reg.getAttribute('paged') == 'yes':
+                    regrwmf += 'm'
+            if reg.hasAttribute('selector'):            
+                if reg.getAttribute('selector') == 'yes':            
+                    if(selector == ""):            
+                        selector = regname
+                        
+                    #else:
+                        #Error, we can't have more than one pageselector!
+            if reg.hasAttribute('mask'):      
+                regmsk    = reg.getAttribute('mask')
+                
+                #check integer generic list
+                for genName in genIntD.iterkeys():
+                    if(regmsk.find(genName) > -1):
+                        (genType, genVal, genDesc) = genIntD[genName]
+                        regmsk = regmsk.replace(genName, str(genVal))            
+
+                #check conversion function list
+                idxCmp = regmsk.find('f_makeMask(')            
+                if(idxCmp > -1):
+                    regmsk = regmsk.replace('f_makeMask(', '')
+                    regmsk = regmsk.rstrip(')') #FIXME: this is extremely presumptious!
+                            
+                    #mask valid
+                aux = parseNumeral(regmsk)
+                
+                if(not aux):
+                    aux = 2^ int(ifWidth) -1
+                    print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, aux)
+                if(idxCmp > -1):            
+                    regmsk = 2**aux-1 
+                else:
+                    regmsk = aux                        
+            else:        
+                print "Slave <%s>: No mask for Register <%s> supplied, defaulting to %x" % (name, regname, 2**ifWidth-1)
+                regmsk = 2**ifWidth-1
+            
+         
+            if (reg.getAttribute('atomic')):
+                tmpSlave.addAtomicReg(regname, regmsk, regrwmf, regdesc)
+            else:        
+                tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc)
+            #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")    
+        print "changing slave sel to %s and pages to %s" % (selector, pages)    
+        tmpSlave.pageSelect = selector    
+        tmpSlave.pages      = pages    
+        tmpSlave.renderAll()    
+        ifList.append(tmpSlave)
+        
+
+def writeMainVhd(filename):
+    
+    fo = open(filename, "w")
+    
+    header = []
+    header.append(VhdlStr.header[0] % filename)
+    header.append(VhdlStr.header[1] % autoUnitName)
+    header.append(VhdlStr.header[2] % version)
+    header.append(VhdlStr.header[3] % author)
+    header.append(VhdlStr.header[4] % date)
+    header.append('\n')
+    header = adjBlockByMarks(header, [':'], 0)
+    
+    for line in header:
+        fo.write(line)
+    
+    libraries = []
+    libraries += VhdlStr.libraries
+    libraries += "use work.%s_pkg.all;\n\n" % autoUnitName
+    for line in libraries:
+        fo.write(line)
+        
+    fo.write(VhdlStr.entityStart % autoUnitName)
+    
+    if(len(genIntD) + len(genMiscD) > 0):
+        fo.write(VhdlStr.genStart)
+        for line in genList:   
+            fo.write(line)
+        fo.write(VhdlStr.genEnd)
+    
+    fo.write(VhdlStr.entityMid)
+    
+    for line in portList:
+        fo.write(line)
+        
+    fo.write(VhdlStr.entityEnd % autoUnitName)
+    
+    fo.write(VhdlStr.archDecl % autoUnitName)
+    
+    for line in adrList:
+        fo.write(line)
+    
+    for line in regList:
+        fo.write(line)
+    
+    fo.write(VhdlStr.archStart)
+    
+    for line in fsmList:
+        fo.write(line)
+    
+    fo.write(VhdlStr.archEnd)
+    
+    fo.close
+
+def writePkgVhd(filename):
+    fo = open(filename, "w")
+    
+    header = []
+    header.append(VhdlStr.header[0] % filename)
+    header.append(VhdlStr.header[1] % autoUnitName)
+    header.append(VhdlStr.header[2] % version)
+    header.append(VhdlStr.header[3] % author)
+    header.append(VhdlStr.header[4] % date)
+    header.append('\n')
+    header = adjBlockByMarks(header, [':'], 0)
+    
+    for line in header:
+        fo.write(line)
+    
+    libraries = []
+    libraries += VhdlStr.libraries
+    libraries += '\n'
+    for line in libraries:
+        fo.write(line)
+    
+    
+    fo.write(VhdlStr.packageStart % autoUnitName)
+    
+    decl = []
+    for line in recordList:
+        decl.append(line)
+    decl += (iN(commentLine("Component", autoUnitName), 1)) 
+    
+    for line in decl:
+        fo.write(line)    
+    
+    decl = []
+    decl.append(VhdlStr.componentStart % autoUnitName)
+    if(len(genIntD) + len(genMiscD) > 0):
+        decl.append(VhdlStr.genStart)
+        for line in genList:   
+            decl.append(line)
+        decl.append(VhdlStr.genEnd)
+    decl.append(VhdlStr.entityMid)
+    for line in portList:
+        decl.append(line)
+    decl += VhdlStr.componentEnd
+    decl = iN(decl, 1)
+    for line in decl:
+        fo.write(line)
+        
+    fo.write(VhdlStr.packageEnd % autoUnitName)
+    fo.write(VhdlStr.packageBodyStart % autoUnitName)
+    fo.write(VhdlStr.packageEnd % autoUnitName)
+    
+    fo.close
 
 #TODO: A lot ...
             
@@ -687,8 +872,34 @@ for slaveIf in slaveIfList:
     
   
 
- 
-            
+xmlIn = "testme.xml"
+
+genIntD     = dict()
+genMiscD    = dict()
+portList    = []
+recordList  = []
+regList     = []
+adrList     = []
+fsmList     = []
+genList     = []
+ifList      = []
+unitName    = "unknown unit"
+author      = "unknown author"
+version     = "unknown version"
+date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
+
+parseXML(xmlIn)
+autoUnitName = unitName + "_auto"
+
+fileMainVhd = autoUnitName              + ".vhd"
+filePkgVhd  = autoUnitName  + "_pkg"    + ".vhd"
+fileTbVhd   = unitName      + "_tb"     + ".vhd"
+fileHdrC    = unitName                  + ".h"
+
+
+(portList, recordList, regList, adrList, fsmList, genList) = mergeIfLists(ifList)
+writeMainVhd(fileMainVhd)
+writePkgVhd(filePkgVhd)
 
 
 
@@ -698,98 +909,3 @@ for slaveIf in slaveIfList:
 
 
 
-
-
-fileOut0 = unitName + ".vhd"
-generics = 0
-
-
-#z = wbsIf("alex", 0, 10, '', 10)
-#z.addSimpleReg('STATE',   0xffff, 'r',    "Shows if device is ready")
-#z.addSimpleReg('RUN',     0xffff, 'rw',   "Turns device power on or off and shows current state")
-#z.renderAll()
-#ifList.append(z)
-
-
-#y = wbsIf("periphery", 0x400, 4, '')
-#y.addAtomicReg('ich', 0x3fff, 'r', "1")
-#y.addSimpleReg('AAARGH', 0x7ff, 'rw', "2")
-#y.addAtomicReg('HAHA', 0xff, 'rw', "3")
-#y.renderAll()
-#ifList.append(y)
-#
-#x = wbsIf("control", 0x800, 8, 'auswahl')
-#x.addAtomicReg('STATUS',    0xffff, 'r',    "I am a dummy!", 0)
-#x.addAtomicReg('EDGE',      0xffff, 'rw',   "Me too!")
-#x.addAtomicReg('TRIGGER1',  0xffff, 'w',    "Me three!")
-#x.addSimpleReg('CH_SEL',    0x1f,   'rw',   "Ouch!",  0x20)
-#x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
-#x.addSimpleReg('A',         0xffff, 'rw',   "Hi!")
-#x.addAtomicReg('ONEMORE',   0xff,   'rwm',  "There!")
-#x.renderAll()
-#ifList.append(x)
-
-
-
-
-
-
-
-
-
-
-fo = open(fileOut0, "w")
-
-header = []
-header.append(VhdlStr.header[0] % fileOut0)
-header.append(VhdlStr.header[1] % unitName)
-header.append(VhdlStr.header[2] % version)
-header.append(VhdlStr.header[3] % author)
-header.append(VhdlStr.header[4] % date)
-header.append('\n')
-header = adjBlockByMarks(header, [':'], 0)
-
-for line in header:
-    fo.write(line)
-
-libraries = VhdlStr.libraries
-for line in libraries:
-    fo.write(line)
-    
-fo.write(VhdlStr.entityStart % unitName)
-
-if(generics > 0):
-    fo.write(iN(VhdlStr.entityGenStart, 1))
-    #TODO: insert generics here
-    fo.write(iN(VhdlStr.entityGenEnd, 1))
-
-fo.write(VhdlStr.entityMid)
-
-for line in portList:
-    fo.write(line)
-    
-fo.write(VhdlStr.entityEnd % unitName)
-
-fo.write(VhdlStr.archDecl % unitName)
-
-for line in adrList:
-    fo.write(line)
-
-for line in regList:
-    fo.write(line)
-
-fo.write(VhdlStr.archStart)
-
-for line in fsmList:
-    fo.write(line)
-
-fo.write(VhdlStr.archEnd)
-
-fo.close
-
-
-#getElementsByTagName('item') 
-#print len(codegenParent )
-#print itemlist[0].attributes['name'].value
-#for s in itemlist :
-#    print s.attributes['name'].value

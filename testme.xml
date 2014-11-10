@@ -18,7 +18,7 @@
       </properties>
    </masterinterface>     
 
-   <slaveinterface name="control_slave" data="32" adr="32" type="pipelined" pages="5" addressbits="auto">
+   <slaveinterface name="control_slave" data="32" adr="32" type="pipelined" pages="channels" addressbits="auto">
       <sdb vendorID="GSI" deviceID="0x01234567" version="1" date="auto"></sdb>
       <registers>
            <reg   name="ACTIVE" read="yes" write="yes" access="atomic" mask="f_makeMask(channels)" comment="Turns trigger channels on or off"></reg>
