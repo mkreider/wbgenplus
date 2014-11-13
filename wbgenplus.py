@@ -71,67 +71,151 @@ def mskWidth(msk):
         result  = [hiIdx, loIdx]
     return result   
 
+class CStr(object):
+   
+
+    def __init__(self, pages, unitname, slaveIfName):
+        self.unitname   = unitname
+        self.slaveIfName  = slaveIfName        
+        self.filename   = ""
+        self.pages      = pages
+        
+        #################################################################################        
+        #Strings galore        
+        self.header         = []        
+        self.hdrfileStart   = ["#ifndef _%s_H_\n"   % unitName,
+                               "#define _%s_H_\n\n" % unitName]     
+        self.hdrfileEnd     = "#endif\n"
+        self.constRegAdr    = "#define %s_%%s 0x%%x // _0x%%08x %%s, %%s\n" % slaveIfName #name, adrVal,  msk, rw, desc
+        
+  
+       
+
 class VhdlStr(object):
    
 
-    def __init__(self, pages):
-        self.filename   = ""       
+    def __init__(self, pages, unitname, slaveIfName):
+        self.unitname   = unitname
+        self.slaveIfName  = slaveIfName        
+        self.filename   = ""
         self.pages      = pages
+        
+        #################################################################################        
+        #Strings galore        
+        self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName, #name
+                           "%s_o : out t_wishbone_slave_out" % slaveIfName] #name
+  
+        self.wbs0       = ["%s : process(clk_sys_i)\n" % slaveIfName,
+                           "   variable v_dat_i  : t_wishbone_data;\n",
+                           "   variable v_dat_o  : t_wishbone_data;\n",
+                           "   variable v_adr    : natural;\n",
+                           "   variable v_page   : natural;\n",
+                           "   variable v_sel    : t_wishbone_byte_select;\n",
+                           "   variable v_we     : std_logic;\n",
+                           "   variable v_en     : std_logic;\n",
+                           "begin\n",
+                           "   if rising_edge(clk_sys_i) then\n",
+                           "      if(rst_n_i = '0') then\n"]
        
-  
-  
+        self.wbs1       = ["else\n",
+                           "   -- short names\n",
+                           "   v_dat_i           := %s_i.dat;\n" % slaveIfName,
+                           "   v_adr             := to_integer(unsigned(%s_i.adr(%%s)) & \"00\");\n" % slaveIfName,
+                           "   v_sel             := %s_i.sel;\n" % slaveIfName,
+                           "   v_en              := %s_i.cyc and %s_i.stb and not r_%s_out.stall;\n" % (slaveIfName, slaveIfName, slaveIfName),
+                           "   v_we              := %s_i.we;\n\n" % slaveIfName,
+                           "   --interface outputs\n",
+                           "   r_%s_out.stall  <= '0';\n" % slaveIfName,
+                           "   r_%s_out.ack    <= '0';\n" % slaveIfName,
+                           "   r_%s_out.err    <= '0';\n" % slaveIfName,
+                           "   r_%s_out.dat    <= (others => '0');\n" % slaveIfName] 
       
+        self.wbs2       = ["if(v_en = '1') then\n",
+                           "   r_%s_out.ack  <= '1';\n" % slaveIfName,
+                           "   if(v_we = '1') then\n",
+                           "      -- WISHBONE WRITE ACTIONS\n",
+                           "      case v_adr is\n"]
+    
+        self.wbs3       = ["   end case;\n",
+                           "else\n",
+                           "   -- WISHBONE READ ACTIONS\n",
+                           "   case v_adr is\n"]  
+
+        self.wbs4       = ["               end case;\n",
+                           "            end if; -- v_we\n",
+                           "         end if; -- v_en\n",
+                           "      end if; -- rst\n",
+                           "   end if; -- clk edge\n",
+                           "end process;\n\n"]                
+      
+        self.slvSubType         = "subtype t_slv_%s_%%s is std_logic_vector(%%s downto 0);\n" % slaveIfName #name, idxHi
+        self.slvArrayType       = "type    t_slv_%s_%%s_array is array(natural range <>) of t_slv_%s_%%s;\n" % (slaveIfName, slaveIfName)  #name, #name
+        self.signalSlvArray     = "%%s : t_slv_%s_%%s_array(%%s downto 0); %%s\n"  % slaveIfName #name, name, idxHi, desc
+        self.wbsPageSelect      = "v_page := to_integer(unsigned(r_%s.%%s));\n\n"  % slaveIfName #pageSelect Register
+        self.wbWrite            = "when c_%s_%%s => r_%s.%%s <= f_wb_wr(r_%s.%%s, v_dat_i, v_sel, \"%%s\"); %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, (set/clr/owr), desc
+        self.wbRead             = "when c_%s_%%s => r_%s_out.dat(r_%s.%%s'range) <= r_%s.%%s; %%s\n" % (slaveIfName, slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+        self.wbOthers           = "when others => r_%s_out.ack <= '0'; r_%s_out.err <= '1';\n" % (slaveIfName, slaveIfName) 
+        self.wbs_output_reg     = "signal r_%s_out : t_wishbone_slave_out; --> WB output buffer register\n" % slaveIfName
+        self.wbs_reg_rec        = "signal r_%s : t_%s_regs;\n" % (slaveIfName, slaveIfName)
+        self.resetOutput        = "r_%s_out <= ('0', '0', '0', '0', '0', x\"00000000\");\n" % slaveIfName 
+        self.resetSignal        = "r_%s.%%s <= (others => '0');\n" % slaveIfName #registerName   
+        self.resetSignalArray   = "r_%s.%%s <= (others =>(others => '0'));\n" % slaveIfName #registerName
+        self.recordPortOut      = "%s_regs_o : out t_%s_regs;\n" % (slaveIfName, slaveIfName) 
+        self.recordRegStart     = "type t_%s_regs is record\n" % slaveIfName
+        self.recordRegEnd       = "end record t_%s_regs;\n\n" % slaveIfName
+        self.recordAdrStart     = "type t_%s_adr is record\n" % slaveIfName
+        self.recordAdrEnd       = "end record t_%s_adr;\n\n" % slaveIfName
+        self.recAdr             = "%s : natural;\n"
+        self.constRegAdr        = "constant c_%s_%%s : natural := 16#%%x#; -- 0x%%02X, _0x%%08x %%s, %%s\n" % slaveIfName #name, adrVal, adrVal, rw, msk, desc
+        self.constRecAdrStart   = "constant c_%s_adr : t_%s_adr := (\n" % (slaveIfName, slaveIfName)
+        self.constRecAdrLine    = "%s => 16#%x#%s -- 0x%02X, %s, _0x%08x %s\n" #name, adrVal, comma/noComma, adrVal, rw, msk, desc
+        self.constRecAdrEnd     = ");\n"
+
   
-    def fsmPageSel(self, name, pageSel):
+    def fsmPageSel(self, pageSel):
         if(pageSel == ""):
             return "\n"
         else:    
-            return self.wbsPageSelect % (name, pageSel)
+            return self.wbsPageSelect % pageSel
   
-    def fsmRead(self, regList, name):
+    def fsmRead(self, regList):
         s = []    
-        #print "r ------------------------------ "        
         for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-            #print "a %s b %s %u" % (elem[0], nextElem[0], elem[3].find('r'))         
             if(elem[3].find('r') > -1):
                 if(elem[3].find('m') > -1):
                     ind = '(v_page)'
                 else:
                     ind = ""
-                #  wbRead      = "when c_%s => r_%s_out.dat(r_%s.%s'range) <= r_%s.%s; %s\n"          
-                s.append(self.wbRead % (elem[0] + elem[1], name, name, elem[0]+ind, name, elem[0]+ind, elem[4]))
+                s.append(self.wbRead % (elem[0] + elem[1], elem[0]+ind, elem[0]+ind, elem[4]))
         return s
 
-    def fsmWrite(self, regList, name):
+    def fsmWrite(self, regList):
         s = []    
-        #print "W ------------------------------ " 
         for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
             if(elem[3].find('w') > -1):
                 if(elem[3].find('m') > -1):
                     ind = '(v_page)'
                 else:
                     ind = ""
-                        
-                #wbWrite     = "when c_%s => r_%s.%s <= f_wb_wr(r_%s.%s, v_dat_i, v_sel, \"%s\"); %s\n"
-                s.append(self.wbWrite % (elem[0] + elem[1], name, elem[0]+ind, name, elem[0]+ind, self.wrModes[elem[1]], elem[4]))
+                s.append(self.wbWrite % (elem[0] + elem[1], elem[0]+ind, elem[0]+ind, self.wrModes[elem[1]], elem[4]))
         return s     
     
-    def regs(self, regList, qty = 0):
+   
+    def regs(self, regList):
        recordelements   = []
        types            = []
-       m                = []
        for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
            if(elem[0] != nextElem[0]):
                if(elem[3].find('m') > -1):
-                   types            += self.multitype(elem, self.pages)
-                   recordelements   += self.multielement(elem, self.pages)                    
+                   types            += self.multitype(elem)
+                   recordelements   += self.multielement(elem)                    
                else:    
                    recordelements.append(self.reg(elem))
        return [types, recordelements]           
     
     def reg(self, (name, suf, msk, rw, desc, adr)):
         (idxHi, idxLo) = mskWidth(msk);        
-        s = self.signalSlv % (name, idxHi-idxLo, 0, desc)        
+        s = self.signalSlv % (name, idxHi-idxLo, desc)        
         return s
     
 
@@ -139,7 +223,7 @@ class VhdlStr(object):
         s = []        
         (idxHi, idxLo) = mskWidth(msk);
         s.append('\n')        
-        s.append(self.slvSubType % (name, idxHi-idxLo, 0)) #shift mask to LSB
+        s.append(self.slvSubType % (name, idxHi-idxLo)) #shift mask to LSB
         s.append(self.slvArrayType % (name, name))
         return s 
     
@@ -148,24 +232,25 @@ class VhdlStr(object):
         (idxHi, idxLo) = mskWidth(msk);
         s.append('\n')        
         if(type(qty) == int):
-            s.append(self.signalSlvArray % (name, name, (qty-1), desc))
+            s.append(self.signalSlvArray % (name, name, (self.pages-1), desc))
         else:
-            s.append(self.signalSlvArray % (name, name, qty + '-1', desc))
+            s.append(self.signalSlvArray % (name, name, self.pages + '-1', desc))
         return s    
               
     
     def cRegAdr(self, (name, suf, msk, rw, desc, adr)):
-        s = self.constRegAdr % (name + suf, adr, adr, rw, msk, desc)        
+        s = self.recAdr % (name + suf, adr, adr, rw, msk, desc)        
         return s
     
-    def resets(self, regList, name):
+    def resets(self, regList):
        s = []
        for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
            if(elem[0] != nextElem[0]):
                if(elem[3].find('m') > -1):
-                   s.append("r_" + name + '.' + elem[0] + " <= (others =>(others => '0'));\n")                  
-               else:    
-                   s.append("r_" + name + '.' + elem[0] + " <= (others => '0');\n")
+                   s.append(self.resetSignalArray % elem[0])                      
+               else:
+                   s.append(self.resetSignal % elem[0])
+       s.append(self.resetOutput)           
        return s
     
     wrModes = {'_GET'   : 'owr',
@@ -211,16 +296,15 @@ class VhdlStr(object):
     archEnd     = "end rtl;\n" # autoUnitName
     
     genport     = "g_%s : %s := %s%s -- %s\n" #name, type, default
-    signalSlv   = "%s : std_logic_vector(%u downto %u); %s\n" #name, idxHi, idxLo, desc
+    signalSlv   = "%s : std_logic_vector(%s downto 0); %s\n" #name, idxHi, idxLo, desc
     signalSl    = "signal %s : std_logic; %s\n" #name, desc
-    constRegAdr = "constant c_%s : natural := 16#%x#; -- 0x%02X, %s, _0x%08x %s\n" #name, adrVal, adrVal, rw, msk, desc
-  
+    
+
     
     masterIf    = ["%s_o : out t_wishbone_master_out;\n", # name
                    "%s_i : in  t_wishbone_master_in := ('0', '0', '0', '0', '0', x\"00000000\")"] # name
     
-    slaveIf     = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n", #name
-                   "%s_o : out t_wishbone_slave_out"] #name
+    
     
    
     commBoxLine     = "--+" + '*' * 90 + "+\n"
@@ -228,61 +312,9 @@ class VhdlStr(object):
     commBoxCont1    = "|\n" #topic
         
        
-    wbs0         = ["%s : process(clk_sys_i)\n", 
-                    "   variable v_dat_i  : t_wishbone_data;\n",
-                    "   variable v_dat_o  : t_wishbone_data;\n",
-                    "   variable v_adr    : natural;\n",
-                    "   variable v_page   : natural;\n",
-                    "   variable v_sel    : t_wishbone_byte_select;\n",
-                    "   variable v_we     : std_logic;\n",
-                    "   variable v_en     : std_logic;\n",
-                    "begin\n",
-                    "   if rising_edge(clk_sys_i) then\n",
-                    "      if(rst_n_i = '0') then\n"]
-      
-    wbs1         = ["else\n",
-                    "   -- short names\n",
-                    "   v_dat_i           := %s_i.dat;\n",
-                    "   v_adr             := to_integer(unsigned(%s_i.adr(%s)) & \"00\");\n",
-                    "   v_sel             := %s_i.sel;\n",
-                    "   v_en              := %s_i.cyc and %s_i.stb and not r_%s_out.stall;\n",
-                    "   v_we              := %s_i.we;\n\n",
-                    "   --interface outputs\n",
-                    "   r_%s_out.stall  <= '0';\n",
-                    "   r_%s_out.ack    <= '0';\n",
-                    "   r_%s_out.err    <= '0';\n",
-                    "   r_%s_out.dat    <= (others => '0');\n" ] 
     
-    wbsPageSelect   = "v_page := to_integer(unsigned(r_%s.%s));\n\n"    
     
-    slvSubType      = "subtype t_slv_%s is std_logic_vector(%u downto %u);\n"
-    slvArrayType    = "type    t_slv_%s_array is array(natural range <>) of t_slv_%s;\n"
-    signalSlvArray  = "%s : t_slv_%s_array(%s downto 0); %s\n"
-      
 
-    wbs2 = ["if(v_en = '1') then\n",
-            "   r_%s_out.ack  <= '1';\n",
-            "   if(v_we = '1') then\n",
-            "      -- WISHBONE WRITE ACTIONS\n",
-            "      case v_adr is\n"]
-    
-    wbs3 = ["   end case;\n",
-            "else\n",
-            "   -- WISHBONE READ ACTIONS\n",
-            "   case v_adr is\n"]  
-
-    wbs4 = ["               end case;\n",
-            "            end if; -- v_we\n",
-            "         end if; -- v_en\n",
-            "      end if; -- rst\n",
-            "   end if; -- clk edge\n",
-            "end process;\n\n"]
-
-    wbWrite     = "when c_%s => r_%s.%s <= f_wb_wr(r_%s.%s, v_dat_i, v_sel, \"%s\"); %s\n"
-    
-    wbRead      = "when c_%s => r_%s_out.dat(r_%s.%s'range) <= r_%s.%s; %s\n"
-    
-    wbOthers    = "when others => r_%s_out.ack <= '0'; r_%s_out.err <= '1';\n"
 
     sdbtemplate = ['constant c_%s_sdb : t_sdb_device := (',
                    'abi_class => x"%s", -- %s',
@@ -314,21 +346,25 @@ class wbsIf():
     #regList     = []     
     #fsmList     = []
     #v = None
-        
+
     
-    def __init__(self, name, startAdr, adrBits, pageSelect, pages):
+    def __init__(self, unitName, name, startAdr, adrBits, pageSelect, pages):
         self.regs       = []        
+                
         self.portList   = []
+        self.stubPortList = []
         self.regList    = []
+        self.stubRegList = []    
         self.recordList = []
         self.adrList    = []
         self.fsm        = []
+        self.stubInstanceList = []
         self.name       = name        
         self.startAdr   = startAdr
         self.adrBits    = adrBits
         self.pageSelect = pageSelect
         self.pages      = pages
-        self.v = VhdlStr(self.pages)        
+        self.v = VhdlStr(pages, unitName, name)        
         
         
 
@@ -373,94 +409,73 @@ class wbsIf():
 
   
     def renderPortStub(self):
-        a = []        
-        a.append(self.v.slaveIf[0] % self.name)
-        a.append(self.v.slaveIf[1] % self.name)
-        self.portList = a # no need to indent, we'll do it later with all IF lists together  
+        return self.v.slaveIf  
   
     def renderPorts(self):
         a = []        
-        a.append("%s_regs_o : out t_%s_regs;\n" % (self.name, self.name))        
-        a.append(self.v.slaveIf[0] % self.name)
-        a.append(self.v.slaveIf[1] % self.name)
+        a.append(self.v.recordPortOut)
+        a += self.renderPortStub()
         self.portList = a # no need to indent, we'll do it later with all IF lists together      
         
         
     def renderFsm(self):
-        hdr0 = []
-        hdr0.append(self.v.wbs0[0] % self.name)
-        for i in range(1, len(self.v.wbs0)):        
-            hdr0.append(self.v.wbs0[i])
-        hdr0 = iN(hdr0, 1)
-        rstaux = "r_%s_out <= ('0', '0', '0', '0', '0', x\"00000000\");\n" % self.name
-        rst = adjBlockByMarks(self.v.resets(self.regs, self.name) + [rstaux], ['<='], 4)       
+        hdr0 = iN(self.v.wbs0, 1) 
         
-        hdr1 = []        
-        hdr1.append(self.v.wbs1[0])
-        hdr1.append(self.v.wbs1[1]) 
-        hdr1.append(self.v.wbs1[2] % self.name)
-        hdr1.append(self.v.wbs1[3] % (self.name, '%u downto %u' % (self.adrBits-1, 2)))
-        hdr1.append(self.v.wbs1[4] % self.name)
-        hdr1.append(self.v.wbs1[5] % (self.name, self.name, self.name))
-        hdr1.append(self.v.wbs1[6] % self.name)
-        hdr1.append(self.v.wbs1[7])
-        for i in range(8, len(self.v.wbs1)):        
-            hdr1.append(self.v.wbs1[i] % self.name)
+        rst = adjBlockByMarks(self.v.resets(self.regs), ['<='], 4)       
         
+        hdr1 = self.v.wbs1        
+        hdr1[3] = hdr1[3] % ('%u downto %u' % (self.adrBits-1, 2))
         hdr1    = iN(hdr1, 3)
-        psel    = iN([self.v.fsmPageSel(self.name, self.pageSelect)], 4)
         
-        hdr2    = []   
-        hdr2.append(self.v.wbs2[0])
-        hdr2.append(self.v.wbs2[1] % self.name)
-        hdr2.append(self.v.wbs2[2])
-        hdr2.append(self.v.wbs2[3])
-        hdr2.append(self.v.wbs2[4])
-        hdr2 = iN(hdr2, 4)
+        psel    = iN([self.v.fsmPageSel(self.pageSelect)], 4)
         
-        wr      = self.v.fsmWrite(self.regs, self.name)        
-        swr     = adjBlockByMarks(wr, ['=>', '<=', 'v_dat_i'], 7)    
-        mid0    = iN([self.v.wbOthers % (self.name, self.name)], 7)
+        hdr2    = iN(self.v.wbs2, 4)  
+        
+        swr     = adjBlockByMarks(self.v.fsmWrite(self.regs), ['=>', '<=', 'v_dat_i'], 7)    
+        
+        mid0    = iN([self.v.wbOthers], 7)
         mid1    = iN(self.v.wbs3, 5)
-        rd      = self.v.fsmRead(self.regs, self.name)       
-        srd     = adjBlockByMarks(rd, ['=>', '<=', "--"], 7)
+        
+        srd     = adjBlockByMarks(self.v.fsmRead(self.regs), ['=>', '<=', "--"], 7)
         ftr     = iN(self.v.wbs4, 1)
         
         self.fsmList = hdr0 + rst + hdr1 + psel +  hdr2 + swr + mid0 + mid1 + srd + mid0 + ftr
-    
+        
+    def renderAdr(self):
+        a = []
+        b = []       
+        for elem in self.regs:
+                      
+            (name, suf, msk, rw, desc, adr) = elem
+            print self.v.constRegAdr             
+            print adr, type(adr)
+            #"c_%s_%%s : natural := 16#%%x#; -- 0x%%02X, %%s, _0x%%08x %%s\n" % slaveIfName #name, adrVal, adrVal, rw, msk, desc
+            b.append(self.v.constRegAdr % (name + suf, adr, adr, msk, rw, desc ))
+        a += adjBlockByMarks(b, [ ':', ':=', '-- 0x', '_0x', '--> '], 1)        
+        self.adrList = iN(a, 1)    
+
     def renderRecords(self):
         a = []
         (types, records) = self.v.regs(self.regs)
-        a += types     
-        a.append("type t_%s_regs is record\n" % self.name)
+        a += types
+        a += self.v.nl
+        a.append(self.v.recordRegStart)
         a += (iN(records, 1))
-        a.append("end record t_%s_regs;\n\n" % self.name)    
+        a.append(self.v.recordRegEnd)   
         self.recordList = a
     
     def renderRegs(self):
-        a = []        
-        a.append("signal r_%s_out : t_wishbone_slave_out; --> WB output buffer register\n" % self.name)
-        a.append("signal r_%s : t_%s_regs;\n" % (self.name, self.name))
+        a = []
+        a.append(self.v.wbs_output_reg)
+        a.append(self.v.wbs_reg_rec)
         self.regList = a # no need to indent, we'll do it later with all IF lists together
 
-        
-    def renderAdr(self):
-        a = []        
-        for line in self.regs:
-            a.append(self.v.cRegAdr(line))
-        self.adrList = a # no need to indent, we'll do it later with all IF lists together
-        #adjBlockByMarks(a, [':', ':=', '-- 0x', '-->'], 1)
-        
-    
     def renderAll(self):
-               
         self.renderPorts()
-        self.renderAdr()
-        print "%s regs: %u" % (self.name, len(self.regs))
-        self.renderRecords()        
+        self.renderRecords()
+        self.renderAdr()        
         self.renderRegs()
-        self.renderFsm()
-        print "%s regs: %u" % (self.name, len(self.regList))   
+        self.renderFsm()  
 
     
 
@@ -528,7 +543,8 @@ def commentBox(ifType, ifName):
     
 def mergeIfLists(slaveList=[], masterList = []):
     uglyPortList    = ["clk_sys_i : in  std_logic;\n",
-                       "rst_n_i   : in  std_logic;\n\n"]    
+                       "rst_n_i   : in  std_logic;\n\n"]
+    stubPortList    = uglyPortList                   
     recordList      = []                   
     uglyRegList     = []
     uglyAdrList     = []     
@@ -538,14 +554,17 @@ def mergeIfLists(slaveList=[], masterList = []):
     print len(slaveList)
     for slave in slaveList:
         uglyPortList += slave.portList
+        stubPortList += slave.stubPortList
         #deal with vhdl not wanting a semicolon at the last port entry        
         if(slave != slaveList[-1]):
             uglyPortList[-1] += ";\n"
+            stubPortList[-1] += ";\n"
         else:
             uglyPortList[-1] += "\n"
+            stubPortList[-1] += "\n"
         uglyPortList  += "\n"    
         uglyAdrList  += iN(commentLine("WBS Adr", slave.name), 1) 
-        uglyAdrList  += adjBlockByMarks(slave.adrList, [ ':', ':=', '-- 0x', '_0x', '--> '], 1)
+        uglyAdrList  += slave.adrList
         uglyAdrList  += "\n"
         uglyRegList  += iN(commentLine("WBS Regs", slave.name),1) 
         uglyRegList  += adjBlockByMarks(slave.regList, [' is ', ':', ':=', '-->'], 1)
@@ -655,7 +674,7 @@ def parseXML(xmlIn):
         else:        
             pages = aux
     
-        tmpSlave = wbsIf(name, 0, 32, '', pages)  
+        tmpSlave = wbsIf(unitName, name, 0, 32, '', pages)  
                 
                 
         #get child nodes
@@ -730,7 +749,7 @@ def parseXML(xmlIn):
                 regmsk = 2**ifWidth-1
             
          
-            if (reg.getAttribute('atomic')):
+            if (reg.getAttribute('access') == "atomic"):
                 tmpSlave.addAtomicReg(regname, regmsk, regrwmf, regdesc)
             else:        
                 tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc)
@@ -781,9 +800,6 @@ def writeMainVhd(filename):
     
     fo.write(VhdlStr.archDecl % autoUnitName)
     
-    for line in adrList:
-        fo.write(line)
-    
     for line in regList:
         fo.write(line)
     
@@ -819,6 +835,9 @@ def writePkgVhd(filename):
     
     
     fo.write(VhdlStr.packageStart % autoUnitName)
+    
+    for line in adrList:
+        fo.write(line)    
     
     decl = []
     for line in recordList:
@@ -889,19 +908,26 @@ version     = "unknown version"
 date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
 
 parseXML(xmlIn)
+
 autoUnitName = unitName + "_auto"
 
-fileMainVhd = autoUnitName              + ".vhd"
-filePkgVhd  = autoUnitName  + "_pkg"    + ".vhd"
-fileTbVhd   = unitName      + "_tb"     + ".vhd"
-fileHdrC    = unitName                  + ".h"
+#filenames for various output files
+fileMainVhd     = autoUnitName              + ".vhd"
+filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
+
+fileStubVhd     = unitName                  + ".vhd"
+fileStubPkgVhd  = unitName      + "_pkg"    + ".vhd"
+fileTbVhd       = unitName      + "_tb"     + ".vhd"
+
+fileHdrC        = unitName                  + ".h"
 
 
 (portList, recordList, regList, adrList, fsmList, genList) = mergeIfLists(ifList)
 writeMainVhd(fileMainVhd)
 writePkgVhd(filePkgVhd)
-
-
+#writeStubVhd(fileStubVhd)
+#writeTbVhd(fileTbVhd)
+#writeHdrC(fileHdrC)
 
 
 
