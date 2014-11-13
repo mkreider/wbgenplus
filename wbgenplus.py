@@ -528,7 +528,6 @@ def commentBox(ifType, ifName):
     b = len(tmp)
     c = len(ifName)
     d = a - (b + c + 3 + 2)
-    print "line %u start %u name %u sum %u" % (a, b, c, d)
     pad0 = d // 2 - len(ifType)
     pad1 = d - pad0
     
@@ -549,7 +548,6 @@ def mergeIfLists(slaveList=[], masterList = []):
     fsmList         = [] 
     genList         = []
     
-    print len(slaveList)
     for slave in slaveList:
         uglyPortList += slave.portList
         stubPortList += slave.stubPortList
@@ -631,9 +629,8 @@ def parseXML(xmlIn):
     genericsParent = xmldoc.getElementsByTagName('generics')
     if len(genericsParent) != 1:
         print "There must be exactly 1 generics tag!"
-    else:
-        print "Found generics" 
     genericsList = genericsParent[0].getElementsByTagName('item')
+    print "Found %u generics\n" % len(genericsList)   
     for generic in genericsList:
         genName = generic.getAttribute('name')
         genType = generic.getAttribute('type')
@@ -643,7 +640,7 @@ def parseXML(xmlIn):
             genType = genTypes[genType]               
             if(genType == 'natural'):
                 aux = parseNumeral(genVal)
-                if(not aux):            
+                if(aux == None):            
                     print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
                 else:        
                     genVal = aux
@@ -654,23 +651,20 @@ def parseXML(xmlIn):
             print "%s is not a valid type" % generic.getAttribute('type')
     
     slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
+    print "Found %u slave interfaces\n" % len(slaveIfList)    
     for slaveIf in slaveIfList:
           
         name    = slaveIf.getAttribute('name')
         ifWidth = parseNumeral(slaveIf.getAttribute('data'))
         pages   = slaveIf.getAttribute('pages')
         #check integer generic list
-        print "PAGES0: %s\n" % pages
         for genName in genIntD.iterkeys():
             if(pages.find(genName) > -1):
                 (genType, genVal, genDesc) = genIntD[genName]
-                print "Val: %s\n" % genVal                
                 pages = pages.replace(genName, str(genVal))
-                
-        print "PAGES: %s\n" % pages 
         aux = parseNumeral(pages)
-        if(not aux):            
-            print "Pages' numeric value <%s> is invalid" % (pages)
+        if(aux == None):            
+            print "Slave <%s>: Pages' numeric value <%s> is invalid" % (name, pages)
             pages = 0
         else:        
             pages = aux
@@ -699,7 +693,7 @@ def parseXML(xmlIn):
             if reg.hasAttribute('address'):            
                 regadr = reg.getAttribute('address')            
                 aux = parseNumeral(regadr)
-                if(not aux):            
+                if(aux == None):            
                     print "Slave <%s>: Register <%s>'s supplied address <%x> is invalid, defaulting to auto" % (name, regname, regadr)
                         
             
@@ -738,7 +732,7 @@ def parseXML(xmlIn):
                     #mask valid
                 aux = parseNumeral(regmsk)
                 
-                if(not aux):
+                if(aux == None):
                     aux = 2^ int(ifWidth) -1
                     print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, aux)
                 if(idxCmp > -1):            
@@ -746,7 +740,7 @@ def parseXML(xmlIn):
                 else:
                     regmsk = aux                        
             else:        
-                print "Slave <%s>: No mask for Register <%s> supplied, defaulting to %x" % (name, regname, 2**ifWidth-1)
+                print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
                 regmsk = 2**ifWidth-1
             
          
@@ -755,7 +749,7 @@ def parseXML(xmlIn):
             else:        
                 tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc)
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")    
-        print "changing slave sel to %s and pages to %s" % (selector, pages)    
+        print "Slave <%s>: changing page selector to %s and pages to %s" % (name, selector, pages)    
         tmpSlave.pageSelect = selector    
         tmpSlave.pages      = pages    
         tmpSlave.renderAll()    
@@ -940,6 +934,7 @@ fileHdrC        = unitName                  + ".h"
 
 
 (portList, recordList, regList, vAdrList, fsmList, genList, cAdrList) = mergeIfLists(ifList)
+
 writeMainVhd(fileMainVhd)
 writePkgVhd(filePkgVhd)
 #writeStubVhd(fileStubVhd)
