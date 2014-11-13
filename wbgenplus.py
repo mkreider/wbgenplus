@@ -83,12 +83,12 @@ class CStr(object):
         #################################################################################        
         #Strings galore        
         self.header         = []        
-        self.hdrfileStart   = ["#ifndef _%s_H_\n"   % unitName,
-                               "#define _%s_H_\n\n" % unitName]     
-        self.hdrfileEnd     = "#endif\n"
-        self.constRegAdr    = "#define %s_%%s 0x%%x // _0x%%08x %%s, %%s\n" % slaveIfName #name, adrVal,  msk, rw, desc
         
-  
+        self.constRegAdr    = "#define %s_%%s   0x%%08x // _0x%%08x %%s, %%s\n" % slaveIfName.upper() #name, adrVal,  msk, rw, desc
+        
+    hdrfileStart   = ["#ifndef _%s_H_\n", #   % unitName.capitalize(),
+                      "#define _%s_H_\n\n"] # % unitName.capitalize()]
+    hdrfileEnd     = "#endif\n"        
        
 
 class VhdlStr(object):
@@ -365,7 +365,7 @@ class wbsIf():
         self.pageSelect = pageSelect
         self.pages      = pages
         self.v = VhdlStr(pages, unitName, name)        
-        
+        self.c = CStr(pages, unitName, name)
         
 
     
@@ -443,16 +443,13 @@ class wbsIf():
         
     def renderAdr(self):
         a = []
-        b = []       
+        b = []
         for elem in self.regs:
-                      
             (name, suf, msk, rw, desc, adr) = elem
-            print self.v.constRegAdr             
-            print adr, type(adr)
-            #"c_%s_%%s : natural := 16#%%x#; -- 0x%%02X, %%s, _0x%%08x %%s\n" % slaveIfName #name, adrVal, adrVal, rw, msk, desc
-            b.append(self.v.constRegAdr % (name + suf, adr, adr, msk, rw, desc ))
-        a += adjBlockByMarks(b, [ ':', ':=', '-- 0x', '_0x', '--> '], 1)        
-        self.adrList = iN(a, 1)    
+            a.append(self.v.constRegAdr % (name + suf, adr, adr, msk, rw, desc ))
+            b.append(self.c.constRegAdr % (name + suf, adr, msk, rw, desc ))
+        self.vAdrList = adjBlockByMarks(a, [ ':', ':=', '-- 0x', '_0x', '--> '], 2)
+        self.cAdrList = adjBlockByMarks(b, [ '   0x', '//', ','], 0)
 
     def renderRecords(self):
         a = []
@@ -547,7 +544,8 @@ def mergeIfLists(slaveList=[], masterList = []):
     stubPortList    = uglyPortList                   
     recordList      = []                   
     uglyRegList     = []
-    uglyAdrList     = []     
+    uglyAdrList     = []
+    cAdrList        = []     
     fsmList         = [] 
     genList         = []
     
@@ -563,8 +561,11 @@ def mergeIfLists(slaveList=[], masterList = []):
             uglyPortList[-1] += "\n"
             stubPortList[-1] += "\n"
         uglyPortList  += "\n"    
+        cAdrList     += ["// %s\n\n" % slave.name]
+        cAdrList     += slave.cAdrList
+        cAdrList     += "\n"
         uglyAdrList  += iN(commentLine("WBS Adr", slave.name), 1) 
-        uglyAdrList  += slave.adrList
+        uglyAdrList  += slave.vAdrList
         uglyAdrList  += "\n"
         uglyRegList  += iN(commentLine("WBS Regs", slave.name),1) 
         uglyRegList  += adjBlockByMarks(slave.regList, [' is ', ':', ':=', '-->'], 1)
@@ -585,7 +586,7 @@ def mergeIfLists(slaveList=[], masterList = []):
                 + uglyRegList
                 
                 
-    adrList     = iN(commentBox("", "WB Adress Map"), 1) + ['\n']\
+    vAdrList     = iN(commentBox("", "WB Adress Map"), 1) + ['\n']\
                 + uglyAdrList
                 
     if( len(genMiscD) > 0):
@@ -614,7 +615,7 @@ def mergeIfLists(slaveList=[], masterList = []):
         idx += 1
     genList = adjBlockByMarks(genList, [':', ':=', '--'], 1)             
     #Todo: missing generics 
-    return [portList, recordList, regList, adrList, fsmList, genList]           
+    return [portList, recordList, regList, vAdrList, fsmList, genList, cAdrList]           
 
 def parseXML(xmlIn):
     xmldoc      = minidom.parse(xmlIn)   
@@ -836,7 +837,7 @@ def writePkgVhd(filename):
     
     fo.write(VhdlStr.packageStart % autoUnitName)
     
-    for line in adrList:
+    for line in vAdrList:
         fo.write(line)    
     
     decl = []
@@ -868,6 +869,21 @@ def writePkgVhd(filename):
     
     fo.close
 
+
+def writeHdrC(filename):
+    fo = open(filename, "w")
+    
+    header = CStr.hdrfileStart
+    
+    header[0] = header[0] % unitName.upper()
+    header[1] = header[1] % unitName.upper()
+    for line in header:
+        fo.write(line)
+    for line in cAdrList:
+        fo.write(line)    
+    fo.write(CStr.hdrfileEnd)
+    
+    fo.close
 #TODO: A lot ...
             
 #        codegenParent = self.xmldoc.getElementsByTagName('codegen')
@@ -898,7 +914,8 @@ genMiscD    = dict()
 portList    = []
 recordList  = []
 regList     = []
-adrList     = []
+vAdrList    = []
+cAdrList    = []
 fsmList     = []
 genList     = []
 ifList      = []
@@ -922,12 +939,12 @@ fileTbVhd       = unitName      + "_tb"     + ".vhd"
 fileHdrC        = unitName                  + ".h"
 
 
-(portList, recordList, regList, adrList, fsmList, genList) = mergeIfLists(ifList)
+(portList, recordList, regList, vAdrList, fsmList, genList, cAdrList) = mergeIfLists(ifList)
 writeMainVhd(fileMainVhd)
 writePkgVhd(filePkgVhd)
 #writeStubVhd(fileStubVhd)
 #writeTbVhd(fileTbVhd)
-#writeHdrC(fileHdrC)
+writeHdrC(fileHdrC)
 
 
 
