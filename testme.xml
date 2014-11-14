@@ -18,7 +18,7 @@
       </properties>
    </masterinterface>     
 
-   <slaveinterface name="control" data="16" type="pipelined" pages="channels">
+   <slaveinterface name="control" data="32" type="pipelined" pages="channels">
       <sdb vendorID="GSI" productID="0x01234567" version="1" date="auto" name="my_ctrl_thingy"></sdb>
       <registers>
            <reg   name="ACTIVE" read="yes" write="yes" access="atomic" mask="f_makeMask(channels)" comment="Turns trigger channels on or off"></reg>
@@ -30,7 +30,7 @@
            </reg>
            <reg   name="CHSEL"  read="yes" write="yes"  access="simple" mask="0xff" selector="yes" comment="Selects/Shows active channel"></reg>
            
-           <reg   name="TS_POP" read="no" write="yes"  access="simple" mask="1"     paged="yes" comment="Write here to pop Timestamp"></reg>
+           <reg   name="TS_POP" read="no" write="yes"  access="simple" mask="1"     address="0x100" paged="yes" comment="Write here to pop Timestamp"></reg>
            <reg   name="TS_HI" read="yes" write="no"  access="simple"               paged="yes" comment="Timestamp hi word"></reg>
            <reg   name="TS_LO" read="yes" write="no"  access="simple" mask="0xffff" paged="yes" comment="Timestamp lo word"></reg>
       </registers>

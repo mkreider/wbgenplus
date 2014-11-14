@@ -83,7 +83,7 @@ def parseNumeral(num, default = None):
     
 def commentStrings(commentSym, label1=''):
     commBoxCont0    = commentSym +"| %s" % label1
-    commBoxCont1    = commentSym +"|\n"
+    commBoxCont1    = "|\n"
     commBoxLine     = commentSym + '+' + '*' * 90 + "+\n"    
     return [commBoxLine, commBoxCont0, commBoxCont1]    
 

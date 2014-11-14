@@ -30,7 +30,7 @@ class wbsCStr(object):
         
         #################################################################################        
         #Strings galore        
-        self.constRegAdr    = "#define %s_%%s   0x%%08x // _0x%%08x %%s, %%s\n" % slaveIfName.upper() #name, adrVal,  msk, rw, desc
+        self.constRegAdr    = "#define %s_%%s   0x%%sx // _0x%%sx %%s, %%s\n" % slaveIfName.upper() #name, adrVal,  msk, rw, desc
 
 class gCStr(object):
     def __init__(self, filename, unitname, author, version, date):
@@ -117,7 +117,7 @@ class wbsVhdlStr(object):
         self.recordAdrStart     = "type t_%s_adr is record\n" % slaveIfName
         self.recordAdrEnd       = "end record t_%s_adr;\n\n" % slaveIfName
         self.recAdr             = "%s : natural;\n"
-        self.constRegAdr        = "constant c_%s_%%s : natural := 16#%%x#; -- 0x%%02X, _0x%%08x %%s, %%s\n" % slaveIfName #name, adrVal, adrVal, rw, msk, desc
+        self.constRegAdr        = "constant c_%s_%%s : natural := 16#%%s#; -- 0x%%s %%s, %%s\n" % slaveIfName #name, adrVal, adrVal, rw, msk, desc
         self.constRecAdrStart   = "constant c_%s_adr : t_%s_adr := (\n" % (slaveIfName, slaveIfName)
         self.constRecAdrLine    = "%s => 16#%x#%s -- 0x%02X, %s, _0x%08x %s\n" #name, adrVal, comma/noComma, adrVal, rw, msk, desc
         self.constRecAdrEnd     = ");\n"
@@ -144,7 +144,8 @@ class wbsVhdlStr(object):
                16  : '3',
                32  : '7', 
                64  : 'f'} 
-                               
+     
+                           
     wrModes = {'_GET'  : 'owr',
                '_SET'  : 'set',
                '_CLR'  : 'clr', 
@@ -310,6 +311,7 @@ class wbsIf():
         self.startAdr   = startAdr
         self.pageSelect = pageSelect
         self.pages      = pages
+        self.dataWidth  = dataWidth
         self.v = wbsVhdlStr(pages, unitname, name, dataWidth, vendId, devId, sdbname)        
         self.c = wbsCStr(pages, unitname, name)
     
@@ -333,11 +335,11 @@ class wbsIf():
     def addSimpleReg(self, name, msk, rw, desc, adr = None, offs = 4):
         s = str()        
         if rw.find('rw') > -1:
-            s = '_RW '
+            s = '_OWR'
         elif rw.find('r') > -1:    
             s = '_GET'
         elif rw.find('w') > -1:
-            s = '_OWR'            
+            s = '_SET'            
         self.addReg(name, s, msk, rw, "--> " + desc, adr, offs)
         
     def addAtomicReg(self, name, msk, rw, desc, adr = None, offs = 4):
@@ -405,10 +407,17 @@ class wbsIf():
     def renderAdr(self):
         a = []
         b = []
+        (_, _, _, _, _, hiAdr) = self.regs[-1]
+        (idxHi, idxLo) = mskWidth(hiAdr)
+        adrx = ("%0" + str((idxHi+1+3)/4) + "x")
+        mskx = ("%0" + str(self.dataWidth/4) + "x")
+        print adrx, mskx
         for elem in self.regs:
             (name, suf, msk, rw, desc, adr) = elem
-            a.append(self.v.constRegAdr % (name + suf, adr, adr, msk, rw, desc ))
-            b.append(self.c.constRegAdr % (name + suf, adr, msk, rw, desc ))
+           
+             
+            a.append(self.v.constRegAdr % (name + suf, adrx % adr, mskx % msk, rw, desc ))
+            b.append(self.c.constRegAdr % (name + suf, adrx  % adr, mskx % msk, rw, desc ))
         self.vAdrList = adj(a, [ ':', ':=', '-- 0x', '_0x', '--> '], 2)
         self.cAdrList = adj(b, [ '   0x', '//', ','], 0)
 
@@ -640,13 +649,14 @@ def parseXML(xmlIn):
         for reg in registerList:
             regname = reg.getAttribute('name')
             regdesc = reg.getAttribute('comment')
-                   
+            regadr = None       
             if reg.hasAttribute('address'):            
                 regadr = reg.getAttribute('address')            
                 aux = str2int(regadr)
                 if(aux == None):            
                     print "Slave <%s>: Register <%s>'s supplied address <%x> is invalid, defaulting to auto" % (name, regname, regadr)
-                        
+                regadr = aux            
+                
             regrwmf    = str()
             if reg.hasAttribute('read'):
                 if reg.getAttribute('read') == 'yes':            
@@ -695,9 +705,9 @@ def parseXML(xmlIn):
             
          
             if (reg.getAttribute('access') == "atomic"):
-                tmpSlave.addAtomicReg(regname, regmsk, regrwmf, regdesc)
+                tmpSlave.addAtomicReg(regname, regmsk, regrwmf, regdesc, regadr, ifWidth/8)
             else:        
-                tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc)
+                tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc, regadr, ifWidth/8)
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
         if((selector != '') and (pages > 0)):    
             print "Slave <%s>: Interface has %u memory pages. Selector register is %s" % (name, pages, selector)    
