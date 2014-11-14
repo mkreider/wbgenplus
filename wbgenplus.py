@@ -47,11 +47,10 @@ class gCStr(object):
 class wbsVhdlStr(object):
    
 
-    def __init__(self, pages, unitname, slaveIfName, vendId, devId):
+    def __init__(self, pages, unitname, slaveIfName, dataWidth, vendId, devId, sdbname):
         self.unitname       = unitname
         self.slaveIfName    = slaveIfName        
         self.pages          = pages
-        
         #################################################################################        
         #Strings galore        
         self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName,
@@ -122,24 +121,30 @@ class wbsVhdlStr(object):
         self.constRecAdrStart   = "constant c_%s_adr : t_%s_adr := (\n" % (slaveIfName, slaveIfName)
         self.constRecAdrLine    = "%s => 16#%x#%s -- 0x%02X, %s, _0x%08x %s\n" #name, adrVal, comma/noComma, adrVal, rw, msk, desc
         self.constRecAdrEnd     = ");\n"
-        self.signalSlv   = "%s : std_logic_vector(%s downto 0); %s\n" #name, idxHi, idxLo, desc
-        self.signalSl    = "signal %s : std_logic; %s\n" #name, desc
-        self.sdbtemplate        = ['constant c_%s_sdb : t_sdb_device := (',
-                                   'abi_class     => x"%s", -- %s',
-                                   'abi_ver_major => x"%s",\n',
-                                   'abi_ver_minor => x"%s",\n',
-                                   'wbd_endian    => c_sdb_%s,\n',
-                                   'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n',
+        self.signalSlv          = "%s : std_logic_vector(%s downto 0); %s\n" #name, idxHi, idxLo, desc
+        self.signalSl           = "signal %s : std_logic; %s\n" #name, desc
+        self.sdb                = ['constant c_%s_%s_sdb : t_sdb_device := (\n' % (unitname, slaveIfName),
+                                   'abi_class     => x"%s", -- %s\n' % ("0000", "undocumented device"),
+                                   'abi_ver_major => x"%s",\n' % "01",
+                                   'abi_ver_minor => x"%s",\n' % "00",
+                                   'wbd_endian    => c_sdb_endian_%s,\n' % "big",
+                                   'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n' % self.wbWidth[dataWidth],
                                    'sdb_component => (\n',
                                    'addr_first    => x"%s",\n',
                                    'addr_last     => x"%s",\n',
                                    'product => (\n',
-                                   'vendor_id     => x"%s", -- %s\n',
-                                   'device_id     => x"%s",\n',
-                                   'version       => x"%s",\n',
-                                   'date          => x"%s",\n',
-                                   'name          => "%s")));\n']
-
+                                   'vendor_id     => x"%016x",\n' % vendId,
+                                   'device_id     => x"%08x",\n' % devId,
+                                   'version       => x"%s",\n' % '{message:{fill}{align}{width}}'.format(message=version.replace('.', ''), fill='0', align='>', width=8),
+                                   'date          => x"%04u%02u%02u",\n' % (now.year, now.month, now.day),
+                                   'name          => "%s")));\n' % sdbname.upper().ljust(19)]
+                                   
+    
+    wbWidth = {8   : '1',
+               16  : '3',
+               32  : '7', 
+               64  : 'f'} 
+                               
     wrModes = {'_GET'  : 'owr',
                '_SET'  : 'set',
                '_CLR'  : 'clr', 
@@ -159,7 +164,7 @@ class wbsVhdlStr(object):
     def fsmRead(self, regList):
         s = []    
         for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-            (name, suf, msk, rw, desc, adr) = elem            
+            (name, suf, _, rw, desc, _) = elem            
             if(rw.find('r') > -1):
                 if(rw.find('m') > -1):
                     ind = '(v_page)'
@@ -171,7 +176,7 @@ class wbsVhdlStr(object):
     def fsmWrite(self, regList):
         s = []    
         for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-            (name, suf, msk, rw, desc, adr) = elem            
+            (name, suf, _, rw, desc, _) = elem            
             if(rw.find('w') > -1):
                 if(rw.find('m') > -1):
                     ind = '(v_page)'
@@ -290,7 +295,7 @@ class gVhdlStr(object):
 
 class wbsIf():
     
-    def __init__(self, unitname, name, startAdr, adrBits, pageSelect, pages, vendId, devId):
+    def __init__(self, unitname, name, startAdr, pageSelect, pages, dataWidth, vendId, devId, sdbname):
         self.regs       = []        
                 
         self.portList   = []
@@ -303,13 +308,10 @@ class wbsIf():
         self.stubInstanceList = []
         self.name       = name        
         self.startAdr   = startAdr
-        self.adrBits    = adrBits
         self.pageSelect = pageSelect
         self.pages      = pages
-        self.v = wbsVhdlStr(pages, unitname, name, vendId, devId)        
+        self.v = wbsVhdlStr(pages, unitname, name, dataWidth, vendId, devId, sdbname)        
         self.c = wbsCStr(pages, unitname, name)
-        
-
     
     def addReg(self, name, suf, msk, rw, desc, adr = None, offs = 4):
         if adr == None:
@@ -359,14 +361,31 @@ class wbsIf():
         a += self.renderPortStub()
         self.portList = a # no need to indent, we'll do it later with all IF lists together
                 
+    
+
+    def renderSdb(self):
         
+        (_, _, _, _, _, hiAdr) = self.regs[-1]
+        (idxHi, idxLo) = mskWidth(hiAdr)
+        adrRange = 2**(idxHi+1)-1
+        self.v.sdb[7] = self.v.sdb[7] % ('0' * 16) 
+        self.v.sdb[8] = self.v.sdb[8] % ("%016x" % adrRange)
+        
+    
     def renderFsm(self):
+               
+        
         hdr0 = iN(self.v.wbs0, 1) 
         
         rst = adj(self.v.resets(self.regs), ['<='], 4)       
         
+        (_, _, _, _, _, hiAdr) = self.regs[-1]
+        (idxHi, idxLo) = mskWidth(hiAdr)
+        adrRange = 2**(idxHi+1)-1
+        print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto 0\n" % (self.name, len(self.regs), hiAdr, adrRange, idxHi)
+        
         hdr1 = self.v.wbs1        
-        hdr1[3] = hdr1[3] % ('%u downto %u' % (self.adrBits-1, 2))
+        hdr1[3] = hdr1[3] % ('%u downto %u' % (idxHi, 2))
         hdr1    = iN(hdr1, 3)
         
         psel    = iN([self.v.fsmPageSel(self.pageSelect)], 4)
@@ -414,7 +433,8 @@ class wbsIf():
         self.renderRecords()
         self.renderAdr()        
         self.renderRegs()
-        self.renderFsm()  
+        self.renderFsm()
+        self.renderSdb()
 
     
 
@@ -432,9 +452,10 @@ genTypes = {'u'        : 'unsigned',
             'slv'      : 'std_logic_vector'}    
 
 
+vendorIdD   = {'GSI'       : 0x0000000000000651,
+               'CERN'      : 0x000000000000ce42}
 
 
-  
                 
   
     
@@ -448,6 +469,7 @@ def mergeIfLists(slaveList=[], masterList = []):
     cAdrList        = []     
     fsmList         = [] 
     genList         = []
+    sdbList         = []
     
     v = gVhdlStr("")
     
@@ -476,8 +498,8 @@ def mergeIfLists(slaveList=[], masterList = []):
         fsmList      += "\n\n"
         recordList   += iN(commentLine("--","WBS Register Record", slave.name), 1) 
         recordList   += adj(slave.recordList, [ ':', '--> '], 1)
-    
-    print uglyPortList
+        sdbList      += slave.v.sdb + ['\n']
+        
     
     for master in masterList:
         uglyPortList += master.portList
@@ -522,7 +544,7 @@ def mergeIfLists(slaveList=[], masterList = []):
         idx += 1
     genList = adj(genList, [':', ':=', '--'], 1)             
     #Todo: missing generics 
-    return [portList, recordList, regList, vAdrList, fsmList, genList, cAdrList]           
+    return [portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList]        
 
 def parseXML(xmlIn):
     xmldoc      = minidom.parse(xmlIn)   
@@ -565,6 +587,7 @@ def parseXML(xmlIn):
           
         name    = slaveIf.getAttribute('name')
         ifWidth = str2int(slaveIf.getAttribute('data'))
+        print "Slave <%s>: %u Bit wordsize" % (name, ifWidth)
         pages   = slaveIf.getAttribute('pages')
         #check integer generic list
         for genName in genIntD.iterkeys():
@@ -581,9 +604,34 @@ def parseXML(xmlIn):
         
         #sdb record
         sdb = slaveIf.getElementsByTagName('sdb')
-        vendId  = sdb[0].getAttribute('vendorID')
-        prodId  = sdb[0].getAttribute('productID')
-        tmpSlave = wbsIf(unitname, name, 0, 32, '', pages, vendId, prodId) 
+        vendId      = sdb[0].getAttribute('vendorID')
+        prodId      = sdb[0].getAttribute('productID')
+        #check vendors
+        if vendorIdD.has_key(vendId):
+            print "Slave <%s>: Known Vendor ID <%s> found" % (name, vendId)            
+            vendId = vendorIdD[vendId]
+             
+        else:
+            aux = str2int(vendId)
+            if(aux == None):            
+                print "Slave <%s>: Invalid Vendor ID <%s>!" % (name, vendId)    
+            else:
+                vendId = aux                
+                print "Slave <%s>: Unknown Vendor ID <%016x>. Would you like to add to my list?" % (name, vendId)                
+                
+        
+        aux = str2int(prodId)
+        if(aux == None):            
+                print "Slave <%s>: Invalid Product ID <%s>!" % (name, prodId)
+        else:
+            prodId = aux     
+                
+        sdbname     = sdb[0].getAttribute('name')
+        if(len(sdbname) > 19):
+            print "Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname))
+            
+            
+        tmpSlave    = wbsIf(unitname, name, 0, '', pages, ifWidth, vendId, prodId, sdbname) 
         
         selector = ""
         #name, adr, pages, selector
@@ -650,8 +698,9 @@ def parseXML(xmlIn):
                 tmpSlave.addAtomicReg(regname, regmsk, regrwmf, regdesc)
             else:        
                 tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc)
-            #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")    
-        print "Slave <%s>: changing page selector to %s and pages to %s" % (name, selector, pages)    
+            #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
+        if((selector != '') and (pages > 0)):    
+            print "Slave <%s>: Interface has %u memory pages. Selector register is %s" % (name, pages, selector)    
         tmpSlave.pageSelect = selector    
         tmpSlave.pages      = pages    
         tmpSlave.renderAll()    
@@ -735,10 +784,16 @@ def writePkgVhd(filename):
     for line in portList:
         decl.append(line)
     decl += v.componentEnd
+    
+    for line in sdbList:
+        decl.append(line)
+   
     decl = iN(decl, 1)
     for line in decl:
         fo.write(line)
+    
         
+    
     fo.write(v.packageEnd)
     fo.write(v.packageBodyStart)
     fo.write(v.packageEnd)
@@ -749,7 +804,7 @@ def writePkgVhd(filename):
 def writeHdrC(filename):
     fo = open(filename, "w")
     
-    gc       = gCStr(filename, unitname, author, version, date)
+    gc     = gCStr(filename, unitname, author, version, date)
     header = "" #gCStr.hdrfileStart
     
     for line in header:
@@ -806,7 +861,7 @@ fileTbVhd       = unitname      + "_tb"     + ".vhd"
 fileHdrC        = unitname                  + ".h"
 
 
-(portList, recordList, regList, vAdrList, fsmList, genList, cAdrList) = mergeIfLists(ifList)
+(portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList) = mergeIfLists(ifList)
 
 writeMainVhd(fileMainVhd)
 writePkgVhd(filePkgVhd)

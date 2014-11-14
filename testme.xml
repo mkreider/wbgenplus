@@ -1,4 +1,4 @@
-<wbdevice unitname="aGoodWBDevice" author="ich!" version="1.0">
+<wbdevice unitname="aGoodWBDevice" author="ich!" version="1.7.1">
    
    <codegen>
       <generate language="vhdl"  documentation="yes" test="yes"></generate>
@@ -14,12 +14,12 @@
     
    <masterinterface name="irq_master">
       <properties>
-         <interface  data="32" adr="32" type="pipelined"></interface>
+         <interface  data="16" adr="32" type="pipelined"></interface>
       </properties>
    </masterinterface>     
 
-   <slaveinterface name="control_slave" data="32" adr="32" type="pipelined" pages="channels" addressbits="auto">
-      <sdb vendorID="GSI" deviceID="0x01234567" version="1" date="auto"></sdb>
+   <slaveinterface name="control" data="16" type="pipelined" pages="channels">
+      <sdb vendorID="GSI" productID="0x01234567" version="1" date="auto" name="my_ctrl_thingy"></sdb>
       <registers>
            <reg   name="ACTIVE" read="yes" write="yes" access="atomic" mask="f_makeMask(channels)" comment="Turns trigger channels on or off"></reg>
            <reg   name="STATUS" read="yes" write="no"  access="atomic" mask="f_makeMask(channels)" comment="Shows which channels contain Timestamps">
@@ -37,11 +37,12 @@
    </slaveinterface>
    
    
-   <slaveinterface name="data_slave" data="32" adr="32" type="pipelined" pages="0" addressbits="auto">
-      <sdb vendorID="GSI" deviceID="0x01234567" version="1" date="auto"></sdb>
+   <slaveinterface name="data" data="8" type="pipelined" pages="0">
+      <sdb vendorID="0x01234567" productID="0x0815" version="1" date="auto" name="your_data_blob"></sdb>
       <registers>
            <reg   name="INPUT"   read="yes" write="no" access="simple" comment="Data in"></reg>
            <reg   name="OUTPUT"  read="no" write="yes"  access="simple" comment="data out"></reg>
+           <reg   name="THROUGHPUT"  read="yes" write="yes"  access="simple" comment="data through"></reg>
       </registers>
    </slaveinterface>
     
