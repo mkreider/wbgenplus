@@ -6,103 +6,55 @@ This temporary script file is located here:
 /home/mkreider/.spyder2/.temp.py
 """
 from xml.dom import minidom
-import string
 import datetime
+import textformatting
 
+i1          = textformatting.setColIndent
+iN          = textformatting.setColsIndent    
+adj         = textformatting.adjBlockByMarks
+mskWidth    = textformatting.mskWidth
+str2int     = textformatting.parseNumeral
+commentLine = textformatting.commentLine
+commentBox  = textformatting.commentBox
 now = datetime.datetime.now()
 
-def setColIndent(sLine, level, tabsize=3):
-    if(sLine == ""):
-        s = ""
-    else:    
-        ind = ' ' * (tabsize * level)        
-        s = ind + sLine#s = sLine.lstrip(' ')    
-    return s      
+ 
 
-def i1(sLine, level, tabsize=3):
-    return setColIndent(sLine, level, tabsize)
-    
-def setColsIndent(sLines, level, tabsize=3):
-    l = []    
-    for i in range(0, len(sLines)):    
-        l.append(setColIndent(sLines[i], level, tabsize))    
-    return l
-
-def iN(sLines, level, tabsize=3):
-    return setColsIndent(sLines, level, tabsize)
-
-def getMaxBlockColByMark(sLines, cMark, tabsize):
-    offs = 0
-    for line in sLines:
-        if(line.find(cMark) > offs):
-            offs = line.find(cMark)
-            
-    alignedOffs = ((offs + tabsize - 1) // tabsize) * tabsize;        
-    #print "Mark: <%s> Offs: %u Aoffs: %u\n" % (cMark, offs, alignedOffs)
-    return alignedOffs 
-
-def adjColByMark(sLine, cMark, offs):
-    pos = sLine.find(cMark)
-    ins = ' ' * (offs - pos)
-    s = sLine[:pos] + ins + sLine[pos:]    
-    return s
-
-def adjBlockByMarks(sLines, cMarks, indentLvl, tabsize=3):
-    l  = setColsIndent(sLines, indentLvl, tabsize)
-        
-    for mark in cMarks:
-        offs    = getMaxBlockColByMark(l, mark, tabsize)
-        
-        for i in range(0, len(l)):    
-            sLine = l[i]
-            sLine = adjColByMark(sLine, mark, offs)   
-            l[i] = sLine    
-    
-    return l
-
-def mskWidth(msk):
-    result  = 0
-    if(msk != 0): 
-        aux     = bin(msk).split('b')
-        tmpmsk  = aux[-1];
-        hiIdx   = len(tmpmsk)-1 - tmpmsk.find('1')        
-        tmpmsk  = tmpmsk[::-1]
-        loIdx   = tmpmsk.find('1')
-        result  = [hiIdx, loIdx]
-    return result   
-
-class CStr(object):
+class wbsCStr(object):
    
 
     def __init__(self, pages, unitname, slaveIfName):
         self.unitname   = unitname
         self.slaveIfName  = slaveIfName        
-        self.filename   = ""
         self.pages      = pages
         
         #################################################################################        
         #Strings galore        
-        self.header         = []        
-        
         self.constRegAdr    = "#define %s_%%s   0x%%08x // _0x%%08x %%s, %%s\n" % slaveIfName.upper() #name, adrVal,  msk, rw, desc
-        
-    hdrfileStart   = ["#ifndef _%s_H_\n", #   % unitName.capitalize(),
-                      "#define _%s_H_\n\n"] # % unitName.capitalize()]
-    hdrfileEnd     = "#endif\n"        
+
+class gCStr(object):
+    def __init__(self, filename, unitname, author, version, date):
+        self.unitname   = unitname     
+        self.author     = author
+        self.version    = version
+        self.date       = date
+        self.header         = [] 
+        self.hdrfileStart   = ["#ifndef _%s_H_\n"   % unitname.upper(),
+                               "#define _%s_H_\n\n" % unitname.upper()]
+        self.hdrfileEnd     =  "#endif\n"        
        
 
-class VhdlStr(object):
+class wbsVhdlStr(object):
    
 
-    def __init__(self, pages, unitname, slaveIfName):
-        self.unitname   = unitname
-        self.slaveIfName  = slaveIfName        
-        self.filename   = ""
-        self.pages      = pages
+    def __init__(self, pages, unitname, slaveIfName, vendId, devId):
+        self.unitname       = unitname
+        self.slaveIfName    = slaveIfName        
+        self.pages          = pages
         
         #################################################################################        
         #Strings galore        
-        self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName, #name
+        self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName,
                            "%s_o : out t_wishbone_slave_out" % slaveIfName] #name
   
         self.wbs0       = ["%s : process(clk_sys_i)\n" % slaveIfName,
@@ -170,7 +122,33 @@ class VhdlStr(object):
         self.constRecAdrStart   = "constant c_%s_adr : t_%s_adr := (\n" % (slaveIfName, slaveIfName)
         self.constRecAdrLine    = "%s => 16#%x#%s -- 0x%02X, %s, _0x%08x %s\n" #name, adrVal, comma/noComma, adrVal, rw, msk, desc
         self.constRecAdrEnd     = ");\n"
+        self.signalSlv   = "%s : std_logic_vector(%s downto 0); %s\n" #name, idxHi, idxLo, desc
+        self.signalSl    = "signal %s : std_logic; %s\n" #name, desc
+        self.sdbtemplate        = ['constant c_%s_sdb : t_sdb_device := (',
+                                   'abi_class     => x"%s", -- %s',
+                                   'abi_ver_major => x"%s",\n',
+                                   'abi_ver_minor => x"%s",\n',
+                                   'wbd_endian    => c_sdb_%s,\n',
+                                   'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n',
+                                   'sdb_component => (\n',
+                                   'addr_first    => x"%s",\n',
+                                   'addr_last     => x"%s",\n',
+                                   'product => (\n',
+                                   'vendor_id     => x"%s", -- %s\n',
+                                   'device_id     => x"%s",\n',
+                                   'version       => x"%s",\n',
+                                   'date          => x"%s",\n',
+                                   'name          => "%s")));\n']
 
+    wrModes = {'_GET'  : 'owr',
+               '_SET'  : 'set',
+               '_CLR'  : 'clr', 
+               '_OWR'  : 'owr',
+               '_RW '  : 'owr'} 
+
+    nl          = "\n"
+    snl         = ";\n"
+    lnl         = "\n)\n" 
   
     def fsmPageSel(self, pageSel):
         if(pageSel == ""):
@@ -181,23 +159,25 @@ class VhdlStr(object):
     def fsmRead(self, regList):
         s = []    
         for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-            if(elem[3].find('r') > -1):
-                if(elem[3].find('m') > -1):
+            (name, suf, msk, rw, desc, adr) = elem            
+            if(rw.find('r') > -1):
+                if(rw.find('m') > -1):
                     ind = '(v_page)'
                 else:
                     ind = ""
-                s.append(self.wbRead % (elem[0] + elem[1], elem[0]+ind, elem[0]+ind, elem[4]))
+                s.append(self.wbRead % (name + suf, name+ind, name+ind, desc))
         return s
 
     def fsmWrite(self, regList):
         s = []    
         for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-            if(elem[3].find('w') > -1):
-                if(elem[3].find('m') > -1):
+            (name, suf, msk, rw, desc, adr) = elem            
+            if(rw.find('w') > -1):
+                if(rw.find('m') > -1):
                     ind = '(v_page)'
                 else:
                     ind = ""
-                s.append(self.wbWrite % (elem[0] + elem[1], elem[0]+ind, elem[0]+ind, self.wrModes[elem[1]], elem[4]))
+                s.append(self.wbWrite % (name + suf, name+ind, name+ind, self.wrModes[suf], desc))
         return s     
     
    
@@ -252,103 +232,65 @@ class VhdlStr(object):
                    s.append(self.resetSignal % elem[0])
        s.append(self.resetOutput)           
        return s
+
+
+class gVhdlStr(object):
+   
+
+    def __init__(self, unitname, filename="unknown", author="unknown", version="0.0", date=""):
+        self.unitname   = unitname
+        self.filename   = filename        
+        self.author     = author
+        self.version    = version
+        
+        self.header     = ["-- File Name : %s\n"        % filename,                 
+                           "-- Design Unit Name : %s\n" % unitname,    
+                           "-- Revision : %s\n"         % version,                     
+                           "-- Author : %s\n"           % author,                          
+                           "-- Created: %s\n"           % date]                                
     
-    wrModes = {'_GET'   : 'owr',
-               '_SET'   : 'set',
-               '_CLR'   : 'clr', 
-               '_OWR'   : 'owr',
-               '_RW '   : 'owr'}    
-    
-    header      = ["-- File Name : %s\n",       # fileName
-                   "-- Design Unit Name : %s\n",    # autoUnitName
-                   "-- Revision : %s\n",            # Revision
-                   "-- Author : %s\n",              # Author
-                   "-- Created: %s\n"]              # Date        
-    
-    libraries   = ["library ieee;\n",
-                   "use ieee.std_logic_1164.all;\n",
-                   "use ieee.numeric_std.all;\n",
-                   "use work.wishbone_pkg.all;\n"]
-                   
-    
+        self.libraries  = ["library ieee;\n",
+                           "use ieee.std_logic_1164.all;\n",
+                           "use ieee.numeric_std.all;\n",
+                           "use work.wishbone_pkg.all;\n"]
+        self.pkg        =  "use work.%s_pkg.all;\n\n" % unitname                   
+           
+        self.packageStart       = "package %s_pkg is\n\n" % unitname
+        self.componentStart     = "component %s is\n" % unitname
+        self.componentMid       = "Port(\n"    
+        self.componentEnd       = [");\n",
+                                   "end component;\n\n"] 
+        self.packageBodyStart   = "package body %s_pkg is\n" % unitname 
+        self.packageEnd         = "end %s_pkg;\n" % unitname    
+        
+        self.entityStart        = "entity %s is\n" % unitname
+        self.genStart           = "generic(\n"
+        self.genEnd             = ");\n" 
+         
+        self.entityMid   = "Port(\n"
+        self.entityEnd   = ");\nend %s;\n\n" % unitname
+        
+        self.archDecl    = "architecture rtl of %s is\n\n" % unitname
+        self.archStart   = "\n\nbegin\n\n"
+        self.archEnd     = "end rtl;\n"
+        
+        self.genport     = "g_%s : %s := %s%s -- %s\n" #name, type, default
+
+          
+          
     nl          = "\n"
-    snl          = ";\n"
+    snl         = ";\n"
     lnl         = "\n)\n"    
 
-
-    packageStart = "package %s_pkg is\n\n" # autoUnitName
-    componentStart = "component %s is\n" # autoUnitName
-    componentMid   = "Port(\n"    
-    componentEnd   = [");\n",
-                      "end component;\n\n"] 
-    packageBodyStart = "package body %s_pkg is\n" # autoUnitName 
-    packageEnd = "end %s_pkg;\n" # autoUnitName    
-    
-    entityStart = "entity %s is\n" # autoUnitName
-    genStart = "generic(\n"
-    genEnd = ");\n" 
-     
-    entityMid   = "Port(\n"
-    entityEnd   = ");\nend %s;\n\n"
-    
-    archDecl    = "architecture rtl of %s is\n\n" # autoUnitName
-    archStart   = "\n\nbegin\n\n"
-    archEnd     = "end rtl;\n" # autoUnitName
-    
-    genport     = "g_%s : %s := %s%s -- %s\n" #name, type, default
-    signalSlv   = "%s : std_logic_vector(%s downto 0); %s\n" #name, idxHi, idxLo, desc
-    signalSl    = "signal %s : std_logic; %s\n" #name, desc
-    
-
-    
     masterIf    = ["%s_o : out t_wishbone_master_out;\n", # name
                    "%s_i : in  t_wishbone_master_in := ('0', '0', '0', '0', '0', x\"00000000\")"] # name
     
-    
-    
-   
-    commBoxLine     = "--+" + '*' * 90 + "+\n"
-    commBoxCont0    = "--| %s" #topic
-    commBoxCont1    = "|\n" #topic
-        
-       
-    
-    
 
-
-    sdbtemplate = ['constant c_%s_sdb : t_sdb_device := (',
-                   'abi_class => x"%s", -- %s',
-                   'abi_ver_major => x"%s",\n',
-                   'abi_ver_minor => x"%s",\n',
-                   'wbd_endian    => c_sdb_%s,\n',
-                   'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n',
-                   'sdb_component => (\n',
-                   'addr_first    => x"%s",\n',
-                   'addr_last     => x"%s",\n',
-                   'product => (\n',
-                   'vendor_id     => x"%s", -- %s\n',
-                   'device_id     => x"%s",\n',
-                   'version       => x"%s",\n',
-                   'date          => x"%s",\n',
-                   'name          => "%s")));\n']
-    #def addGen(self, name, gtype, value, desc):
-        #self.genList.append([name, gtype, value, desc])
+     
 
 class wbsIf():
-
-    #startAdr    = 0
-    #name        = ""
     
-    #regs        = []
-    
-    #portList    = []
-    #adrList     = []
-    #regList     = []     
-    #fsmList     = []
-    #v = None
-
-    
-    def __init__(self, unitName, name, startAdr, adrBits, pageSelect, pages):
+    def __init__(self, unitname, name, startAdr, adrBits, pageSelect, pages, vendId, devId):
         self.regs       = []        
                 
         self.portList   = []
@@ -364,8 +306,8 @@ class wbsIf():
         self.adrBits    = adrBits
         self.pageSelect = pageSelect
         self.pages      = pages
-        self.v = VhdlStr(pages, unitName, name)        
-        self.c = CStr(pages, unitName, name)
+        self.v = wbsVhdlStr(pages, unitname, name, vendId, devId)        
+        self.c = wbsCStr(pages, unitname, name)
         
 
     
@@ -415,13 +357,13 @@ class wbsIf():
         a = []        
         a.append(self.v.recordPortOut)
         a += self.renderPortStub()
-        self.portList = a # no need to indent, we'll do it later with all IF lists together      
-        
+        self.portList = a # no need to indent, we'll do it later with all IF lists together
+                
         
     def renderFsm(self):
         hdr0 = iN(self.v.wbs0, 1) 
         
-        rst = adjBlockByMarks(self.v.resets(self.regs), ['<='], 4)       
+        rst = adj(self.v.resets(self.regs), ['<='], 4)       
         
         hdr1 = self.v.wbs1        
         hdr1[3] = hdr1[3] % ('%u downto %u' % (self.adrBits-1, 2))
@@ -431,12 +373,12 @@ class wbsIf():
         
         hdr2    = iN(self.v.wbs2, 4)  
         
-        swr     = adjBlockByMarks(self.v.fsmWrite(self.regs), ['=>', '<=', 'v_dat_i'], 7)    
+        swr     = adj(self.v.fsmWrite(self.regs), ['=>', '<=', 'v_dat_i'], 7)    
         
         mid0    = iN([self.v.wbOthers], 7)
         mid1    = iN(self.v.wbs3, 5)
         
-        srd     = adjBlockByMarks(self.v.fsmRead(self.regs), ['=>', '<=', "--"], 7)
+        srd     = adj(self.v.fsmRead(self.regs), ['=>', '<=', "--"], 7)
         ftr     = iN(self.v.wbs4, 1)
         
         self.fsmList = hdr0 + rst + hdr1 + psel +  hdr2 + swr + mid0 + mid1 + srd + mid0 + ftr
@@ -448,8 +390,8 @@ class wbsIf():
             (name, suf, msk, rw, desc, adr) = elem
             a.append(self.v.constRegAdr % (name + suf, adr, adr, msk, rw, desc ))
             b.append(self.c.constRegAdr % (name + suf, adr, msk, rw, desc ))
-        self.vAdrList = adjBlockByMarks(a, [ ':', ':=', '-- 0x', '_0x', '--> '], 2)
-        self.cAdrList = adjBlockByMarks(b, [ '   0x', '//', ','], 0)
+        self.vAdrList = adj(a, [ ':', ':=', '-- 0x', '_0x', '--> '], 2)
+        self.cAdrList = adj(b, [ '   0x', '//', ','], 0)
 
     def renderRecords(self):
         a = []
@@ -492,61 +434,22 @@ genTypes = {'u'        : 'unsigned',
 
 
 
-def parseNumeral(num, default = None):
-    result = default 
-    if(num.find('0x') == 0):       
-        base = 16
-    elif(num.find('0b') == 0):
-        base = 2  
-    else:
-        base = 10
-    
-    try:
-        result = int(num, base)
-    except ValueError:
-        result = default
-    return result    
+  
                 
-def commentLine(ifType, ifName):
-    l = []
-    tmp = VhdlStr.commBoxCont0 % ifType
-    a = len(VhdlStr.commBoxLine)
-    b = len(tmp)
-    c = len(ifName)
-    d = a - (b + c + 3 + 2)
-    pad0 = d // 2 - len(ifType)
-    pad1 = d - pad0
-    cont = tmp + ' ' + ('-' * pad0) + ' ' + ifName + ' ' + ('-' * pad1) + VhdlStr.commBoxCont1   
-    l.append(cont)
-    return l 
-
-def commentBox(ifType, ifName):
-    l = []
-    l.append(VhdlStr.commBoxLine)
-    tmp = VhdlStr.commBoxCont0 % ifType
-    a = len(VhdlStr.commBoxLine)
-    b = len(tmp)
-    c = len(ifName)
-    d = a - (b + c + 3 + 2)
-    pad0 = d // 2 - len(ifType)
-    pad1 = d - pad0
-    
-    cont = tmp + ' ' + (' ' * pad0) + ' ' + ifName + ' ' + (' ' * pad1) + VhdlStr.commBoxCont1   
-    l.append(cont)
-    l.append(VhdlStr.commBoxLine)
- 
-    return l    
+  
     
 def mergeIfLists(slaveList=[], masterList = []):
     uglyPortList    = ["clk_sys_i : in  std_logic;\n",
                        "rst_n_i   : in  std_logic;\n\n"]
-    stubPortList    = uglyPortList                   
+    stubPortList    = [] + uglyPortList                   
     recordList      = []                   
     uglyRegList     = []
     uglyAdrList     = []
     cAdrList        = []     
     fsmList         = [] 
     genList         = []
+    
+    v = gVhdlStr("")
     
     for slave in slaveList:
         uglyPortList += slave.portList
@@ -558,33 +461,39 @@ def mergeIfLists(slaveList=[], masterList = []):
         else:
             uglyPortList[-1] += "\n"
             stubPortList[-1] += "\n"
-        uglyPortList  += "\n"    
-        cAdrList     += ["// %s\n\n" % slave.name]
+        uglyPortList += ["\n"]    
+        cAdrList     += commentLine("//","Address Map", slave.name)
         cAdrList     += slave.cAdrList
         cAdrList     += "\n"
-        uglyAdrList  += iN(commentLine("WBS Adr", slave.name), 1) 
+        uglyAdrList  += iN(commentLine("--","WBS Adr", slave.name), 1) 
         uglyAdrList  += slave.vAdrList
         uglyAdrList  += "\n"
-        uglyRegList  += iN(commentLine("WBS Regs", slave.name),1) 
-        uglyRegList  += adjBlockByMarks(slave.regList, [' is ', ':', ':=', '-->'], 1)
+        uglyRegList  += iN(commentLine("--","WBS Regs", slave.name),1) 
+        uglyRegList  += adj(slave.regList, [' is ', ':', ':=', '-->'], 1)
         uglyRegList  += "\n"
-        fsmList      += iN(commentBox("WBS FSM", slave.name), 1)
+        fsmList      += iN(commentBox("--","WBS FSM", slave.name), 1)
         fsmList      += slave.fsmList   
         fsmList      += "\n\n"
-        recordList   += iN(commentLine("WBS Register Records", slave.name), 1) 
-        recordList   += adjBlockByMarks(slave.recordList, [ ':', '--> '], 1)
-        
+        recordList   += iN(commentLine("--","WBS Register Record", slave.name), 1) 
+        recordList   += adj(slave.recordList, [ ':', '--> '], 1)
+    
+    print uglyPortList
+    
     for master in masterList:
         uglyPortList += master.portList
         uglyAdrList  += master.AdrList       
         uglyRegList  += master.regList    
     
-    portList    = adjBlockByMarks(uglyPortList, [':', ':=', '--'], 1)    
-    regList     = iN(commentBox("", "WB Registers"), 1) + ['\n']\
+    portList    = adj(uglyPortList, [':', ':=', '--'], 1)    
+    
+    recordList  = iN(commentBox("--","", "WB Slaves - Control Register Records"), 1) + ['\n']\
+                + recordList    
+    
+    regList     = iN(commentBox("--","", "WB Registers"), 1) + ['\n']\
                 + uglyRegList
                 
                 
-    vAdrList     = iN(commentBox("", "WB Adress Map"), 1) + ['\n']\
+    vAdrList     = iN(commentBox("--","", "WB Slaves - Adress Maps"), 1) + ['\n']\
                 + uglyAdrList
                 
     if( len(genMiscD) > 0):
@@ -601,7 +510,7 @@ def mergeIfLists(slaveList=[], masterList = []):
             lineEnd = ''
         else:
             lineEnd = ';'
-        genList.append(VhdlStr.genport % (genName, genType, genVal, lineEnd, genDesc))
+        genList.append(v.genport % (genName, genType, genVal, lineEnd, genDesc))
         idx += 1
     for genName in genMiscD.iterkeys():
         if(idx == lastIdx):
@@ -609,19 +518,19 @@ def mergeIfLists(slaveList=[], masterList = []):
         else:
             lineEnd = ';'
         (genType, genVal, genDesc) = genMiscD[genName]
-        genList.append(VhdlStr.genport % (genName, genType, genVal, lineEnd, genDesc))
+        genList.append(v.genport % (genName, genType, genVal, lineEnd, genDesc))
         idx += 1
-    genList = adjBlockByMarks(genList, [':', ':=', '--'], 1)             
+    genList = adj(genList, [':', ':=', '--'], 1)             
     #Todo: missing generics 
     return [portList, recordList, regList, vAdrList, fsmList, genList, cAdrList]           
 
 def parseXML(xmlIn):
     xmldoc      = minidom.parse(xmlIn)   
-    global unitName
+    global unitname
     global author 
     global version
     
-    unitName = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('unitname')
+    unitname = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('unitname')
     author   = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
     version  = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('version')
 
@@ -639,7 +548,7 @@ def parseXML(xmlIn):
         if genTypes.has_key(genType):
             genType = genTypes[genType]               
             if(genType == 'natural'):
-                aux = parseNumeral(genVal)
+                aux = str2int(genVal)
                 if(aux == None):            
                     print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
                 else:        
@@ -655,30 +564,26 @@ def parseXML(xmlIn):
     for slaveIf in slaveIfList:
           
         name    = slaveIf.getAttribute('name')
-        ifWidth = parseNumeral(slaveIf.getAttribute('data'))
+        ifWidth = str2int(slaveIf.getAttribute('data'))
         pages   = slaveIf.getAttribute('pages')
         #check integer generic list
         for genName in genIntD.iterkeys():
             if(pages.find(genName) > -1):
                 (genType, genVal, genDesc) = genIntD[genName]
                 pages = pages.replace(genName, str(genVal))
-        aux = parseNumeral(pages)
+        aux = str2int(pages)
         if(aux == None):            
             print "Slave <%s>: Pages' numeric value <%s> is invalid" % (name, pages)
             pages = 0
         else:        
             pages = aux
     
-        tmpSlave = wbsIf(unitName, name, 0, 32, '', pages)  
-                
-                
-        #get child nodes
-        slaveIfChildren = slaveIf.childNodes
+        
         #sdb record
         sdb = slaveIf.getElementsByTagName('sdb')
         vendId  = sdb[0].getAttribute('vendorID')
         prodId  = sdb[0].getAttribute('productID')
-    
+        tmpSlave = wbsIf(unitname, name, 0, 32, '', pages, vendId, prodId) 
         
         selector = ""
         #name, adr, pages, selector
@@ -688,15 +593,12 @@ def parseXML(xmlIn):
             regname = reg.getAttribute('name')
             regdesc = reg.getAttribute('comment')
                    
-                    
-            
             if reg.hasAttribute('address'):            
                 regadr = reg.getAttribute('address')            
-                aux = parseNumeral(regadr)
+                aux = str2int(regadr)
                 if(aux == None):            
                     print "Slave <%s>: Register <%s>'s supplied address <%x> is invalid, defaulting to auto" % (name, regname, regadr)
                         
-            
             regrwmf    = str()
             if reg.hasAttribute('read'):
                 if reg.getAttribute('read') == 'yes':            
@@ -730,7 +632,7 @@ def parseXML(xmlIn):
                     regmsk = regmsk.rstrip(')') #FIXME: this is extremely presumptious!
                             
                     #mask valid
-                aux = parseNumeral(regmsk)
+                aux = str2int(regmsk)
                 
                 if(aux == None):
                     aux = 2^ int(ifWidth) -1
@@ -759,77 +661,57 @@ def parseXML(xmlIn):
 def writeMainVhd(filename):
     
     fo = open(filename, "w")
-    
-    header = []
-    header.append(VhdlStr.header[0] % filename)
-    header.append(VhdlStr.header[1] % autoUnitName)
-    header.append(VhdlStr.header[2] % version)
-    header.append(VhdlStr.header[3] % author)
-    header.append(VhdlStr.header[4] % date)
-    header.append('\n')
-    header = adjBlockByMarks(header, [':'], 0)
+    v = gVhdlStr(autoUnitName, filename, author, version, date)
+
+    header = adj(v.header + ['\n'], [':'], 0)
     
     for line in header:
         fo.write(line)
     
-    libraries = []
-    libraries += VhdlStr.libraries
-    libraries += "use work.%s_pkg.all;\n\n" % autoUnitName
+    libraries = v.libraries + [v.pkg]
     for line in libraries:
         fo.write(line)
         
-    fo.write(VhdlStr.entityStart % autoUnitName)
-    
+    fo.write(v.entityStart)
     if(len(genIntD) + len(genMiscD) > 0):
-        fo.write(VhdlStr.genStart)
+        fo.write(v.genStart)
         for line in genList:   
             fo.write(line)
-        fo.write(VhdlStr.genEnd)
+        fo.write(v.genEnd)
     
-    fo.write(VhdlStr.entityMid)
-    
+    fo.write(v.entityMid)
     for line in portList:
         fo.write(line)
         
-    fo.write(VhdlStr.entityEnd % autoUnitName)
+    fo.write(v.entityEnd)
     
-    fo.write(VhdlStr.archDecl % autoUnitName)
-    
+    fo.write(v.archDecl)
     for line in regList:
         fo.write(line)
     
-    fo.write(VhdlStr.archStart)
-    
+    fo.write(v.archStart)
     for line in fsmList:
         fo.write(line)
     
-    fo.write(VhdlStr.archEnd)
+    fo.write(v.archEnd)
     
     fo.close
 
 def writePkgVhd(filename):
     fo = open(filename, "w")
     
-    header = []
-    header.append(VhdlStr.header[0] % filename)
-    header.append(VhdlStr.header[1] % autoUnitName)
-    header.append(VhdlStr.header[2] % version)
-    header.append(VhdlStr.header[3] % author)
-    header.append(VhdlStr.header[4] % date)
-    header.append('\n')
-    header = adjBlockByMarks(header, [':'], 0)
+    v = gVhdlStr(autoUnitName, filename, author, version, date)
+
+    header = adj(v.header + ['\n'], [':'], 0)
     
     for line in header:
         fo.write(line)
     
-    libraries = []
-    libraries += VhdlStr.libraries
-    libraries += '\n'
+    libraries = v.libraries
     for line in libraries:
-        fo.write(line)
+        fo.write(line)    
     
-    
-    fo.write(VhdlStr.packageStart % autoUnitName)
+    fo.write(v.packageStart)
     
     for line in vAdrList:
         fo.write(line)    
@@ -837,29 +719,29 @@ def writePkgVhd(filename):
     decl = []
     for line in recordList:
         decl.append(line)
-    decl += (iN(commentLine("Component", autoUnitName), 1)) 
+    decl += (iN(commentLine("--", "Component", autoUnitName), 1)) 
     
     for line in decl:
         fo.write(line)    
     
     decl = []
-    decl.append(VhdlStr.componentStart % autoUnitName)
+    decl.append(v.componentStart)
     if(len(genIntD) + len(genMiscD) > 0):
-        decl.append(VhdlStr.genStart)
+        decl.append(v.genStart)
         for line in genList:   
             decl.append(line)
-        decl.append(VhdlStr.genEnd)
-    decl.append(VhdlStr.entityMid)
+        decl.append(v.genEnd)
+    decl.append(v.entityMid)
     for line in portList:
         decl.append(line)
-    decl += VhdlStr.componentEnd
+    decl += v.componentEnd
     decl = iN(decl, 1)
     for line in decl:
         fo.write(line)
         
-    fo.write(VhdlStr.packageEnd % autoUnitName)
-    fo.write(VhdlStr.packageBodyStart % autoUnitName)
-    fo.write(VhdlStr.packageEnd % autoUnitName)
+    fo.write(v.packageEnd)
+    fo.write(v.packageBodyStart)
+    fo.write(v.packageEnd)
     
     fo.close
 
@@ -867,31 +749,22 @@ def writePkgVhd(filename):
 def writeHdrC(filename):
     fo = open(filename, "w")
     
-    header = CStr.hdrfileStart
+    gc       = gCStr(filename, unitname, author, version, date)
+    header = "" #gCStr.hdrfileStart
     
-    header[0] = header[0] % unitName.upper()
-    header[1] = header[1] % unitName.upper()
     for line in header:
         fo.write(line)
+    
+    for line in gc.hdrfileStart:
+        fo.write(line)
+   
     for line in cAdrList:
         fo.write(line)    
-    fo.write(CStr.hdrfileEnd)
+    fo.write(gc.hdrfileEnd)
     
     fo.close
 #TODO: A lot ...
-            
-#        codegenParent = self.xmldoc.getElementsByTagName('codegen')
-#        if len(codegenParent) != 1:
-#            print "There must be exactly 1 codegen tag!"
-#        else:
-#            print "Found codegen"    
-#            codegenList = codegenParent[0].getElementsByTagName('generate')
-#            for generator in codegenList:
-#                s = generator.getAttribute('language')
-                #if(set([s]).issubset(codeGen)):
-                    #valid language
-#                else:
-                    #nothing
+
         
 #masterIfList = xmldoc.getElementsByTagName('masterinterface')
 #for masterIf in masterIfList:
@@ -913,24 +786,24 @@ cAdrList    = []
 fsmList     = []
 genList     = []
 ifList      = []
-unitName    = "unknown unit"
+unitname    = "unknown unit"
 author      = "unknown author"
 version     = "unknown version"
 date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
 
 parseXML(xmlIn)
 
-autoUnitName = unitName + "_auto"
+autoUnitName = unitname + "_auto"
 
 #filenames for various output files
 fileMainVhd     = autoUnitName              + ".vhd"
 filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
 
-fileStubVhd     = unitName                  + ".vhd"
-fileStubPkgVhd  = unitName      + "_pkg"    + ".vhd"
-fileTbVhd       = unitName      + "_tb"     + ".vhd"
+fileStubVhd     = unitname                  + ".vhd"
+fileStubPkgVhd  = unitname      + "_pkg"    + ".vhd"
+fileTbVhd       = unitname      + "_tb"     + ".vhd"
 
-fileHdrC        = unitName                  + ".h"
+fileHdrC        = unitname                  + ".h"
 
 
 (portList, recordList, regList, vAdrList, fsmList, genList, cAdrList) = mergeIfLists(ifList)
