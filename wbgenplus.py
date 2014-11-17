@@ -8,6 +8,7 @@ This temporary script file is located here:
 from xml.dom import minidom
 import datetime
 import textformatting
+import math
 
 i1          = textformatting.setColIndent
 iN          = textformatting.setColsIndent    
@@ -164,58 +165,77 @@ class wbsVhdlStr(object):
   
     def fsmRead(self, regList):
         s = []    
-        for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-            (name, suf, _, rw, desc, _) = elem            
-            if(rw.find('r') > -1):
-                if(rw.find('m') > -1):
-                    ind = '(v_page)'
-                else:
-                    ind = ""
-                s.append(self.wbRead % (name + suf, name+ind, name+ind, desc))
+        for elem in regList:        
+           (name, desc, rwma, width, opList) = elem
+           if(rwma.find('m') > -1):
+               ind = '(v_page)'
+           else:
+               ind = ""            
+           for opLine in opList:
+               (op, adrList) = opLine
+               if(op == "_GET"):                    
+                   if(len(adrList) > 1):
+                       #this is sliced
+                       for adrLine in adrList:
+                           (msk, adr) = adrLine
+                           s.append(self.wbRead % (name + op, name+ind, name+ind, desc))
+                   else:
+                       (msk, adr) = adrList[0]
+                       s.append(self.wbRead % (name + op, name+ind, name+ind, desc))
         return s
 
     def fsmWrite(self, regList):
         s = []    
-        for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-            (name, suf, _, rw, desc, _) = elem            
-            if(rw.find('w') > -1):
-                if(rw.find('m') > -1):
-                    ind = '(v_page)'
-                else:
-                    ind = ""
-                s.append(self.wbWrite % (name + suf, name+ind, name+ind, self.wrModes[suf], desc))
+        for elem in regList:        
+            (name, desc, rwma, width, opList) = elem
+           
+            if(rwma.find('m') > -1):
+                ind = '(v_page)'
+            else:
+                ind = ""            
+            for opLine in opList:
+                (op, adrList) = opLine
+                if(op != "_GET"):                    
+                    if(len(adrList) > 1):
+                        #this is sliced
+                        for adrLine in adrList:
+                            (msk, adr) = adrLine
+                            s.append(self.wbWrite % (name + op, name+ind, name+ind, self.wrModes[op], desc))
+                    else:
+                        (msk, adr) = adrList[0]
+                        s.append(self.wbWrite % (name + op, name+ind, name+ind, self.wrModes[op], desc))
         return s     
     
    
     def regs(self, regList):
        recordelements   = []
        types            = []
-       for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-           if(elem[0] != nextElem[0]):
-               if(elem[3].find('m') > -1):
-                   types            += self.multitype(elem)
-                   recordelements   += self.multielement(elem)                    
-               else:    
-                   recordelements.append(self.reg(elem))
+       for elem in regList:        
+           (name, desc, rwma, width, opList) = elem
+           if(rwma.find('m') > -1):
+               types            += self.multitype(elem)
+               recordelements   += self.multielement(elem)                    
+           else:    
+               recordelements.append(self.reg(elem))
        return [types, recordelements]           
     
-    def reg(self, (name, suf, msk, rw, desc, adr)):
-        (idxHi, idxLo) = mskWidth(msk);        
-        s = self.signalSlv % (name, idxHi-idxLo, desc)        
+    def reg(self, elem):
+        (name, desc, rwma, width, opList) = elem       
+        s = self.signalSlv % (name, width, desc)        
         return s
     
 
-    def multitype(self, (name, suf, msk, rw, desc, adr), qty = 1):
+    def multitype(self, elem):
+        (name, desc, rwma, width, opList) = elem        
         s = []        
-        (idxHi, idxLo) = mskWidth(msk);
         s.append('\n')        
-        s.append(self.slvSubType % (name, idxHi-idxLo)) #shift mask to LSB
+        s.append(self.slvSubType % (name, width)) #shift mask to LSB
         s.append(self.slvArrayType % (name, name))
         return s 
     
-    def multielement(self, (name, suf, msk, rw, desc, adr), qty = 1):
+    def multielement(self, elem, qty=1):
+        (name, desc, rwma, width, opList) = elem        
         s = []        
-        (idxHi, idxLo) = mskWidth(msk);
         s.append('\n')        
         if(type(qty) == int):
             s.append(self.signalSlvArray % (name, name, (self.pages-1), desc))
@@ -224,18 +244,25 @@ class wbsVhdlStr(object):
         return s    
               
     
-    def cRegAdr(self, (name, suf, msk, rw, desc, adr)):
-        s = self.recAdr % (name + suf, adr, adr, rw, msk, desc)        
+    def cRegAdr(self, elem):
+        (name, desc, rwma, width, opList) = elem
+        rw = rwma.replace('m', '').replace('a', '')
+        for opLine in opList:
+            (op, adrList) = opLine
+            for adrLine in adrList:
+                (msk, adr) = adrLine
+                s = self.recAdr % (name + op, adr, adr, rw, msk, desc)    
+                    
         return s
     
     def resets(self, regList):
        s = []
-       for elem, nextElem in zip(regList, regList[1:]+[regList[0]]):
-           if(elem[0] != nextElem[0]):
-               if(elem[3].find('m') > -1):
-                   s.append(self.resetSignalArray % elem[0])                      
-               else:
-                   s.append(self.resetSignal % elem[0])
+       for elem in regList:
+           (name, desc, rwma, width, opList) = elem
+           if(rwma.find('m') > -1):
+               s.append(self.resetSignalArray % name)                      
+           else:
+               s.append(self.resetSignal % name)
        s.append(self.resetOutput)           
        return s
 
@@ -315,45 +342,98 @@ class wbsIf():
         self.v = wbsVhdlStr(pages, unitname, name, dataWidth, vendId, devId, sdbname)        
         self.c = wbsCStr(pages, unitname, name)
     
-    def addReg(self, name, suf, msk, rw, desc, adr = None, offs = 4):
-        if adr == None:
-            if len(self.regs) == 0:
-                adr = self.startAdr
-                self.regs.append([name, suf, msk, rw, desc, adr])
-            else:            
-                self.regs.append([name, suf, msk, rw, desc, self.regs[-1][5] +offs])
-        else:
-            if len(self.regList) > 1:            
-                if adr > self.regList[-1][5]:
-                    self.regs.append([name, suf, msk, rw, desc, adr])
-                else:
-                    print "Error, double address detected"
-            else:
-                self.regs.append([name, suf, msk, rw, desc, adr])
-                
+    def sliceMsk(self, aMsk):
+        mskList = []
+        msk     = 0 + aMsk
+        (idxHi, idxLo) = mskWidth(msk)
+        regWidth    = (idxHi-idxLo+1)
+        words       = regWidth / self.dataWidth
+        for i in range(0, words):
+            mskList.append(2**self.dataWidth-1)                
+            msk >>= self.dataWidth
+        if(msk):
+            mskList.append(msk)
+        return (mskList)     
     
-    def addSimpleReg(self, name, msk, rw, desc, adr = None, offs = 4):
-        s = str()        
-        if rw.find('rw') > -1:
-            s = '_OWR'
-        elif rw.find('r') > -1:    
-            s = '_GET'
-        elif rw.find('w') > -1:
-            s = '_SET'            
-        self.addReg(name, s, msk, rw, "--> " + desc, adr, offs)
+    def getLastAdr(self, elem):
         
-    def addAtomicReg(self, name, msk, rw, desc, adr = None, offs = 4):
-        if rw.find('r') > -1:
-            self.addReg(name, '_GET', msk, rw.translate(None, 'w'), "--> " + desc, adr, offs)
-            adr = None
-        if rw.find('w') > -1:    
-            if rw.find('r') > -1:            
-                self.addReg(name, '_SET', msk, rw.translate(None, 'r'), "--> " + desc, adr, offs)                
-                self.addReg(name, '_CLR', msk, rw.translate(None, 'r'), "--> " + desc, None, offs)        
+        (_, _, _, _, opList) = elem
+        print opList
+        (_, adrList) = opList[-1]
+        print adrList
+        (_, adr)  = adrList[-1]
+        print adr
+        return adr          
+    
+    def addOp(self, opList, startAdr, offs, bigMsk, op):
+        adrList = []        
+        
+        if startAdr == None:
+            if len(self.regs) == 0 and len(opList) ==  0:
+                adr = self.startAdr
             else:
-                self.addReg(name, '_SET', msk, rw.translate(None, 'r'), "--> " + desc, adr, offs) 
-
-  
+                if len(opList) >  0:
+                    print opList
+                    (_, oldAdrList) = opList[-1]
+                    (_, oldAdr)  = oldAdrList[-1]
+                    adr = oldAdr + offs
+                else:            
+                    adr = self.getLastAdr(self.regs[-1]) + offs
+        else:
+            adr = (startAdr // offs) * offs          
+        print "OP <%s> adr is %x" % (op, adr)
+        mskList = self.sliceMsk(bigMsk)
+        for msk in mskList:
+            adrList.append([msk, adr])
+            adr += offs
+        #print '*' * 10
+        #print opList
+        opList.append([op, adrList])
+        #print '+' * 10        
+        print "OP: %s Msk: %u Oplsit: %u adrList %u" % (op, len(mskList), len(opList), len(adrList))
+        
+        
+    
+    def addReg(self, name, desc, bigMsk, rwma, startAdr=None, offs=4):
+        opList  = []        
+        newElem = []            
+        adr = startAdr
+              
+        if(rwma.find('a') > -1): # atomic
+            if rwma.find('r') > -1:
+                self.addOp(opList, adr, offs, bigMsk, '_GET')
+                adr = None
+            if rwma.find('w') > -1:    
+                if rwma.find('r') > -1:            
+                    self.addOp(opList, adr, offs, bigMsk, '_SET')                
+                    self.addOp(opList, None, offs, bigMsk, '_CLR')        
+                else:    
+                    self.addOp(opList, adr, offs, bigMsk, '_SET')
+        else:
+            op = str()        
+            if rwma.find('rw') > -1:
+                op = '_OWR'
+            elif rwma.find('r') > -1:    
+                op = '_GET'
+            elif rwma.find('w') > -1:
+                op = '_SET'
+            self.addOp(opList, adr, offs, bigMsk, op)      
+        (idxHi, idxLo) = mskWidth(bigMsk)
+        width   = (idxHi-idxLo+1)
+        newElem = [name, desc, rwma, width, opList]
+        print "lenElem %u" % len(newElem)
+        print "Reg <%s>, Desc <%s>, <%s> w <%u>" % (name, desc, rwma, width)
+        i = 0        
+        for opLine in opList:
+            print opLine            
+            (op, adrList) = opLine            
+            print "#%u <%s>" % (i, op)
+            for adrLine in adrList:
+               (msk, adr) = adrLine     
+               print "msk <%x>, adr <%x>" % (msk, adr) 
+        self.regs.append(newElem)      
+    
+    
     def renderPortStub(self):
         return self.v.slaveIf  
   
@@ -367,7 +447,7 @@ class wbsIf():
 
     def renderSdb(self):
         
-        (_, _, _, _, _, hiAdr) = self.regs[-1]
+        hiAdr = self.getLastAdr(self.regs[-1])
         (idxHi, idxLo) = mskWidth(hiAdr)
         adrRange = 2**(idxHi+1)-1
         self.v.sdb[7] = self.v.sdb[7] % ('0' * 16) 
@@ -381,7 +461,8 @@ class wbsIf():
         
         rst = adj(self.v.resets(self.regs), ['<='], 4)       
         
-        (_, _, _, _, _, hiAdr) = self.regs[-1]
+        hiAdr = self.getLastAdr(self.regs[-1])
+        print hiAdr, type(hiAdr)
         (idxHi, idxLo) = mskWidth(hiAdr)
         adrRange = 2**(idxHi+1)-1
         print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto 0\n" % (self.name, len(self.regs), hiAdr, adrRange, idxHi)
@@ -407,17 +488,21 @@ class wbsIf():
     def renderAdr(self):
         a = []
         b = []
-        (_, _, _, _, _, hiAdr) = self.regs[-1]
-        (idxHi, idxLo) = mskWidth(hiAdr)
+        adrHi = self.getLastAdr(self.regs[-1])        
+        (idxHi, idxLo) = mskWidth(adrHi)
+        
         adrx = ("%0" + str((idxHi+1+3)/4) + "x")
         mskx = ("%0" + str(self.dataWidth/4) + "x")
         print adrx, mskx
-        for elem in self.regs:
-            (name, suf, msk, rw, desc, adr) = elem
-           
-             
-            a.append(self.v.constRegAdr % (name + suf, adrx % adr, mskx % msk, rw, desc ))
-            b.append(self.c.constRegAdr % (name + suf, adrx  % adr, mskx % msk, rw, desc ))
+        for elem in self.regs:        
+            (name, desc, rwma, width, opList) = elem
+            rw = rwma.replace('m', '').replace('a', '')
+            for opLine in opList:
+                (op, adrList) = opLine
+                for adrLine in adrList:
+                    (msk, adr) = adrLine
+                    a.append(self.v.constRegAdr % (name + op, adrx % adr, rw, mskx % msk, desc ))
+                    b.append(self.c.constRegAdr % (name + op, adrx % adr, rw, mskx % msk, desc ))   
         self.vAdrList = adj(a, [ ':', ':=', '-- 0x', '_0x', '--> '], 2)
         self.cAdrList = adj(b, [ '   0x', '//', ','], 0)
 
@@ -667,6 +752,9 @@ def parseXML(xmlIn):
             if reg.hasAttribute('paged'):
                 if reg.getAttribute('paged') == 'yes':
                     regrwmf += 'm'
+            if reg.hasAttribute('access'):
+                if reg.getAttribute('access') == 'atomic':
+                    regrwmf += 'a'        
             if reg.hasAttribute('selector'):            
                 if reg.getAttribute('selector') == 'yes':            
                     if(selector == ""):            
@@ -703,11 +791,7 @@ def parseXML(xmlIn):
                 print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
                 regmsk = 2**ifWidth-1
             
-         
-            if (reg.getAttribute('access') == "atomic"):
-                tmpSlave.addAtomicReg(regname, regmsk, regrwmf, regdesc, regadr, ifWidth/8)
-            else:        
-                tmpSlave.addSimpleReg(regname, regmsk, regrwmf, regdesc, regadr, ifWidth/8)
+            tmpSlave.addReg(regname, regdesc, regmsk, regrwmf,  regadr, ifWidth/8)
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
         if((selector != '') and (pages > 0)):    
             print "Slave <%s>: Interface has %u memory pages. Selector register is %s" % (name, pages, selector)    
