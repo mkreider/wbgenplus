@@ -32,21 +32,23 @@ def getMaxBlockColByMark(sLines, cMark, tabsize):
             offs = line.find(cMark)
             
     alignedOffs = ((offs + tabsize - 1) // tabsize) * tabsize;        
-    #print "Mark: <%s> Offs: %u Aoffs: %u\n" % (cMark, offs, alignedOffs)
+    
     return alignedOffs 
 
 def adjColByMark(sLine, cMark, offs):
     pos = sLine.find(cMark)
-    ins = ' ' * (offs - pos)
-    s = sLine[:pos] + ins + sLine[pos:]    
+    if(pos > -1):
+        ins = ' ' * (offs - pos)
+        s = sLine[:pos] + ins + sLine[pos:]
+    else:
+        s = sLine
     return s
 
 def adjBlockByMarks(sLines, cMarks, indentLvl, tabsize=3):
     l  = setColsIndent(sLines, indentLvl, tabsize)
-        
+    
     for mark in cMarks:
         offs    = getMaxBlockColByMark(l, mark, tabsize)
-        
         for i in range(0, len(l)):    
             sLine = l[i]
             sLine = adjColByMark(sLine, mark, offs)   

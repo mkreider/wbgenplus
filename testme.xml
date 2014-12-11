@@ -31,16 +31,16 @@
            <reg   name="CHSEL"  read="yes" write="yes"  access="simple" mask="0xff" selector="yes" comment="Selects/Shows active channel"></reg>
            
            <reg   name="TS_POP" read="no" write="yes"  access="simple" mask="1"     address="0x100" paged="yes" comment="Write here to pop Timestamp"></reg>
-           <reg   name="TS" read="yes" write="yes"  access="atomic"  mask="f_makeMask(64)" paged="yes" comment="Timestamp"></reg>
+           <reg   name="TS" read="yes" write="no"  access="atomic"  mask="f_makeMask(80)" paged="yes" comment="Timestamp"></reg>
       </registers>
    </slaveinterface>
    
    
-   <slaveinterface name="data" data="8" type="pipelined" pages="0">
+   <slaveinterface name="data" data="32" type="pipelined" pages="0">
       <sdb vendorID="0x01234567" productID="0x0815" version="1" date="auto" name="your_data_blob"></sdb>
       <registers>
-           <reg   name="INPUT"   read="yes" write="no" access="simple" comment="Data in"></reg>
-           <reg   name="OUTPUT"  read="no" write="yes"  access="simple" comment="data out"></reg>
+           <reg   name="INPUT"   read="yes" write="no" mask="f_makeMask(64)" access="simple" comment="Data in"></reg>
+           <reg   name="OUTPUT"  read="no" write="yes" mask="f_makeMask(40)" access="simple" comment="data out"></reg>
            <reg   name="THROUGHPUT"  read="yes" write="yes"  access="simple" comment="data through"></reg>
       </registers>
    </slaveinterface>
