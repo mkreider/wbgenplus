@@ -91,6 +91,7 @@ class wbsVhdlStr(object):
                            "   v_en              := %s_i.cyc and %s_i.stb and not r_%s_out.stall;\n" % (slaveIfName, slaveIfName, slaveIfName),
                            "   v_we              := %s_i.we;\n\n" % slaveIfName,
                            "   --interface outputs\n",
+                           "   r_%s_out.stall  <= '0';\n" % slaveIfName,                            
                            "   r_%s_out.ack    <= '0';\n" % slaveIfName,
                            "   r_%s_out.err    <= '0';\n" % slaveIfName,
                            "   r_%s_out.dat    <= (others => '0');\n\n" % slaveIfName] 
@@ -113,24 +114,29 @@ class wbsVhdlStr(object):
                            "   end if; -- clk edge\n",
                            "end process;\n\n"]
                            
-        self.wbs5       = ["r_%s_out.stall  <= %s_regs_i.stall;\n" % (slaveIfName, slaveIfName),
-                           "%s_regs_o <= r_%s;\n" % (slaveIfName, slaveIfName),
-                           "s_%s  <= %s_regs_i;\n" % (slaveIfName, slaveIfName)]                
+        self.wbs5       = ["%s_regs_o <= r_%s;\n" % (slaveIfName, slaveIfName),
+                           "s_%s <= %s_regs_i;\n" % (slaveIfName, slaveIfName),
+                           "%s_o.stall <= r_%s_out.stall or %s_regs_i.STALL;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
+                           "%s_o.dat <= r_%s_out.dat;\n" % (slaveIfName, slaveIfName),                           
+                           "%s_o.ack <= r_%s_out.ack;\n" % (slaveIfName, slaveIfName),                           
+                           "%s_o.err <= r_%s_out.err;\n" % (slaveIfName, slaveIfName)]                
       
         self.slvSubType         = "subtype t_slv_%s_%%s is std_logic_vector(%%s downto 0);\n" % slaveIfName #name, idxHi
         self.slvArrayType       = "type    t_slv_%s_%%s_array is array(natural range <>) of t_slv_%s_%%s;\n" % (slaveIfName, slaveIfName)  #name, #name
         self.signalSlvArray     = "%%s : t_slv_%s_%%s_array(%%s downto 0); -- %%s\n"  % slaveIfName #name, name, idxHi, desc
         self.wbsPageSelect      = "v_page := to_integer(unsigned(r_%s.%%s));\n\n"  % slaveIfName #pageSelect Register
         self.wbWrite            = "when c_%s_%%s => r_%s.%%s <= f_wb_wr(r_%s.%%s, v_dat_i, v_sel, \"%%s\"); -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, (set/clr/owr), desc
-        self.wbWriteWe          = "r_%s.%%s_WE <= '1'; -- %%s\n" % (slaveIfName) #registerName
-        self.wbWriteWeZero      = "r_%s.%%s_WE <= '0'; -- %%s\n" % (slaveIfName) #registerName
-        self.wbWritePulseZero   = "r_%s.%%s <= (others => '0'); -- %%s\n" % (slaveIfName) #registerName        
+        self.wbWriteWe          = "r_%s.%%s_WE <= '1'; --    %%s write enable\n" % (slaveIfName) 
+        self.wbWriteWeZero      = "r_%s.%%s_WE <= '0'; -- %%s pulse\n" % (slaveIfName)
+        self.wbStall            = "r_%s_out.STALL  <= '1'; --    %%s auto stall\n" % (slaveIfName)
+        self.wbWritePulseZero   = "r_%s.%%s <= (others => '0'); -- %%s pulse\n" % (slaveIfName) #registerName        
         self.wbRead             = "when c_%s_%%s => r_%s_out.dat(%%s) <= s_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
         self.wbOthers           = "when others => r_%s_out.ack <= '0'; r_%s_out.err <= '1';\n" % (slaveIfName, slaveIfName) 
         self.wbs_output_reg     = "signal r_%s_out : t_wishbone_slave_out; --> WB output buffer register\n" % slaveIfName
         self.wbs_reg_o          = "signal r_%s : t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
         self.wbs_reg_i          = "signal s_%s : t_%s_regs_i;\n" % (slaveIfName, slaveIfName)
-        self.resetOutput        = ["r_%s_out.ack    <= '0';\n" % slaveIfName,
+        self.resetOutput        = ["r_%s_out.stall  <= '0';\n" % slaveIfName,
+                                   "r_%s_out.ack    <= '0';\n" % slaveIfName,
                                    "r_%s_out.err    <= '0';\n" % slaveIfName,
                                    "r_%s_out.dat    <= (others => '0');\n" % slaveIfName]
         self.resetSignal        = "r_%s.%%s <= (others => '0');\n" % slaveIfName #registerName   
@@ -191,8 +197,8 @@ class wbsVhdlStr(object):
     def fsmRead(self, regList):
         s = []    
         for elem in regList:        
-           (name, desc, rwmaf, width, opList) = elem
-           if(rwmaf.find('m') > -1):
+           (name, desc, rwmafs, width, opList) = elem
+           if(rwmafs.find('m') > -1):
                ind = '(v_page)'
            else:
                ind = ""            
@@ -227,6 +233,8 @@ class wbsVhdlStr(object):
                        sliceWidth       = (idxHi-idxLo+1) 
                        baseSlice        = "%u downto %u" % ( sliceWidth -1, 0)
                        s.append(self.wbRead % (name + op, baseSlice, name+ind, desc))
+                   if((rwmafs.find('s') > -1)):             
+                       s.append(self.wbStall % name)    
         return s
 
   
@@ -234,9 +242,9 @@ class wbsVhdlStr(object):
     def fsmWrite(self, regList):
         s = []    
         for elem in regList:        
-            (name, desc, rwmaf, width, opList) = elem
+            (name, desc, rwmafs, width, opList) = elem
            
-            if(rwmaf.find('m') > -1):
+            if(rwmafs.find('m') > -1):
                 ind = '(v_page)'
             else:
                 ind = ""
@@ -269,61 +277,68 @@ class wbsVhdlStr(object):
                         else:
                             comment = '\"\"'
                         s.append(self.wbWrite % (name + op, name+ind, name+ind, self.wrModes[op], comment))
-                    if(rwmaf.find('f') > -1):
-                        s.append(self.wbWriteWe % (name, "Write enable flag"))    
+                    if(rwmafs.find('f') > -1):
+                        s.append(self.wbWriteWe % (name, name))
+                    if((rwmafs.find('s') > -1)):             
+                        s.append(self.wbStall % name)     
                     opIdx += 1
         return s     
+
+
+
 
     def fsmWritePulse(self, regList):
         s = []    
         for elem in regList:        
-            (name, desc, rwmaf, width, opList) = elem
+            (name, desc, rwmafs, width, opList) = elem
            
-            if(rwmaf.find('m') > -1):
+            if(rwmafs.find('m') > -1):
                 ind = '(v_page)'
             else:
                 ind = ""
             
-            if(rwmaf.find('w') > -1):
-                if((rwmaf.find('f') > -1)):
-                    s.append(self.wbWriteWeZero % (name, "we flag register"))
-                if((rwmaf.find('p') > -1)):             
-                    s.append(self.wbWritePulseZero % (name, "pulse register"))
+            if(rwmafs.find('w') > -1):
+                if((rwmafs.find('f') > -1)):
+                    s.append(self.wbWriteWeZero % (name, name))
+                if((rwmafs.find('p') > -1)):             
+                    s.append(self.wbWritePulseZero % (name, name))
+                                
+                    
         return s 
     
    
     def regs(self, regList):
        recordsOut       = []
-       recordsIn        = [] + [self.signalSl % ('stall', 'Stall control for outside entity')]
+       recordsIn        = [] + [self.signalSl % ('STALL', 'Stall control for outside entity')]
        types            = []
        for elem in regList:        
-           (name, desc, rwmaf, width, opList) = elem
-           if(rwmaf.find('m') > -1):
+           (name, desc, rwmafs, width, opList) = elem
+           if(rwmafs.find('m') > -1):
                types            += self.multitype(elem)
-               if(rwmaf.find('w') > -1):
+               if(rwmafs.find('w') > -1):
                    recordsOut       += self.multielement(elem)
-                   if(rwmaf.find('f') > -1):
+                   if(rwmafs.find('f') > -1):
                        recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
-               if(rwmaf.find('r') > -1):            
+               if(rwmafs.find('r') > -1):            
                    recordsIn       += self.multielement(elem)      
            else:
-               if(rwmaf.find('w') > -1):
+               if(rwmafs.find('w') > -1):
                    recordsOut.append(self.reg(elem))
-                   if(rwmaf.find('f') > -1):
+                   if(rwmafs.find('f') > -1):
                        recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
-               if(rwmaf.find('r') > -1): 
+               if(rwmafs.find('r') > -1): 
                    recordsIn.append(self.reg(elem))
                    
        return [types, recordsOut, recordsIn]           
     
     def reg(self, elem):
-        (name, desc, rwmaf, width, opList) = elem       
+        (name, desc, rwmafs, width, opList) = elem       
         s = self.signalSlv % (name, width-1, desc)        
         return s
     
 
     def multitype(self, elem):
-        (name, desc, rwmaf, width, opList) = elem        
+        (name, desc, rwmafs, width, opList) = elem        
         s = []        
         s.append('\n')        
         s.append(self.slvSubType % (name, width-1)) #shift mask to LSB
@@ -331,7 +346,7 @@ class wbsVhdlStr(object):
         return s 
     
     def multielement(self, elem, qty=1):
-        (name, desc, rwmaf, width, opList) = elem        
+        (name, desc, rwmafs, width, opList) = elem        
         s = []        
       
         if(type(qty) == int):
@@ -342,8 +357,8 @@ class wbsVhdlStr(object):
               
     
     def cRegAdr(self, elem):
-        (name, desc, rwmaf, width, opList) = elem
-        rw = rwmaf.replace('m', '').replace('a', '')
+        (name, desc, rwmafs, width, opList) = elem
+        rw = rwmafs.replace('m', '').replace('a', '')
         for opLine in opList:
             (op, adrList) = opLine
             for adrLine in adrList:
@@ -355,13 +370,13 @@ class wbsVhdlStr(object):
     def resets(self, regList):
        s = []
        for elem in regList:
-           (name, desc, rwmaf, width, opList) = elem
-           if(rwmaf.find('w') > -1):
-               if(rwmaf.find('m') > -1):
+           (name, desc, rwmafs, width, opList) = elem
+           if(rwmafs.find('w') > -1):
+               if(rwmafs.find('m') > -1):
                    s.append(self.resetSignalArray % name)                      
                else:
                    s.append(self.resetSignal % name)
-               if(rwmaf.find('f') > -1):
+               if(rwmafs.find('f') > -1):
                    s.append(self.wbWriteWeZero % (name, ""))    
        s += self.resetOutput           
        return s
@@ -509,35 +524,35 @@ class wbsIf():
         
         
     
-    def addReg(self, name, desc, bigMsk, rwmaf, startAdr=None, offs=4):
+    def addReg(self, name, desc, bigMsk, rwmafs, startAdr=None, offs=4):
         opList  = []        
         newElem = []            
         adr = startAdr
               
-        if(rwmaf.find('a') > -1): # atomic
-            if rwmaf.find('r') > -1:
+        if(rwmafs.find('a') > -1): # atomic
+            if rwmafs.find('r') > -1:
                 self.addOp(opList, adr, offs, bigMsk, '_GET')
                 adr = None
-            if rwmaf.find('w') > -1:    
-                if rwmaf.find('r') > -1:            
+            if rwmafs.find('w') > -1:    
+                if rwmafs.find('r') > -1:            
                     self.addOp(opList, adr, offs, bigMsk, '_SET')                
                     self.addOp(opList, None, offs, bigMsk, '_CLR')        
                 else:    
                     self.addOp(opList, adr, offs, bigMsk, '_SET')
         else:
             op = str()        
-            if rwmaf.find('rw') > -1:
+            if rwmafs.find('rw') > -1:
                 op = '_OWR'
-            elif rwmaf.find('r') > -1:    
+            elif rwmafs.find('r') > -1:    
                 op = '_GET'
-            elif rwmaf.find('w') > -1:
+            elif rwmafs.find('w') > -1:
                 op = '_SET'
             self.addOp(opList, adr, offs, bigMsk, op)      
         (idxHi, idxLo) = mskWidth(bigMsk)
         width   = (idxHi-idxLo+1)
-        newElem = [name, desc, rwmaf, width, opList]
+        newElem = [name, desc, rwmafs, width, opList]
         #print "lenElem %u" % len(newElem)
-        print "Reg <%s>, Desc <%s>, <%s> w <%u>" % (name, desc, rwmaf, width)
+        print "Reg <%s>, Desc <%s>, <%s> w <%u>" % (name, desc, rwmafs, width)
         i = 0        
         for opLine in opList:
             #print opLine            
@@ -634,8 +649,8 @@ class wbsIf():
         mskx = ("%0" + str(self.dataWidth/4) + "x")
         #print adrx, mskx
         for elem in self.regs:        
-            (name, desc, rwmaf, width, opList) = elem
-            rw = rwmaf.replace('m', '').replace('a', '')
+            (name, desc, rwmafs, width, opList) = elem
+            rw = rwmafs.replace('m', '').replace('a', '')
             opIdx = 0            
             for opLine in opList:
                 
@@ -942,7 +957,13 @@ def parseXML(xmlIn):
                     regrwmf += 'a'
             if reg.hasAttribute('weflag'):
                 if reg.getAttribute('weflag') == 'yes':            
-                    regrwmf += 'f'        
+                    regrwmf += 'f'
+            if reg.hasAttribute('autostall'):
+                if reg.getAttribute('autostall') == 'yes':            
+                    regrwmf += 's'
+            if reg.hasAttribute('pulse'):
+                if reg.getAttribute('pulse') == 'yes':            
+                    regrwmf += 'p'        
             if reg.hasAttribute('selector'):            
                 if reg.getAttribute('selector') == 'yes':            
                     if(selector == ""):            
