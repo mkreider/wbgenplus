@@ -88,7 +88,7 @@ class wbsVhdlStr(object):
                            "   v_dat_i           := %s_i.dat;\n" % slaveIfName,
                            "   v_adr             := to_integer(unsigned(%s_i.adr(%%s)) & \"00\");\n" % slaveIfName,
                            "   v_sel             := %s_i.sel;\n" % slaveIfName,
-                           "   v_en              := %s_i.cyc and %s_i.stb and not r_%s_out.stall;\n" % (slaveIfName, slaveIfName, slaveIfName),
+                           "   v_en              := %s_i.cyc and %s_i.stb and not (r_%s_out.stall or %s_regs_i.STALL);\n" % (slaveIfName, slaveIfName, slaveIfName, slaveIfName),
                            "   v_we              := %s_i.we;\n\n" % slaveIfName,
                            "   --interface outputs\n",
                            "   r_%s_out.stall  <= '0';\n" % slaveIfName,                            
@@ -546,7 +546,7 @@ class wbsIf():
             elif rwmafs.find('r') > -1:    
                 op = '_GET'
             elif rwmafs.find('w') > -1:
-                op = '_SET'
+                op = '_OWR'
             self.addOp(opList, adr, offs, bigMsk, op)      
         (idxHi, idxLo) = mskWidth(bigMsk)
         width   = (idxHi-idxLo+1)
@@ -1226,9 +1226,9 @@ unitname    = "unknown unit"
 author      = "unknown author"
 version     = "unknown version"
 date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
+path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
 
-
-
+print "input/output dir: %s" % path
 print "Trying to parse %s..." % xmlIn
 print "\n%s" % ('*' * 80)
 parseXML(xmlIn)
@@ -1236,14 +1236,14 @@ parseXML(xmlIn)
 autoUnitName = unitname + "_auto"
 
 #filenames for various output files
-fileMainVhd     = autoUnitName              + ".vhd"
-filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
+fileMainVhd     = path + autoUnitName              + ".vhd"
+filePkgVhd      = path + autoUnitName  + "_pkg"    + ".vhd"
 
-fileStubVhd     = unitname                  + ".vhd"
-fileStubPkgVhd  = unitname      + "_pkg"    + ".vhd"
-fileTbVhd       = unitname      + "_tb"     + ".vhd"
+fileStubVhd     = path + unitname                  + ".vhd"
+fileStubPkgVhd  = path + unitname      + "_pkg"    + ".vhd"
+fileTbVhd       = path + unitname      + "_tb"     + ".vhd"
 
-fileHdrC        = unitname                  + ".h"
+fileHdrC        = path + unitname                  + ".h"
 
 
 (portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
