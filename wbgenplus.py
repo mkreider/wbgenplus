@@ -38,9 +38,10 @@ class wbsCStr(object):
         self.constRegAdr    = "#define %s_%%s   0x%%s // %%s _0x%%s, %%s\n" % slaveIfName.upper() #name, adrVal,  rw, msk, desc
 
 class gCStr(object):
-    def __init__(self, filename, unitname, author, version, date):
+    def __init__(self, filename, unitname, author, email, version, date):
         self.unitname   = unitname     
         self.author     = author
+        self.email      = email
         self.version    = version
         self.date       = date
         self.header         = [] 
@@ -88,16 +89,20 @@ class wbsVhdlStr(object):
                            "   v_dat_i           := %s_i.dat;\n" % slaveIfName,
                            "   v_adr             := to_integer(unsigned(%s_i.adr(%%s)) & \"00\");\n" % slaveIfName,
                            "   v_sel             := %s_i.sel;\n" % slaveIfName,
-                           "   v_en              := %s_i.cyc and %s_i.stb and not (r_%s_out.stall or %s_regs_i.STALL);\n" % (slaveIfName, slaveIfName, slaveIfName, slaveIfName),
+                           "   v_en              := %s_i.cyc and %s_i.stb and not (r_%s_out_stall or %s_regs_i.STALL);\n" % (slaveIfName, slaveIfName, slaveIfName, slaveIfName),
                            "   v_we              := %s_i.we;\n\n" % slaveIfName,
                            "   --interface outputs\n",
-                           "   r_%s_out.stall  <= '0';\n" % slaveIfName,                            
-                           "   r_%s_out.ack    <= '0';\n" % slaveIfName,
-                           "   r_%s_out.err    <= '0';\n" % slaveIfName,
-                           "   r_%s_out.dat    <= (others => '0');\n\n" % slaveIfName] 
+                           "   r_%s_out_stall   <= '0';\n" % slaveIfName,                            
+                           "   r_%s_out_ack0    <= '0';\n" % slaveIfName,
+                           "   r_%s_out_err0    <= '0';\n" % slaveIfName,
+                           "   r_%s_out_dat0    <= (others => '0');\n\n" % slaveIfName,
+                           "   r_%s_out_ack1    <= r_%s_out_ack0;\n" % (slaveIfName, slaveIfName),
+                           "   r_%s_out_err1    <= r_%s_out_err0;\n" % (slaveIfName, slaveIfName),
+                           "   r_%s_out_dat1    <= r_%s_out_dat0;\n\n" % (slaveIfName, slaveIfName),
+] 
       
         self.wbs2       = ["if(v_en = '1') then\n",
-                           "   r_%s_out.ack  <= '1';\n" % slaveIfName,
+                           "   r_%s_out_ack0  <= '1';\n" % slaveIfName,
                            "   if(v_we = '1') then\n",
                            "      -- WISHBONE WRITE ACTIONS\n",
                            "      case v_adr is\n"]
@@ -116,10 +121,10 @@ class wbsVhdlStr(object):
                            
         self.wbs5       = ["%s_regs_o <= r_%s;\n" % (slaveIfName, slaveIfName),
                            "s_%s <= %s_regs_i;\n" % (slaveIfName, slaveIfName),
-                           "%s_o.stall <= r_%s_out.stall or %s_regs_i.STALL;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
-                           "%s_o.dat <= r_%s_out.dat;\n" % (slaveIfName, slaveIfName),                           
-                           "%s_o.ack <= r_%s_out.ack;\n" % (slaveIfName, slaveIfName),                           
-                           "%s_o.err <= r_%s_out.err;\n" % (slaveIfName, slaveIfName)]                
+                           "%s_o.stall <= r_%s_out_stall or %s_regs_i.STALL;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
+                           "%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName),                           
+                           "%s_o.ack <= r_%s_out_ack1 and not %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
+                           "%s_o.err <= r_%s_out_err1 or      %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)]                
       
         self.slvSubType         = "subtype t_slv_%s_%%s is std_logic_vector(%%s downto 0);\n" % slaveIfName #name, idxHi
         self.slvArrayType       = "type    t_slv_%s_%%s_array is array(natural range <>) of t_slv_%s_%%s;\n" % (slaveIfName, slaveIfName)  #name, #name
@@ -128,19 +133,31 @@ class wbsVhdlStr(object):
         self.wbWrite            = "when c_%s_%%s => r_%s.%%s <= f_wb_wr(r_%s.%%s, v_dat_i, v_sel, \"%%s\"); -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, (set/clr/owr), desc
         self.wbWriteWe          = "r_%s.%%s_WE <= '1'; --    %%s write enable\n" % (slaveIfName) 
         self.wbWriteWeZero      = "r_%s.%%s_WE <= '0'; -- %%s pulse\n" % (slaveIfName)
-        self.wbStall            = "r_%s_out.STALL  <= '1'; --    %%s auto stall\n" % (slaveIfName)
+        self.wbStall            = "r_%s_out_stall  <= '1'; --    %%s auto stall\n" % (slaveIfName)
         self.wbWritePulseZero   = "r_%s.%%s <= (others => '0'); -- %%s pulse\n" % (slaveIfName) #registerName        
-        self.wbReadExt          = "when c_%s_%%s => r_%s_out.dat(%%s) <= s_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
-        self.wbReadInt          = "when c_%s_%%s => r_%s_out.dat(%%s) <= r_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+        self.wbReadExt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= s_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+        self.wbReadInt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= r_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
                 
-        self.wbOthers           = "when others => r_%s_out.ack <= '0'; r_%s_out.err <= '1';\n" % (slaveIfName, slaveIfName) 
-        self.wbs_output_reg     = "signal r_%s_out : t_wishbone_slave_out; --> WB output buffer register\n" % slaveIfName
+        self.wbOthers           = "when others => r_%s_out_ack0 <= '0'; r_%s_out_err0 <= '1';\n" % (slaveIfName, slaveIfName) 
+        self.wbs_ackerr         = ["signal r_%s_out_stall : std_logic;\n" % slaveIfName,
+                                   "signal r_%s_out_ack0,\n" % slaveIfName,
+                                   "       r_%s_out_ack1,\n" % slaveIfName,
+                                   "       r_%s_out_err0,\n" % slaveIfName,
+                                   "       r_%s_out_err1 : std_logic;\n" % slaveIfName,
+                                   "signal r_%s_out_dat0,\n" % slaveIfName,
+                                   "       r_%s_out_dat1 : std_logic_vector(31 downto 0);\n"  % slaveIfName]
+                                
+                                  
         self.wbs_reg_o          = "signal r_%s : t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
         self.wbs_reg_i          = "signal s_%s : t_%s_regs_i;\n" % (slaveIfName, slaveIfName)
-        self.resetOutput        = ["r_%s_out.stall  <= '0';\n" % slaveIfName,
-                                   "r_%s_out.ack    <= '0';\n" % slaveIfName,
-                                   "r_%s_out.err    <= '0';\n" % slaveIfName,
-                                   "r_%s_out.dat    <= (others => '0');\n" % slaveIfName]
+        
+        self.resetOutput        = ["r_%s_out_stall   <= '0';\n" % slaveIfName,
+                                   "r_%s_out_ack0    <= '0';\n" % slaveIfName,
+                                   "r_%s_out_err0    <= '0';\n" % slaveIfName,
+                                   "r_%s_out_dat0    <= (others => '0');\n" % slaveIfName,
+                                   "r_%s_out_ack1    <= '0';\n" % slaveIfName,
+                                   "r_%s_out_err1    <= '0';\n" % slaveIfName,
+                                   "r_%s_out_dat1    <= (others => '0');\n" % slaveIfName]
         self.resetSignal        = "r_%s.%%s <= (others => '0');\n" % slaveIfName #registerName   
         self.resetSignalArray   = "r_%s.%%s <= (others =>(others => '0'));\n" % slaveIfName #registerName
         self.recordPortOut      = "%s_regs_o : out t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
@@ -226,12 +243,13 @@ class wbsVhdlStr(object):
                            baseSlice        = "%u downto %u" % ( sliceWidth -1, 0)
                            adrIdx += 1
                            #append word idx and bitslice
-
+                           
+                           #We can't have two drivers for a register. Find out if the register driver is internal or external to the WB core
                            if(rwmafs.find('w') > -1):
-                               #if the Reg can be written to by WB, read from WB register                                  
+                               #if the register can be written to by WB, it is internal. read from WB register                                  
                                s.append(self.wbReadInt % (name + op + idx, baseSlice, name + ind + curSlice, comment))
                            else:
-                               #if the Reg cannot be written to by WB, read from input record 
+                               #if the register cannot be written to by WB, it is external. read from input record 
                                s.append(self.wbReadExt % (name + op + idx, baseSlice, name + ind + curSlice, comment))
                    else:
                        (msk, adr) = adrList[0]
@@ -239,10 +257,10 @@ class wbsVhdlStr(object):
                        sliceWidth       = (idxHi-idxLo+1) 
                        baseSlice        = "%u downto %u" % ( sliceWidth -1, 0)
                        if(rwmafs.find('w') > -1):
-                           #if the Reg can be written to by WB, read from WB register
+                           #if the register can be written to by WB, read from WB register
                            s.append(self.wbReadInt % (name + op, baseSlice, name+ind, desc))
                        else:
-                           #if the Reg cannot be written to by WB, read from input record 
+                           #if the register cannot be written to by WB, read from input record 
                            s.append(self.wbReadExt % (name + op, baseSlice, name+ind, desc))
                    if((rwmafs.find('s') > -1)):             
                        s.append(self.wbStall % name)    
@@ -314,13 +332,13 @@ class wbsVhdlStr(object):
                 if((rwmafs.find('p') > -1)):             
                     s.append(self.wbWritePulseZero % (name, name))
                                 
-                    
         return s 
     
    
     def regs(self, regList):
        recordsOut       = []
-       recordsIn        = [] + [self.signalSl % ('STALL', 'Stall control for outside entity')]
+       recordsIn        = [] + [self.signalSl % ('STALL', 'Stall control for outside entity'),
+                                self.signalSl % ('ERR', 'Error control for outside entity')]
        types            = []
        for elem in regList:        
            (name, desc, rwmafs, width, opList) = elem
@@ -398,17 +416,36 @@ class wbsVhdlStr(object):
 class gVhdlStr(object):
    
 
-    def __init__(self, unitname, filename="unknown", author="unknown", version="0.0", date=""):
+    def __init__(self, unitname, filename="unknown", author="unknown", email="unknown", version="0.0", date=""):
         self.unitname   = unitname
         self.filename   = filename        
         self.author     = author
         self.version    = version
         
-        self.header     = ["-- File Name : %s\n"        % filename,                 
-                           "-- Design Unit Name : %s\n" % unitname,    
-                           "-- Revision : %s\n"         % version,                     
-                           "-- Author : %s\n"           % author,                          
-                           "-- Created: %s\n"           % date]                                
+        self.header     = ["--! @file        %s\n" % filename,                 
+                           "--  DesignUnit   %s\n" % unitname,                           
+                           "--! @author      %s <%s>\n" % (author, email),
+                           "--! @date        %s\n" % date,
+                           "--! @version     %s\n" % version,                     
+                           "--! @copyright   %s GSI Helmholtz Centre for Heavy Ion Research GmbH\n" % now.year,
+                           "--!\n"]
+
+        self.headerLPGL =    ["--------------------------------------------------------------------------------\n" 
+                              "--! This library is free software; you can redistribute it and/or\n",
+                              "--! modify it under the terms of the GNU Lesser General Public\n",
+                              "--! License as published by the Free Software Foundation; either\n",
+                              "--! version 3 of the License, or (at your option) any later version.\n",
+                              "--!\n",
+                              "--! This library is distributed in the hope that it will be useful,\n",
+                              "--! but WITHOUT ANY WARRANTY; without even the implied warranty of\n",
+                              "--! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n",
+                              "--! Lesser General Public License for more details.\n",
+                              "--!\n",  
+                              "--! You should have received a copy of the GNU Lesser General Public\n",
+                              "--! License along with this library. If not, see <http://www.gnu.org/licenses/>.\n",
+                              "--------------------------------------------------------------------------------\n\n"]                                
+
+        self.headerDetails = []
        
         self.headerWarning =    ["-- ***********************************************************\n",
                                  "-- ** WARNING - THIS IS AUTO-GENERATED CODE! DO NOT MODIFY! **\n",
@@ -707,9 +744,9 @@ class wbsIf():
     
     def renderRegs(self):
         a = []
-        a.append(self.v.wbs_output_reg)
         a.append(self.v.wbs_reg_o)
         a.append(self.v.wbs_reg_i)
+        a += (self.v.wbs_ackerr)        
         self.regList = a # no need to indent, we'll do it later with all IF lists together
 
     def renderAll(self):
@@ -858,11 +895,12 @@ def parseXML(xmlIn):
     global unitname
     global author 
     global version
+    global email    
     
     unitname = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('unitname')
     author   = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
     version  = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('version')
-
+    email    = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('email')
     
     genericsParent = xmldoc.getElementsByTagName('generics')
     if len(genericsParent) != 1:
@@ -1027,7 +1065,7 @@ def parseXML(xmlIn):
 def writeStubVhd(filename):
     
     
-    if os.path.isfile(filename):
+    if os.path.isfile(path + filename):
         print "!!! %s already exists !!!\n\nI don't want to accidentally trash your work.\nAre you sure you want to overwrite %s with a new stub entity? " % (filename, filename)
         inp = 'dunno'        
         
@@ -1040,12 +1078,18 @@ def writeStubVhd(filename):
             print ""
             
     print "Generating stub entity           %s" % filename        
-    fo = open(filename, "w")
-    v = gVhdlStr(unitname, filename, author, version, date)
+    fo = open(path + filename, "w")
+    v = gVhdlStr(unitname, filename, author, email, version, date)
 
     header = adj(v.header + ['\n'], [':'], 0)
     
     for line in header:
+        fo.write(line)
+    
+    fo.write("--! @brief *** ADD BRIEF DESCRIPTION HERE ***\n")
+    fo.write("--!\n")
+                      
+    for line in v.headerLPGL:
         fo.write(line)
     
     libraries = v.libraries + [v.pkg]
@@ -1093,15 +1137,21 @@ def writeMainVhd(filename):
 
     print "Generating WishBone core entity  %s" % filename 
     
-    fo = open(filename, "w")
-    v = gVhdlStr(autoUnitName, filename, author, version, date)
+    fo = open(path + filename, "w")
+    v = gVhdlStr(autoUnitName, filename, author, email, version, date)
 
     header = adj(v.header + ['\n'], [':'], 0)
-    header += v.headerWarning
-    header.append(v.headerModify % (unitname, unitname))
     for line in header:
         fo.write(line)
-    
+    fo.write("--! @brief AUTOGENERATED WISHBONE-SLAVE CORE FOR %s.vhd\n" % unitname)
+    fo.write("--!\n")        
+        
+    for line in v.headerLPGL:
+        fo.write(line)
+    warning = [] + v.headerWarning
+    warning.append(v.headerModify % (unitname, unitname))    
+    for line in warning:
+        fo.write(line)
     libraries = v.libraries + [v.pkg]
     for line in libraries:
         fo.write(line)
@@ -1135,17 +1185,21 @@ def writePkgVhd(filename):
 
     print "Generating WishBone core package %s" % filename    
     
-    fo = open(filename, "w")
+    fo = open(path + filename, "w")
     
-    v = gVhdlStr(autoUnitName, filename, author, version, date)
+    v = gVhdlStr(autoUnitName, filename, author, email, version, date)
 
     header = adj(v.header + ['\n'], [':'], 0)
-    header += v.headerWarning
-    header.append(v.headerModify % (unitname, unitname))
-    
     for line in header:
         fo.write(line)
-    
+    fo.write("--! @brief AUTOGENERATED WISHBONE-SLAVE PACKAGE FOR %s.vhd\n" % unitname)
+    fo.write("--!\n")     
+    for line in v.headerLPGL:
+        fo.write(line)
+    warning = [] + v.headerWarning
+    warning.append(v.headerModify % (unitname, unitname))    
+    for line in warning:
+        fo.write(line)
     libraries = v.libraries
     for line in libraries:
         fo.write(line)    
@@ -1195,9 +1249,9 @@ def writeHdrC(filename):
     
     print "Generating C Header file         %s\n" % filename    
     
-    fo = open(filename, "w")
+    fo = open(path + filename, "w")
     
-    gc     = gCStr(filename, unitname, author, version, date)
+    gc     = gCStr(filename, unitname, author, email, version, date)
     header = "" #gCStr.hdrfileStart
     
     for line in header:
@@ -1237,6 +1291,7 @@ genList     = []
 ifList      = []
 unitname    = "unknown unit"
 author      = "unknown author"
+email       = "unknown mail"
 version     = "unknown version"
 date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
 path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
@@ -1249,14 +1304,14 @@ parseXML(xmlIn)
 autoUnitName = unitname + "_auto"
 
 #filenames for various output files
-fileMainVhd     = path + autoUnitName              + ".vhd"
-filePkgVhd      = path + autoUnitName  + "_pkg"    + ".vhd"
+fileMainVhd     = autoUnitName              + ".vhd"
+filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
 
-fileStubVhd     = path + unitname                  + ".vhd"
-fileStubPkgVhd  = path + unitname      + "_pkg"    + ".vhd"
-fileTbVhd       = path + unitname      + "_tb"     + ".vhd"
+fileStubVhd     = unitname                  + ".vhd"
+fileStubPkgVhd  = unitname      + "_pkg"    + ".vhd"
+fileTbVhd       = unitname      + "_tb"     + ".vhd"
 
-fileHdrC        = path + unitname                  + ".h"
+fileHdrC        = unitname                  + ".h"
 
 
 (portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
