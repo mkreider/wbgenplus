@@ -130,7 +130,9 @@ class wbsVhdlStr(object):
         self.wbWriteWeZero      = "r_%s.%%s_WE <= '0'; -- %%s pulse\n" % (slaveIfName)
         self.wbStall            = "r_%s_out.STALL  <= '1'; --    %%s auto stall\n" % (slaveIfName)
         self.wbWritePulseZero   = "r_%s.%%s <= (others => '0'); -- %%s pulse\n" % (slaveIfName) #registerName        
-        self.wbRead             = "when c_%s_%%s => r_%s_out.dat(%%s) <= s_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+        self.wbReadExt          = "when c_%s_%%s => r_%s_out.dat(%%s) <= s_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+        self.wbReadInt          = "when c_%s_%%s => r_%s_out.dat(%%s) <= r_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+                
         self.wbOthers           = "when others => r_%s_out.ack <= '0'; r_%s_out.err <= '1';\n" % (slaveIfName, slaveIfName) 
         self.wbs_output_reg     = "signal r_%s_out : t_wishbone_slave_out; --> WB output buffer register\n" % slaveIfName
         self.wbs_reg_o          = "signal r_%s : t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
@@ -225,14 +227,23 @@ class wbsVhdlStr(object):
                            adrIdx += 1
                            #append word idx and bitslice
 
-                           #we are applying the 'range attribute. This is tricky, if we use the idx field, then me must put it all in parentheses                             
-                           s.append(self.wbRead % (name + op + idx, baseSlice, name + ind + curSlice, comment))
+                           if(rwmafs.find('w') > -1):
+                               #if the Reg can be written to by WB, read from WB register                                  
+                               s.append(self.wbReadInt % (name + op + idx, baseSlice, name + ind + curSlice, comment))
+                           else:
+                               #if the Reg cannot be written to by WB, read from input record 
+                               s.append(self.wbReadExt % (name + op + idx, baseSlice, name + ind + curSlice, comment))
                    else:
                        (msk, adr) = adrList[0]
                        (idxHi, idxLo)   = mskWidth(msk)
                        sliceWidth       = (idxHi-idxLo+1) 
                        baseSlice        = "%u downto %u" % ( sliceWidth -1, 0)
-                       s.append(self.wbRead % (name + op, baseSlice, name+ind, desc))
+                       if(rwmafs.find('w') > -1):
+                           #if the Reg can be written to by WB, read from WB register
+                           s.append(self.wbReadInt % (name + op, baseSlice, name+ind, desc))
+                       else:
+                           #if the Reg cannot be written to by WB, read from input record 
+                           s.append(self.wbReadExt % (name + op, baseSlice, name+ind, desc))
                    if((rwmafs.find('s') > -1)):             
                        s.append(self.wbStall % name)    
         return s
@@ -314,19 +325,21 @@ class wbsVhdlStr(object):
        for elem in regList:        
            (name, desc, rwmafs, width, opList) = elem
            if(rwmafs.find('m') > -1):
-               types            += self.multitype(elem)
+               types += self.multitype(elem)
                if(rwmafs.find('w') > -1):
-                   recordsOut       += self.multielement(elem)
+                   recordsOut += self.multielement(elem)
                    if(rwmafs.find('f') > -1):
                        recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
-               if(rwmafs.find('r') > -1):            
-                   recordsIn       += self.multielement(elem)      
+               elif(rwmafs.find('r') > -1):            
+                   #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF                    
+                   recordsIn += self.multielement(elem)      
            else:
                if(rwmafs.find('w') > -1):
                    recordsOut.append(self.reg(elem))
                    if(rwmafs.find('f') > -1):
                        recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
-               if(rwmafs.find('r') > -1): 
+               elif(rwmafs.find('r') > -1):
+                   #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF 
                    recordsIn.append(self.reg(elem))
                    
        return [types, recordsOut, recordsIn]           
