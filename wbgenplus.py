@@ -1274,56 +1274,173 @@ def writeHdrC(filename):
 #        print "Generating WBMF %s" % masterIf.getAttribute('name')
 #        entityPortList.append(VhdlStr.masterIf % (masterIf.getAttribute('name'), masterIf.getAttribute('name'))) 
     
-  
 
-xmlIn = sys.argv[1]
+helpText = ["Usage: wbgenplus <path-to-wishbone-descriptor.xml>\n\n",
+            "-h     --help          Show detailed help with intro to Wishbone-Descriptor-XMLs'\n"
+            "-l     --log           Log build output\n"
+            ]
+            
+detailedHelpText = ['%s' % ("*" * 80),
+                    '**                                                                            **',                    
+                    '**                          wbgenplus Manual V0.1                             **',                    
+                    '**                                                                            **',
+                    '%s\n' % ("*" * 80),
+                    'wbgenplus autogenerates wishbone devices for FPGAs in VHDL from a single XML file.',
+                    'In VHDL, it builds the core logic, a package with register records and SDB entries',
+                    'and provides a stub for the outer entity.',
+                    'It also creates a C Header file with the address definitions and can build',
+                    'documentation via doxygen (not yet implemented).\n',
+                    'In order to keep things modular, wbgenplus creates a seperate core for the',
+                    'wishbone interface to be instantiated for your design.\n',
+                    'Because of this, there are a few design rules which must be obeyed:\n',                    
+                    'All registers that are write/read-write on the wishbone side are read-only on the entity side.',
+                    'all registers that are read only on the wishbone side will be driven by the entity side.\n',
+                    'If you want to use generics, they will be defined as constants in an extra package,',
+                    'so they can be imported into the core package. Without full VHDL 2008 support,',
+                    'there is currently no other way to get generics into a package.',
+                    'Yes, I agree. This sucks.\n\n',
+                    '+%s+' % ("-" * 78),
+                     '|                            Wishbone-Descriptor-XMLs                          |',
+                    '+%s+\n' % ("-" * 78),                    
+                    
+                    'This sections covers the details of the XML syntax.\n',
+                    'Supported tags:\n',
+                    '<wbdevice             Supreme Tag introducing a new wishbone device with one ore more interfaces.',
+                    '   <codegen>          Selects which outputs files should be built',
+                    '   <generics>         Gives a list of generics to the device. Generic names can be used in interface descriptions',                                     
+                    '   <slaveinterface    Introduces a new Wishbone Slave interface to the device',
+                    '       <sdb>          Parameters for Self Describing Bus (SDB) record of this slave interface',
+                    '       <reg>          Introduces a new register to this slave interface interface',        
+                    '       <ram>          Introduces a new memory block to this slave interface interface',
+                    '   >',
+                    '>',
+                    
+                    'Detailed Tag parameter descriptions. All parameters marked with an * are mandatory,',
+                    'the rest is optional and does need to appear in the XML.',
+                    'There are two exceptions, see below:',
+                    '   1: Either read or write or both must be "yes"',
+                    '   2: Only valid in a group: If pages is greater 0, exactly 1 register must have set selector="yes"',
+                    '      and 1 or more registers must have set paged="yes"\n\n',
+                    'Tag parameters:\n',
+                    '<WBDEVICE>:\n',                  
+                    '  *unitname:   Name of the design unit of the wishbone top file.',
+                    '               The inner core will be named "<unitname>_auto"\n',
+                    '  *author:     Name of the author of this xml and all derived files\n',
+                    '   email:      The email address of the author\n',
+                    '   version:    version number of this device\n',
+                    '   Example:',                      
+                    '   <wbdevice unitname="my_cool_device" author="M. Kreider" email="m.kreider@gsi.de" version="0.0.1">\n',
+                    '<SLAVEINTERFACE>:\n',                   
+                    '  *name:       Name of the slave interface port\n',
+                    '   data:       Bitwidth of the data lines. Default is 32\n',
+                    '   type:       Type of flow control. Accepts "pipelined" or "classic", default is "pipelined"\n',
+                    ' 2*pages:      Number <n> of memory pages to instantiate, default is 0.',
+                    '               All registers marked paged="yes" will be built as an array with n elements.',
+                    '               If <n> is greater 0, one register must be marked as the page selector by issueing selector="yes"\n',
+                    '   Example:',                      
+                    '   <slaveinterface name="control" data="32" type="pipelined" pages="8">\n',
+                    '<SDB>:\n',
+                    '  *vendorID:   Vendor Identification code, 64 bit hex value. Also accepts known vendors like "GSI" or "CERN"\n',
+                    '  *productID:  Product Identification code, 32 bit hex value\n',
+                    '  *version:    Device version number, 1 to 3 digits\n',
+                    '   date:       Date to be shown on sdb record. Default is "auto" (Today)\n',
+                    '  *name:       Name to be shown on sdb record. 19 Characters max.\n', 
+                    '   Example:',  
+                    '   <sdb vendorID="GSI" productID="0x01234567" version="1" date="auto" name="my_ctrl_thingy"></sdb>\n',
+              
+                    '<REG>:\n',
+                    '  *name:       Main name of the register. Actual address and record names might be extended by suffices\n',
+                    '  *read:       indicates if this register is readable from Wishbone. Default is "no"\n',
+                    '  *write:      indicates if this register is writeable from Wishbone. Default is "no"\n',
+                    '  *comment:    A (hopefully) descriptive comment for this register\n',                        
+                    '   access:     Access mode for this register, "simple" or "atomic", default is "simple"',
+                    '               Simple mode allows direct overwriting of register content.',
+                    '               Atomic mode provides seperate get, set, and clear addresses for this register,\n'
+                    '               allowing atomic single bit manipulation\n',
+                    '   mask:       Bitmask for this register (currently only functions as width), default is the',
+                    '               data parameter of the slave interface tag',
+                    '               If "mask" is wider than "data", wbgenplus will automatically generate multiple addresses',
+                    '               to allow word access of the register',
+                    '               Accepts either hex values as masks or "f_makemask(<decimal bitwidth>)" macro\n'
+                    '   address:    Manually sets the offset for this register, default is auto addressing.',
+                    '               All follwing Registers will be enumerated from this address onward\n',                     
+                    '   weflag      Write enable flag, default is "no". If set to "yes", a additional flag register will be created,',
+                    '               going HI for 1 clock cycle every time the parent register is written to.',
+                    '               The flag register does not discriminate which page, word, or subword is accessed.\n',
+                    '   autostall:  If set to "yes", raises the stall line for 1 cycle after each access. Default is "no"',
+                    '               The outer entity can, only raise a stall request 2 cycles AFTER the bus operation.',
+                    '               Autostall bridges this gap by keeping the bus stalled until the outer entity can do flow control\n',
+                    '   pulse:      If set to "yes", the register will reset to all 0 after 1 cycle. Default is "no"\n', 
+                    '   paged:      When set to "yes", this register will be instantiated as an array with the number of elements',
+                    '               in the pages parameter of the slave interface tag\n',
+                    '   selector:   Selects the active memory page of all paged registers. Value is auto range checked on access.\n',
+                    '   Example:',                    
+                    '   <reg name="ACT" read="yes" write="yes" access="atomic" mask="0xff" comment="Triggers on/off"></reg>\n'
+                    
+                    ]
+                                          
+                        
+                    
+            
+xmlIn = ""  
+if(len(sys.argv) > 1):
+    xmlIn = sys.argv[1]
+
+if os.path.isfile(xmlIn):
+
+    genIntD     = dict()
+    genMiscD    = dict()
+    portList    = []
+    recordList  = []
+    regList     = []
+    vAdrList    = []
+    cAdrList    = []
+    fsmList     = []
+    genList     = []
+    ifList      = []
+    unitname    = "unknown unit"
+    author      = "unknown author"
+    email       = "unknown mail"
+    version     = "unknown version"
+    date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
+    path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
     
-
-genIntD     = dict()
-genMiscD    = dict()
-portList    = []
-recordList  = []
-regList     = []
-vAdrList    = []
-cAdrList    = []
-fsmList     = []
-genList     = []
-ifList      = []
-unitname    = "unknown unit"
-author      = "unknown author"
-email       = "unknown mail"
-version     = "unknown version"
-date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
-path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
-
-print "input/output dir: %s" % path
-print "Trying to parse %s..." % xmlIn
-print "\n%s" % ('*' * 80)
-parseXML(xmlIn)
-
-autoUnitName = unitname + "_auto"
-
-#filenames for various output files
-fileMainVhd     = autoUnitName              + ".vhd"
-filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
-
-fileStubVhd     = unitname                  + ".vhd"
-fileStubPkgVhd  = unitname      + "_pkg"    + ".vhd"
-fileTbVhd       = unitname      + "_tb"     + ".vhd"
-
-fileHdrC        = unitname                  + ".h"
-
-
-(portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
-
-writeStubVhd(fileStubVhd)
-writeMainVhd(fileMainVhd)
-writePkgVhd(filePkgVhd)
-writeHdrC(fileHdrC)
-#writeTbVhd(fileTbVhd)
-print "\n%s" % ('*' * 80) 
-print "\nDone!"
-
+    print "input/output dir: %s" % path
+    print "Trying to parse %s..." % xmlIn
+    print "\n%s" % ('*' * 80)
+    parseXML(xmlIn)
+    
+    autoUnitName = unitname + "_auto"
+    
+    #filenames for various output files
+    fileMainVhd     = autoUnitName              + ".vhd"
+    filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
+    
+    fileStubVhd     = unitname                  + ".vhd"
+    fileStubPkgVhd  = unitname      + "_pkg"    + ".vhd"
+    fileTbVhd       = unitname      + "_tb"     + ".vhd"
+    
+    fileHdrC        = unitname                  + ".h"
+    
+    
+    (portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
+    
+    writeStubVhd(fileStubVhd)
+    writeMainVhd(fileMainVhd)
+    writePkgVhd(filePkgVhd)
+    writeHdrC(fileHdrC)
+    #writeTbVhd(fileTbVhd)
+    print "\n%s" % ('*' * 80) 
+    print "\nDone!"
+else:
+    if( (len(sys.argv) > 1)):
+        for line in detailedHelpText:        
+            print line
+    else:        
+        for line in helpText:        
+            print line
+    
+    
 
 
 
