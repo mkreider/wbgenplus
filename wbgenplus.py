@@ -10,7 +10,12 @@ import datetime
 import textformatting
 import os.path
 import sys
+import getopt
 
+myVersion = "0.3"
+myStart   = "15 Dec 2014"
+myUpdate  = "10 Jan 2015"
+myCreator = "M. Kreider <m.kreider@gsi.de>"
 
 
 
@@ -53,11 +58,12 @@ class gCStr(object):
 class wbsVhdlStr(object):
    
 
-    def __init__(self, pages, unitname, slaveIfName, dataWidth, vendId, devId, sdbname):
+    def __init__(self, pages, unitname, slaveIfName, dataWidth, vendId, devId, sdbname, clocks):
         self.unitname       = unitname
         self.slaveIfName    = slaveIfName        
         self.pages          = pages
         self.dataWidth      = dataWidth
+        self.clocks         = clocks
         #################################################################################        
         #Strings galore        
         self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName,
@@ -72,7 +78,7 @@ class wbsVhdlStr(object):
                           "%s_i => s_%s_i,\n" % (slaveIfName, slaveIfName),
                           "%s_o => s_%s_o" % (slaveIfName, slaveIfName)] #name     
            
-        self.wbs0       = ["%s : process(clk_sys_i)\n" % slaveIfName,
+        self.wbs0       = ["%s : process(clk_%s_i)\n" % (slaveIfName, clocks[0]),
                            "   variable v_dat_i  : t_wishbone_data;\n",
                            "   variable v_dat_o  : t_wishbone_data;\n",
                            "   variable v_adr    : natural;\n",
@@ -81,7 +87,7 @@ class wbsVhdlStr(object):
                            "   variable v_we     : std_logic;\n",
                            "   variable v_en     : std_logic;\n",
                            "begin\n",
-                           "   if rising_edge(clk_sys_i) then\n",
+                           "   if rising_edge(clk_%s_i) then\n" % clocks[0],
                            "      if(rst_n_i = '0') then\n"]
        
         self.wbs1       = ["else\n",
@@ -126,7 +132,7 @@ class wbsVhdlStr(object):
                            "%s_o.ack <= r_%s_out_ack1 and not %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
                            "%s_o.err <= r_%s_out_err1 or      %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)]                
       
-        self.slvSubType         = "subtype t_slv_%s_%%s is std_logic_vector(%%s downto 0);\n" % slaveIfName #name, idxHi
+        self.slvSubType         = "subtype t_slv_%s_%%s is std_logic_vector(%%s-1 downto 0);\n" % slaveIfName #name, idxHi
         self.slvArrayType       = "type    t_slv_%s_%%s_array is array(natural range <>) of t_slv_%s_%%s;\n" % (slaveIfName, slaveIfName)  #name, #name
         self.signalSlvArray     = "%%s : t_slv_%s_%%s_array(%%s downto 0); -- %%s\n"  % slaveIfName #name, name, idxHi, desc
         self.wbsPageSelect      = "v_page := to_integer(unsigned(r_%s.%%s));\n\n"  % slaveIfName #pageSelect Register
@@ -171,7 +177,7 @@ class wbsVhdlStr(object):
         self.constRecAdrStart   = "constant c_%s_adr : t_%s_adr := (\n" % (slaveIfName, slaveIfName)
         self.constRecAdrLine    = "%s => 16#%x#%s -- 0x%02X, %s, _0x%08x %s\n" #name, adrVal, comma/noComma, adrVal, rw, msk, desc
         self.constRecAdrEnd     = ");\n"
-        self.signalSlv          = "%s : std_logic_vector(%s downto 0); -- %s\n" #name, idxHi, idxLo, desc
+        self.signalSlv          = "%s : std_logic_vector(%s-1 downto 0); -- %s\n" #name, idxHi, idxLo, desc
         self.signalSl           = "%s : std_logic; -- %s\n" #name, desc
         self.sdb                = ['constant c_%s_%s_sdb : t_sdb_device := (\n' % (unitname, slaveIfName),
                                    'abi_class     => x"%s", -- %s\n' % ("0000", "undocumented device"),
@@ -216,7 +222,7 @@ class wbsVhdlStr(object):
     def fsmRead(self, regList):
         s = []    
         for elem in regList:        
-           (name, desc, rwmafs, width, opList) = elem
+           (name, desc, rwmafs, width, opList, clkdomain) = elem
            if(rwmafs.find('m') > -1):
                ind = '(v_page)'
            else:
@@ -236,14 +242,15 @@ class wbsVhdlStr(object):
                                comment  = desc
                            else:
                                comment  = '\"\"'
+                           
                            #calculate register bitslice from adr idx    
                            (idxHi, idxLo)   = mskWidth(msk)
                            sliceWidth       = (idxHi-idxLo+1) 
                            curSlice         = "(%u downto %u)" % ( sliceWidth + adrIdx*self.dataWidth -1, adrIdx*self.dataWidth)
                            baseSlice        = "%u downto %u" % ( sliceWidth -1, 0)
                            adrIdx += 1
-                           #append word idx and bitslice
-                           
+                               #append word idx and bitslice
+                                
                            #We can't have two drivers for a register. Find out if the register driver is internal or external to the WB core
                            if(rwmafs.find('w') > -1):
                                #if the register can be written to by WB, it is internal. read from WB register                                  
@@ -271,7 +278,7 @@ class wbsVhdlStr(object):
     def fsmWrite(self, regList):
         s = []    
         for elem in regList:        
-            (name, desc, rwmafs, width, opList) = elem
+            (name, desc, rwmafs, width, opList, clkdomain) = elem
            
             if(rwmafs.find('m') > -1):
                 ind = '(v_page)'
@@ -296,9 +303,9 @@ class wbsVhdlStr(object):
                             sliceWidth   = (idxHi-idxLo+1) 
                             curSlice = "(%u downto %u)" % ( sliceWidth + adrIdx*self.dataWidth -1, adrIdx*self.dataWidth)
                             adrIdx += 1
-                                                            
+                                                                
                             s.append(self.wbWrite % (name + op + idx, name + ind + curSlice, name + ind + curSlice, self.wrModes[op], comment))
-                        
+                            
                     else:
                         (msk, adr) = adrList[0]
                         if(opIdx == 0):
@@ -319,7 +326,7 @@ class wbsVhdlStr(object):
     def fsmWritePulse(self, regList):
         s = []    
         for elem in regList:        
-            (name, desc, rwmafs, width, opList) = elem
+            (name, desc, rwmafs, width, opList, clkdomain) = elem
            
             if(rwmafs.find('m') > -1):
                 ind = '(v_page)'
@@ -341,7 +348,7 @@ class wbsVhdlStr(object):
                                 self.signalSl % ('ERR', 'Error control for outside entity')]
        types            = []
        for elem in regList:        
-           (name, desc, rwmafs, width, opList) = elem
+           (name, desc, rwmafs, width, opList, clkdomain) = elem
            if(rwmafs.find('m') > -1):
                types += self.multitype(elem)
                if(rwmafs.find('w') > -1):
@@ -361,34 +368,72 @@ class wbsVhdlStr(object):
                    recordsIn.append(self.reg(elem))
                    
        return [types, recordsOut, recordsIn]           
+
+    def regsSync(self, regList):
+       recordListOut       = []
+       recordListIn        = [] 
+       typeList            = []
+       
+       for clkd in self.clocks[1:]:
+           for elem in regList:        
+               (name, desc, rwmafs, width, opList, clkdomain) = elem
+                          
+               if(clkdomain == clkd):
+                   if(rwmafs.find('m') > -1):
+                       types += self.multitype(elem)
+                       if(rwmafs.find('w') > -1):
+                           recordsOut += self.multielement(elem)
+                           if(rwmafs.find('f') > -1):
+                               recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
+                       elif(rwmafs.find('r') > -1):            
+                           #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF                    
+                           recordsIn += self.multielement(elem)      
+                   else:
+                       if(rwmafs.find('w') > -1):
+                           recordsOut.append(self.reg(elem))
+                           if(rwmafs.find('f') > -1):
+                               recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
+                       elif(rwmafs.find('r') > -1):
+                           #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF 
+                           recordsIn.append(self.reg(elem))
+                       recordListOut += recordsOut
+                       recordListIn  += recordsIn
+                       typeList      += types
+                   
     
     def reg(self, elem):
-        (name, desc, rwmafs, width, opList) = elem       
-        s = self.signalSlv % (name, width-1, desc)        
+        (name, desc, rwmafs, width, opList, clkdomain) = elem
+        
+        s = self.signalSlv % (name, width, desc)        
         return s
     
 
+
+
+
     def multitype(self, elem):
-        (name, desc, rwmafs, width, opList) = elem        
+        (name, desc, rwmafs, width, opList, clkdomain) = elem        
         s = []        
-        s.append('\n')        
-        s.append(self.slvSubType % (name, width-1)) #shift mask to LSB
+        s.append('\n')
+        s.append(self.slvSubType % (name, width)) #shift mask to LSB
         s.append(self.slvArrayType % (name, name))
         return s 
     
     def multielement(self, elem, qty=1):
-        (name, desc, rwmafs, width, opList) = elem        
+        (name, desc, rwmafs, width, opList, clkdomain) = elem        
         s = []        
-      
-        if(type(qty) == int):
-            s.append(self.signalSlvArray % (name, name, (self.pages-1), desc))
+        if(isinstance(self.pages, int)):
+            prefix = ''
         else:
-            s.append(self.signalSlvArray % (name, name, self.pages + '-1', desc))
+            prefix = 'c_g_'            
+        s.append(self.signalSlvArray % (name, name, prefix + str(self.pages) + '-1', desc))
+        
+            
         return s    
               
     
     def cRegAdr(self, elem):
-        (name, desc, rwmafs, width, opList) = elem
+        (name, desc, rwmafs, width, opList, clkdomain) = elem
         rw = rwmafs.replace('m', '').replace('a', '')
         for opLine in opList:
             (op, adrList) = opLine
@@ -401,7 +446,7 @@ class wbsVhdlStr(object):
     def resets(self, regList):
        s = []
        for elem in regList:
-           (name, desc, rwmafs, width, opList) = elem
+           (name, desc, rwmafs, width, opList, clkdomain) = elem
            if(rwmafs.find('w') > -1):
                if(rwmafs.find('m') > -1):
                    s.append(self.resetSignalArray % name)                      
@@ -474,13 +519,14 @@ class gVhdlStr(object):
         self.genEnd             = ");\n" 
          
         self.entityMid   = "Port(\n"
+      
         self.entityEnd   = ");\nend %s;\n\n" % unitname
         
         self.archDecl    = "architecture rtl of %s is\n\n" % unitname
         self.archStart   = "\n\nbegin\n\n"
         self.archEnd     = "end rtl;\n"
         self.genport     = "g_%s : %s := %s%s -- %s\n" #name, type, default
-        
+        self.instGenPort    = "g_%s => g_%s%s\n" 
         self.instStart      = "INST_%s : %s\n" % (unitname, unitname)
         self.instGenStart   = "generic map (\n"
         self.instGenEnd     = ")\n"
@@ -502,9 +548,9 @@ class gVhdlStr(object):
 
 class wbsIf():
     
-    def __init__(self, unitname, name, startAdr, pageSelect, pages, dataWidth, vendId, devId, sdbname):
+    def __init__(self, unitname, name, startAdr, pageSelect, pages, dataWidth, vendId, devId, sdbname, clocks):
         self.regs       = []        
-                
+                 
         self.portList   = []
         self.stubPortList = []
         self.stubInstList = []
@@ -514,15 +560,18 @@ class wbsIf():
         self.adrList    = []
         self.fsm        = []
         
+        self.clocks     = clocks
         self.name       = name        
         self.startAdr   = startAdr
         self.pageSelect = pageSelect
         self.pages      = pages
         self.dataWidth  = dataWidth
-        self.v = wbsVhdlStr(pages, unitname, name, dataWidth, vendId, devId, sdbname)        
+        self.v = wbsVhdlStr(pages, unitname, name, dataWidth, vendId, devId, sdbname, clocks)        
         self.c = wbsCStr(pages, unitname, name)
     
     def sliceMsk(self, aMsk):
+                
+        
         mskList = []
         msk     = 0 + aMsk
         (idxHi, idxLo) = mskWidth(msk)
@@ -537,7 +586,7 @@ class wbsIf():
     
     def getLastAdr(self, elem):
         
-        (_, _, _, _, opList) = elem
+        (_, _, _, _, opList, _) = elem
         #print opList
         (_, adrList) = opList[-1]
         #print adrList
@@ -566,6 +615,7 @@ class wbsIf():
         for msk in mskList:
             adrList.append([msk, adr])
             adr += offs
+       
         #print '*' * 10
         #print opList
         opList.append([op, adrList])
@@ -574,7 +624,7 @@ class wbsIf():
         
         
     
-    def addReg(self, name, desc, bigMsk, rwmafs, startAdr=None, offs=4):
+    def addReg(self, name, desc, bigMsk, rwmafs, startAdr=None, offs=4, clkdomain="sys"):
         opList  = []        
         newElem = []            
         adr = startAdr
@@ -598,24 +648,12 @@ class wbsIf():
             elif rwmafs.find('w') > -1:
                 op = '_OWR'
             self.addOp(opList, adr, offs, bigMsk, op)      
+
+        
         (idxHi, idxLo) = mskWidth(bigMsk)
         width   = (idxHi-idxLo+1)
-        newElem = [name, desc, rwmafs, width, opList]
-        #print "lenElem %u" % len(newElem)
-        print "Reg <%s>, Desc <%s>, <%s> w <%u>" % (name, desc, rwmafs, width)
-        i = 0        
-        for opLine in opList:
-            #print opLine            
-            (op, adrList) = opLine            
-            #print "#%u <%s>" % (i, op)
-            j=0            
-            for adrLine in adrList:
-               (msk, adr) = adrLine
-               (idxHi, idxLo) = mskWidth(msk)
-               sliceWidth   = (idxHi-idxLo+1) 
-               curSlice = "%u downto %u" % ( sliceWidth + j*self.dataWidth -1, j*self.dataWidth)
-               j += 1
-               #print "msk <%x>, adr <%x> Slice %s" % (msk, adr, curSlice) 
+        newElem = [name, desc, rwmafs, width, opList, clkdomain]
+        
         self.regs.append(newElem)      
     
   
@@ -699,7 +737,7 @@ class wbsIf():
         mskx = ("%0" + str(self.dataWidth/4) + "x")
         #print adrx, mskx
         for elem in self.regs:        
-            (name, desc, rwmafs, width, opList) = elem
+            (name, desc, rwmafs, width, opList, clkdomain) = elem
             rw = rwmafs.replace('m', '').replace('a', '')
             opIdx = 0            
             for opLine in opList:
@@ -784,10 +822,16 @@ vendorIdD   = {'GSI'       : 0x0000000000000651,
   
     
 def mergeIfLists(slaveList=[], masterList = []):
-    uglyPortList    = ["clk_sys_i : in  std_logic;\n",
-                       "rst_n_i   : in  std_logic;\n\n"]
-    uglyInstList    = ["clk_sys_i => clk_sys_i,\n",
-                       "rst_n_i => rst_n_i,\n\n"]                   
+    uglyPortList = []
+    uglyInstList = []    
+    
+    clocks = slaveList[0].clocks    
+    for clock in clocks:
+        uglyPortList += ["clk_%s_i   : in  std_logic;\n" % clock]
+        uglyInstList += ["clk_%s_i => clk_%s_i,\n" % (clock, clock)]    
+    
+    uglyPortList    += ["rst_n_i   : in  std_logic;\n\n"]
+    uglyInstList    += ["rst_n_i => rst_n_i,\n\n"]                   
     stubPortList    = [] + uglyPortList
     stubInstList    = [] + uglyInstList
     stubSigList     = []                   
@@ -874,16 +918,18 @@ def mergeIfLists(slaveList=[], masterList = []):
             lineEnd = ';'
             instLineEnd = ','
         genList.append(v.genport % (genName, genType, genVal, lineEnd, genDesc))
-        instGenList.append(v.instGenport % (genName, genVal, instLineEnd, genDesc))
+        instGenList.append(v.instGenPort % (genName, genName, instLineEnd))
         idx += 1
     for genName in genMiscD.iterkeys():
         if(idx == lastIdx):
             lineEnd = ''
+            instLineEnd = ''
         else:
             lineEnd = ';'
+            instLineEnd = ','
         (genType, genVal, genDesc) = genMiscD[genName]
         genList.append(v.genport % (genName, genType, genVal, lineEnd, genDesc))
-        instGenList.append(v.instGenport % (genName, genVal, instLineEnd, genDesc))
+        instGenList.append(v.instGenPort % (genName, genName, instLineEnd))
         idx += 1
     genList = adj(genList, [':', ':=', '--'], 1)
     instGenList = adj(instGenList, ['=>', '--'], 1)              
@@ -901,10 +947,24 @@ def parseXML(xmlIn):
     author   = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
     version  = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('version')
     email    = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('email')
+
+    clockList = []    
+    clocks = xmldoc.getElementsByTagName('clockdomain')
+    if(len(clocks) > 0):    
+        for clock in clocks:
+            if(clock.hasAttribute("name")):
+                clockList += [clock.getAttribute("name")]
+            else:
+                print "Clock must have a name!"
+                sys.exit(2)
+    else:
+        clockList += ["sys"]        
+            
     
     genericsParent = xmldoc.getElementsByTagName('generics')
     if len(genericsParent) != 1:
         print "There must be exactly 1 generics tag!"
+        sys.exit(2)
     genericsList = genericsParent[0].getElementsByTagName('item')
     print "Found %u generics\n" % len(genericsList)   
     for generic in genericsList:
@@ -925,11 +985,13 @@ def parseXML(xmlIn):
                 genMiscD[genName] = [ genType , genVal, genDesc ]    
         else:
             print "%s is not a valid type" % generic.getAttribute('type')
+            sys.exit(2)
     
     slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
     print "Found %u slave interfaces\n" % len(slaveIfList)    
     for slaveIf in slaveIfList:
-          
+        
+        genericPages = False 
         name    = slaveIf.getAttribute('name')
         ifWidth = str2int(slaveIf.getAttribute('data'))
         print "Slave <%s>: %u Bit wordsize" % (name, ifWidth)
@@ -937,14 +999,15 @@ def parseXML(xmlIn):
         #check integer generic list
         for genName in genIntD.iterkeys():
             if(pages.find(genName) > -1):
-                (genType, genVal, genDesc) = genIntD[genName]
-                pages = pages.replace(genName, str(genVal))
-        aux = str2int(pages)
-        if(aux == None):            
-            print "Slave <%s>: Pages' numeric value <%s> is invalid" % (name, pages)
-            pages = 0
-        else:        
-            pages = aux
+                genericPages = True                
+        
+        if(not genericPages):        
+            aux = str2int(pages)
+            if(aux == None):            
+                print "Slave <%s>: Pages' numeric value <%s> is invalid. Defaulting to 0" % (name, pages)
+                pages = 0
+            else:        
+                pages = aux
     
         
         #sdb record
@@ -959,10 +1022,11 @@ def parseXML(xmlIn):
         else:
             aux = str2int(vendId)
             if(aux == None):            
-                print "Slave <%s>: Invalid Vendor ID <%s>!" % (name, vendId)    
+                print "Slave <%s>: Invalid Vendor ID <%s>!" % (name, vendId)
+                sys.exit(2)
             else:
                 vendId = aux                
-                print "Slave <%s>: Unknown Vendor ID <%016x>. Would you like to add to my list?" % (name, vendId)                
+                print "Slave <%s>: Unknown Vendor ID <%016x>" % (name, vendId)                
                 
         
         aux = str2int(prodId)
@@ -974,17 +1038,27 @@ def parseXML(xmlIn):
         sdbname     = sdb[0].getAttribute('name')
         if(len(sdbname) > 19):
             print "Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname))
+            sys.exit(2)
             
-            
-        tmpSlave    = wbsIf(unitname, name, 0, '', pages, ifWidth, vendId, prodId, sdbname) 
+        tmpSlave    = wbsIf(unitname, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList) 
         
         selector = ""
         #name, adr, pages, selector
         #registers
         registerList = slaveIf.getElementsByTagName('reg')
         for reg in registerList:
-            regname = reg.getAttribute('name')
-            regdesc = reg.getAttribute('comment')
+            if reg.hasAttribute('name'):            
+                regname = reg.getAttribute('name')
+            else:
+                print "Register must have a name!"
+                sys.exit(2)
+            
+            if reg.hasAttribute('comment'):      
+                regdesc = reg.getAttribute('comment')
+            else:        
+                print "Register must have a comment!"
+                sys.exit(2)
+            
             regadr = None       
             if reg.hasAttribute('address'):            
                 regadr = reg.getAttribute('address')            
@@ -1019,44 +1093,54 @@ def parseXML(xmlIn):
                 if reg.getAttribute('selector') == 'yes':            
                     if(selector == ""):            
                         selector = regname
-                        
+            regclk = None                
+            if reg.hasAttribute('clockdomain'):
+                regclk = reg.getAttribute('clockdomain')
+                
                     #else:
                         #Error, we can't have more than one pageselector!
             if reg.hasAttribute('mask'):      
                 regmsk    = reg.getAttribute('mask')
-                
+                genericMsk = False
                 #check integer generic list
                 for genName in genIntD.iterkeys():
                     if(regmsk.find(genName) > -1):
-                        (genType, genVal, genDesc) = genIntD[genName]
-                        regmsk = regmsk.replace(genName, str(genVal))            
+                        genericMsk = True          
 
                 #check conversion function list
-                idxCmp = regmsk.find('f_makeMask(')            
-                if(idxCmp > -1):
-                    regmsk = regmsk.replace('f_makeMask(', '')
-                    regmsk = regmsk.rstrip(')') #FIXME: this is extremely presumptious!
-                            
-                    #mask valid
-                aux = str2int(regmsk)
-                
-                if(aux == None):
-                    aux = 2^ int(ifWidth) -1
-                    print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, aux)
-                if(idxCmp > -1):            
-                    regmsk = 2**aux-1 
-                else:
-                    regmsk = aux                        
+                if(not genericMsk):
+                    idxCmp = regmsk.find('f_makeMask(')            
+                    if(idxCmp > -1):
+                        regmsk = regmsk.replace('f_makeMask(', '')
+                        regmsk = regmsk.rstrip(')') #FIXME: this is extremely presumptious!
+                                
+                        #mask valid
+                    aux = str2int(regmsk)
+                    
+                    if(aux == None):
+                        aux = 2^ int(ifWidth) -1
+                        print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, aux)
+                    if(idxCmp > -1):            
+                        regmsk = 2**aux-1 
+                    else:
+                        regmsk = aux 
+                       
             else:        
                 print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
                 regmsk = 2**ifWidth-1
             
-            tmpSlave.addReg(regname, regdesc, regmsk, regrwmf,  regadr, ifWidth/8)
+            tmpSlave.addReg(regname, regdesc, regmsk, regrwmf,  regadr, ifWidth/8, regclk)
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
-        if((selector != '') and (pages > 0)):    
-            print "Slave <%s>: Interface has %u memory pages. Selector register is %s" % (name, pages, selector)    
-        tmpSlave.pageSelect = selector    
-        tmpSlave.pages      = pages    
+        if(isinstance(pages, int)):
+            if((selector != '') and (pages > 0)):    
+                print "Slave <%s>: Interface has %u memory pages. Selector register is %s" % (name, pages, selector)    
+                tmpSlave.pageSelect = selector    
+                tmpSlave.pages      = pages
+        elif(selector != ''):
+                print "Slave <%s>: Interface has %s memory pages. Selector register is %s" % (name, pages, selector)                 
+                tmpSlave.pageSelect = selector    
+                tmpSlave.pages      = pages    
+            
         tmpSlave.renderAll()    
         ifList.append(tmpSlave)
         
@@ -1118,10 +1202,11 @@ def writeStubVhd(filename):
 
     a = []
     a.append(v.instStart)        
-    if(len(genIntD) + len(genMiscD) > 0):
-        a.append(v.instGenStart)
-        a += instGenList
-        a.append(v.instGenEnd)    
+    
+    #if(len(genIntD) + len(genMiscD) > 0):
+    #   a.append(v.instGenStart)
+    #   a += instGenList
+    #   a.append(v.instGenEnd)    
     a.append(v.instPortStart)
     a += stubInstList
     a.append(v.instPortEnd)
@@ -1275,30 +1360,56 @@ def writeHdrC(filename):
 #        entityPortList.append(VhdlStr.masterIf % (masterIf.getAttribute('name'), masterIf.getAttribute('name'))) 
     
 
-helpText = ["Usage: wbgenplus <path-to-wishbone-descriptor.xml>\n\n",
-            "-h     --help          Show detailed help with intro to Wishbone-Descriptor-XMLs'\n"
-            "-l     --log           Log build output\n"
+helpText = ["\nUsage: python %s <path-to-wishbone-descriptor.xml>\n" % sys.argv[0], 
+            "-h    --help       Show detailed help. Lots of text, best redirect output to txt file",
+            "-q    --quiet      No console output",
+            "      --version    Shows version information",
+            "-l    --log        Log build output\n"
             ]
-            
+
+#(" " * ((76-len(myCreator))/2))
+#((76-len(myCreator)) % 2)
+#(" " * ((76-len(myCreator))/2) + 0 )            
 detailedHelpText = ['%s' % ("*" * 80),
                     '**                                                                            **',                    
-                    '**                          wbgenplus Manual V0.1                             **',                    
-                    '**                                                                            **',
+                    '**                          wbgenplus Manual V%s                             **' % myVersion,                    
+                    ('**' + '%s%s%s' + '**') % ((" " * ((76-len(myCreator))/2)), myCreator, (" " * ((76-len(myCreator))/2 + (76-len(myCreator))%2))),
                     '%s\n' % ("*" * 80),
                     'wbgenplus autogenerates wishbone devices for FPGAs in VHDL from a single XML file.',
-                    'In VHDL, it builds the core logic, a package with register records and SDB entries',
+                    'In VHDL, it builds the core logic, a package for register records and SDB entries',
                     'and provides a stub for the outer entity.',
-                    'It also creates a C Header file with the address definitions and can build',
+                    'It also creates a C Header file with the address definitions and builds',
                     'documentation via doxygen (not yet implemented).\n',
                     'In order to keep things modular, wbgenplus creates a seperate core for the',
                     'wishbone interface to be instantiated for your design.\n',
                     'Because of this, there are a few design rules which must be obeyed:\n',                    
                     'All registers that are write/read-write on the wishbone side are read-only on the entity side.',
-                    'all registers that are read only on the wishbone side will be driven by the entity side.\n',
+                    'All registers that are read only on the wishbone side will be driven by the entity side.\n',
                     'If you want to use generics, they will be defined as constants in an extra package,',
-                    'so they can be imported into the core package. Without full VHDL 2008 support,',
-                    'there is currently no other way to get generics into a package.',
-                    'Yes, I agree. This sucks.\n\n',
+                    'so they can be imported into the core package. Although VHDL 2008 supports generic packages,',
+                    'none of major Synthesizers fully supports VHDL 2008. So there is currently no alternative',
+                    'to the workaround. Yes, this sucks.\n\n',
+                    'wbgenplus currently supports the following features:\n',
+                    '- completely modular wishbone interface core',
+                    '- forces comments for all registers in order to produce self-explaining code',                    
+                    '- multiple slave interfaces in one core',                       
+                    '- auto-generated SDB records',
+                    '- address offsets can be generated manually, automatically or by a mix of both',                    
+                    '- optional autogeneration of get/set/clear adresses for registers (atomic bit manipulation)',                        
+                    '- auto-splitting of registers wider than the bus data width',                    
+                    '- option for multiple memory pages of registers, dependent on a selector register,',
+                    '  quantity can be controlled via generic',
+                    '- optional complete flow control by the outer (user generated) entity',
+                    '- optional feedback control via ACK/ERR by the outer (user generated) entity',
+                    '- auto feedback for successful or failed operations(accessing unmapped addresses or',
+                    '  writing to read only / reading from write only registers)',
+                    '- optional pulsed registers, reset to all 0 automatically after 1 cycle',
+                    '- optional autogeneration of write enable (WE) flag for a register (e.g. easy fifo connection)',
+                    '\n'
+                    'Planned features / currently under development:\n'
+                    '- RAM block generation',                    
+                    '- automatic clock crossing',
+                    '\n',
                     '+%s+' % ("-" * 78),
                      '|                            Wishbone-Descriptor-XMLs                          |',
                     '+%s+\n' % ("-" * 78),                    
@@ -1307,11 +1418,13 @@ detailedHelpText = ['%s' % ("*" * 80),
                     'Supported tags:\n',
                     '<wbdevice             Supreme Tag introducing a new wishbone device with one ore more interfaces.',
                     '   <codegen>          Selects which outputs files should be built',
-                    '   <generics>         Gives a list of generics to the device. Generic names can be used in interface descriptions',                                     
+                    '   <generics>         Gives a list of generics to the device. Generic names can be used in interface',
+                    '   <clockdomain>      Introduces a clockdomain. If no such tag is present, wbgenplus will automatically',
+                    '                      generate the "sys" domain for the wb interface',                                       
                     '   <slaveinterface    Introduces a new Wishbone Slave interface to the device',
                     '       <sdb>          Parameters for Self Describing Bus (SDB) record of this slave interface',
                     '       <reg>          Introduces a new register to this slave interface interface',        
-                    '       <ram>          Introduces a new memory block to this slave interface interface',
+                    '       <ram>          Introduces a new memory block to this slave interface interface (not yet implemented)',
                     '   >',
                     '>',
                     
@@ -1322,6 +1435,10 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '   2: Only valid in a group: If pages is greater 0, exactly 1 register must have set selector="yes"',
                     '      and 1 or more registers must have set paged="yes"\n\n',
                     'Tag parameters:\n',
+                    '<CLOCKDOMAIN>:\n',
+                    '  *name:       Name of the clock domain. The first such tag is always treated as the Wishbone domain\n',
+                    '   Example:',                      
+                    '   <clockdomain name="wb"></clockdomain>\n',
                     '<WBDEVICE>:\n',                  
                     '  *unitname:   Name of the design unit of the wishbone top file.',
                     '               The inner core will be named "<unitname>_auto"\n',
@@ -1335,6 +1452,7 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '   data:       Bitwidth of the data lines. Default is 32\n',
                     '   type:       Type of flow control. Accepts "pipelined" or "classic", default is "pipelined"\n',
                     ' 2*pages:      Number <n> of memory pages to instantiate, default is 0.',
+                    '               Accepts a generic (via const package, see above)',
                     '               All registers marked paged="yes" will be built as an array with n elements.',
                     '               If <n> is greater 0, one register must be marked as the page selector by issueing selector="yes"\n',
                     '   Example:',                      
@@ -1374,71 +1492,135 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '   paged:      When set to "yes", this register will be instantiated as an array with the number of elements',
                     '               in the pages parameter of the slave interface tag\n',
                     '   selector:   Selects the active memory page of all paged registers. Value is auto range checked on access.\n',
+                    '   clock:      Clock domain this register shall be synchronized to. Default is no sync (WB clock domain)',
+                    '               Needs a corresponding <clockdomain> tag.\n',
                     '   Example:',                    
-                    '   <reg name="ACT" read="yes" write="yes" access="atomic" mask="0xff" comment="Triggers on/off"></reg>\n'
-                    
+                    '   <reg name="ACT" read="yes" write="yes" access="atomic" mask="0xff" comment="Triggers on/off"></reg>\n',
+                    '<RAM>:\n',
+                    '  not yet implemented\n'
                     ]
+
+versionText = ["\nwbgenplus - A Wishbone Slave Generator\n",
+               "Version: %s" % myVersion,
+               "Created %s by %s" % (myStart, myCreator),
+               "Last updated %s\n" % myUpdate                 
+               ]
                                           
-                        
+def usage():
+    for line in helpText:        
+        print line
+
+def manual():
+    for line in detailedHelpText:        
+        print line            
+
+def version():
+    for line in versionText:        
+        print line 
                     
             
 xmlIn = ""  
+log = False
+quiet = False
+
+
+
+        
 if(len(sys.argv) > 1):
     xmlIn = sys.argv[1]
-
-if os.path.isfile(xmlIn):
-
-    genIntD     = dict()
-    genMiscD    = dict()
-    portList    = []
-    recordList  = []
-    regList     = []
-    vAdrList    = []
-    cAdrList    = []
-    fsmList     = []
-    genList     = []
-    ifList      = []
-    unitname    = "unknown unit"
-    author      = "unknown author"
-    email       = "unknown mail"
-    version     = "unknown version"
-    date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
-    path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
-    
-    print "input/output dir: %s" % path
-    print "Trying to parse %s..." % xmlIn
-    print "\n%s" % ('*' * 80)
-    parseXML(xmlIn)
-    
-    autoUnitName = unitname + "_auto"
-    
-    #filenames for various output files
-    fileMainVhd     = autoUnitName              + ".vhd"
-    filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
-    
-    fileStubVhd     = unitname                  + ".vhd"
-    fileStubPkgVhd  = unitname      + "_pkg"    + ".vhd"
-    fileTbVhd       = unitname      + "_tb"     + ".vhd"
-    
-    fileHdrC        = unitname                  + ".h"
-    
-    
-    (portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
-    
-    writeStubVhd(fileStubVhd)
-    writeMainVhd(fileMainVhd)
-    writePkgVhd(filePkgVhd)
-    writeHdrC(fileHdrC)
-    #writeTbVhd(fileTbVhd)
-    print "\n%s" % ('*' * 80) 
-    print "\nDone!"
 else:
-    if( (len(sys.argv) > 1)):
-        for line in detailedHelpText:        
-            print line
-    else:        
-        for line in helpText:        
-            print line
+    usage()
+    sys.exit(2)     
+
+if(len(sys.argv) == 2):
+    sIdx=1
+else:
+    sIdx=2
+    
+try:
+    opts, args = getopt.getopt(sys.argv[sIdx:], "hlq", ["help", "log", "quiet", "version"])
+except getopt.GetoptError, err:
+    # print help information and exit:
+    print str(err) # will print something like "option -a not recognized"
+    sys.exit(2)    
+
+needFile = True
+optFound = False
+for option, argument in opts:
+    if option in ("-h", "-?", "--help"):
+        optFound = True        
+        needFile = False
+        manual()
+    elif option in ("--version"):
+        optFound = True        
+        needFile = False        
+        version()
+    elif option in ("-q", "--quiet"):
+        optFound = True            
+        quiet = True
+    elif option in ("-l", "--log"):
+        optFound = True        
+        log = True
+    else:
+        print "unhandled option %s" % option
+        sys.exit(2) 
+
+
+if(needFile):
+    if(optFound and len(sys.argv) == 2):
+        usage()
+        sys.exit(0)
+        
+    if os.path.isfile(xmlIn):
+        
+        
+        
+        genIntD     = dict()
+        genMiscD    = dict()
+        portList    = []
+        recordList  = []
+        regList     = []
+        vAdrList    = []
+        cAdrList    = []
+        fsmList     = []
+        genList     = []
+        ifList      = []
+        unitname    = "unknown unit"
+        author      = "unknown author"
+        email       = "unknown mail"
+        version     = "unknown version"
+        date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
+        path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
+        
+        print "input/output dir: %s" % path
+        print "Trying to parse %s..." % xmlIn
+        print "\n%s" % ('*' * 80)
+        parseXML(xmlIn)
+        
+        autoUnitName = unitname + "_auto"
+        
+        #filenames for various output files
+        fileMainVhd     = autoUnitName              + ".vhd"
+        filePkgVhd      = autoUnitName  + "_pkg"    + ".vhd"
+        
+        fileStubVhd     = unitname                  + ".vhd"
+        fileStubPkgVhd  = unitname      + "_pkg"    + ".vhd"
+        fileTbVhd       = unitname      + "_tb"     + ".vhd"
+        
+        fileHdrC        = unitname                  + ".h"
+        
+        
+        (portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
+        
+        writeStubVhd(fileStubVhd)
+        writeMainVhd(fileMainVhd)
+        writePkgVhd(filePkgVhd)
+        writeHdrC(fileHdrC)
+        #writeTbVhd(fileTbVhd)
+        print "\n%s" % ('*' * 80) 
+        print "\nDone!"
+    else:
+        print "\nFile not found: %s" % xmlIn
     
     
 
