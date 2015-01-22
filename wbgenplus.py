@@ -1572,7 +1572,8 @@ if(needFile):
         
     if os.path.isfile(xmlIn):
         mypath, myfile = os.path.split(xmlIn)        
-        mypath += '/'
+        if not mypath:
+            mypath += './'
         
         
         
