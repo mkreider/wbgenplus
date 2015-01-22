@@ -1,10 +1,4 @@
-<wbdevice unitname="aGoodWBDevice" author="ich!" version="1.7.1">
-   
-   <codegen>
-      <generate language="vhdl"  documentation="yes" test="yes"></generate>
-      <generate language="c"     documentation="yes" test="yes"></generate>
-      <generate language="c++"   documentation="yes" test="yes"></generate>
-   </codegen>
+<wbdevice unitname="aGoodWBDevice" author="ich!" email="ich@hier.de" version="1.7.1">
    
    <generics>
       <item name="channels"   type="uint" value="8"></item>
@@ -12,26 +6,18 @@
       <item name="auto_msg"   type="bool" value="false"></item>
    </generics>
     
-   <masterinterface name="irq_master">
-      <properties>
-         <interface  data="16" adr="32" type="pipelined"></interface>
-      </properties>
-   </masterinterface>     
+   <clockdomain name="wb"></clockdomain>
+   <clockdomain name="sys"></clockdomain>	
 
-   <slaveinterface name="control" data="32" type="pipelined" pages="channels">
+
+   <slaveinterface name="control" data="32" type="pipelined" pages="22">
       <sdb vendorID="GSI" productID="0x01234567" version="1" date="auto" name="my_ctrl_thingy"></sdb>
       <registers>
-           <reg   name="ACTIVE" read="yes" write="yes" access="atomic" mask="f_makeMask(channels)" comment="Turns trigger channels on or off"></reg>
-           <reg   name="STATUS" read="yes" write="no"  access="atomic" mask="f_makeMask(channels)" comment="Shows which channels contain Timestamps">
-               <field name="ID"        submask="0x000000ff"></field>
-               <field name="VALID"     submask="0x00000100"></field>
-               <field name="ERROR"     submask="0x00000200"></field>
-               <field name="CH_FLAGS"  submask="0xFFFF0000"></field>
-           </reg>
+          <reg   name="ACTIVE" read="yes" write="yes" access="atomic" mask="0xffff" comment="Turns trigger channels on or off"></reg>
+           <reg   name="STATUS" read="yes" write="no"  access="atomic" mask="32" comment="Shows which channels contain Timestamps"></reg>
            <reg   name="CHSEL"  read="yes" write="yes"  access="simple" mask="0xff" selector="yes" comment="Selects/Shows active channel"></reg>
-           
            <reg   name="TS_POP" read="no" write="yes"  access="simple" mask="1"     address="0x100" paged="yes" comment="Write here to pop Timestamp"></reg>
-           <reg   name="TS" read="yes" write="no"  access="atomic"  mask="f_makeMask(80)" paged="yes" comment="Timestamp"></reg>
+           <reg   name="TS" read="yes" write="no"  access="atomic"  mask="80" paged="yes" comment="Timestamp"></reg>
       </registers>
    </slaveinterface>
    
@@ -39,8 +25,8 @@
    <slaveinterface name="data" data="32" type="pipelined" pages="0">
       <sdb vendorID="0x01234567" productID="0x0815" version="1" date="auto" name="your_data_blob"></sdb>
       <registers>
-           <reg   name="INPUT"   read="yes" write="no" mask="f_makeMask(64)" access="simple" comment="Data in"></reg>
-           <reg   name="OUTPUT"  read="no" write="yes" mask="f_makeMask(40)" access="simple" comment="data out"></reg>
+           <reg   name="INPUT"   read="yes" write="no" mask="64" access="simple" comment="Data in"></reg>
+           <reg   name="OUTPUT"  read="no" write="yes" mask="0b11111" access="simple" comment="data out"></reg>
            <reg   name="THROUGHPUT"  read="yes" write="yes"  access="simple" comment="data through"></reg>
       </registers>
    </slaveinterface>

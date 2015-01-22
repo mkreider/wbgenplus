@@ -11,6 +11,8 @@ import textformatting
 import os.path
 import sys
 import getopt
+import ntpath
+
 
 myVersion = "0.3"
 myStart   = "15 Dec 2014"
@@ -943,7 +945,7 @@ def parseXML(xmlIn):
     global version
     global email    
     
-    unitname = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('unitname')
+    
     author   = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
     version  = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('version')
     email    = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('email')
@@ -1109,22 +1111,19 @@ def parseXML(xmlIn):
 
                 #check conversion function list
                 if(not genericMsk):
-                    idxCmp = regmsk.find('f_makeMask(')            
-                    if(idxCmp > -1):
-                        regmsk = regmsk.replace('f_makeMask(', '')
-                        regmsk = regmsk.rstrip(')') #FIXME: this is extremely presumptious!
-                                
-                        #mask valid
                     aux = str2int(regmsk)
-                    
                     if(aux == None):
                         aux = 2^ int(ifWidth) -1
                         print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, aux)
-                    if(idxCmp > -1):            
-                        regmsk = 2**aux-1 
+                    elif( (regmsk.find('0x') == 0) or (regmsk.find('0b') == 0) ):
+                        #it's a mask. treat as such
+                        regmsk = aux
                     else:
-                        regmsk = aux 
-                       
+                        #it's decimal and therefore the bitwidth. make a bitmask                        
+                        regmsk = 2**aux-1
+                else:
+                     #careful, using generics in register width probably causes more trouble than it's worth
+                     print "Slave <%s>: Register <%s>'s using supplied generic width <%s>" % (name, regname, regmsk)
             else:        
                 print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
                 regmsk = 2**ifWidth-1
@@ -1149,7 +1148,7 @@ def parseXML(xmlIn):
 def writeStubVhd(filename):
     
     
-    if os.path.isfile(path + filename):
+    if os.path.isfile(mypath + filename):
         print "!!! %s already exists !!!\n\nI don't want to accidentally trash your work.\nAre you sure you want to overwrite %s with a new stub entity? " % (filename, filename)
         inp = 'dunno'        
         
@@ -1162,7 +1161,7 @@ def writeStubVhd(filename):
             print ""
             
     print "Generating stub entity           %s" % filename        
-    fo = open(path + filename, "w")
+    fo = open(mypath + filename, "w")
     v = gVhdlStr(unitname, filename, author, email, version, date)
 
     header = adj(v.header + ['\n'], [':'], 0)
@@ -1222,7 +1221,7 @@ def writeMainVhd(filename):
 
     print "Generating WishBone core entity  %s" % filename 
     
-    fo = open(path + filename, "w")
+    fo = open(mypath + filename, "w")
     v = gVhdlStr(autoUnitName, filename, author, email, version, date)
 
     header = adj(v.header + ['\n'], [':'], 0)
@@ -1270,7 +1269,7 @@ def writePkgVhd(filename):
 
     print "Generating WishBone core package %s" % filename    
     
-    fo = open(path + filename, "w")
+    fo = open(mypath + filename, "w")
     
     v = gVhdlStr(autoUnitName, filename, author, email, version, date)
 
@@ -1334,7 +1333,7 @@ def writeHdrC(filename):
     
     print "Generating C Header file         %s\n" % filename    
     
-    fo = open(path + filename, "w")
+    fo = open(mypath + filename, "w")
     
     gc     = gCStr(filename, unitname, author, email, version, date)
     header = "" #gCStr.hdrfileStart
@@ -1476,10 +1475,10 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '               Atomic mode provides seperate get, set, and clear addresses for this register,\n'
                     '               allowing atomic single bit manipulation\n',
                     '   mask:       Bitmask for this register (currently only functions as width), default is the',
-                    '               data parameter of the slave interface tag',
+                    '               data(bus width) parameter of the slave interface tag',
                     '               If "mask" is wider than "data", wbgenplus will automatically generate multiple addresses',
-                    '               to allow word access of the register',
-                    '               Accepts either hex values as masks or "f_makemask(<decimal bitwidth>)" macro\n'
+                    '               to allow word access of the register. Accepts either hex or binary values as',
+                    '               masks (0x ... or 0b ...) or decimal values as the register bitwidth\n',
                     '   address:    Manually sets the offset for this register, default is auto addressing.',
                     '               All follwing Registers will be enumerated from this address onward\n',                     
                     '   weflag      Write enable flag, default is "no". If set to "yes", a additional flag register will be created,',
@@ -1572,6 +1571,8 @@ if(needFile):
         sys.exit(0)
         
     if os.path.isfile(xmlIn):
+        mypath, myfile = os.path.split(xmlIn)        
+        
         
         
         
@@ -1590,11 +1591,15 @@ if(needFile):
         email       = "unknown mail"
         version     = "unknown version"
         date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
-        path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
         
-        print "input/output dir: %s" % path
-        print "Trying to parse %s..." % xmlIn
+        unitname = os.path.splitext(myfile)[0]        
+        #path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
+        
+        print "input/output dir: %s" % mypath
+        print "Trying to parse:  %s" % myfile
+        print "Unit:             %s" % unitname
         print "\n%s" % ('*' * 80)
+                    
         parseXML(xmlIn)
         
         autoUnitName = unitname + "_auto"
