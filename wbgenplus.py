@@ -1269,7 +1269,7 @@ def writePkgVhd(filename):
 
     print "Generating WishBone core package %s" % filename    
     
-    fo = open(mypath + filename, "w")
+    fo = open(mypath + '/' + filename, "w")
     
     v = gVhdlStr(autoUnitName, filename, author, email, version, date)
 
@@ -1572,7 +1572,7 @@ if(needFile):
         
     if os.path.isfile(xmlIn):
         mypath, myfile = os.path.split(xmlIn)        
-        
+        mypath += '/'
         
         
         
