@@ -11,7 +11,6 @@ import textformatting
 import os.path
 import sys
 import getopt
-import ntpath
 
 
 myVersion = "0.3"
@@ -35,11 +34,12 @@ now = datetime.datetime.now()
 class wbsCStr(object):
    
 
-    def __init__(self, pages, unitname, slaveIfName):
-        self.unitname   = unitname
+    def __init__(self, pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID):
+        self.unitname     = unitname
         self.slaveIfName  = slaveIfName        
-        self.pages      = pages
-        
+        self.pages        = pages
+        self.sdbVendorID  = '#define %s_%s_VENDOR_ID 0x%016xULL\n' % (unitname.upper(), slaveIfName.upper(), sdbVendorID)
+        self.sdbDeviceID  = '#define %s_%s_DEVICE_ID 0x%08xUL\n' % (unitname.upper(), slaveIfName.upper(), sdbDeviceID)
         #################################################################################        
         #Strings galore        
         self.constRegAdr    = "#define %s_%%s   0x%%s // %%s _0x%%s, %%s\n" % slaveIfName.upper() #name, adrVal,  rw, msk, desc
@@ -232,7 +232,7 @@ class wbsVhdlStr(object):
            
            for opLine in opList:
                (op, adrList) = opLine
-               if(op == "_GET"):                    
+               if((op == "_GET") or (op == "_RW ")):                    
                    if(len(adrList) > 1):
                        #this is sliced
                        adrIdx = 0            
@@ -255,7 +255,7 @@ class wbsVhdlStr(object):
                                 
                            #We can't have two drivers for a register. Find out if the register driver is internal or external to the WB core
                            if(rwmafs.find('w') > -1):
-                               #if the register can be written to by WB, it is internal. read from WB register                                  
+                               #if the register can be written to by WB, it is internal. read from WB register 
                                s.append(self.wbReadInt % (name + op + idx, baseSlice, name + ind + curSlice, comment))
                            else:
                                #if the register cannot be written to by WB, it is external. read from input record 
@@ -269,7 +269,7 @@ class wbsVhdlStr(object):
                            #if the register can be written to by WB, read from WB register
                            s.append(self.wbReadInt % (name + op, baseSlice, name+ind, desc))
                        else:
-                           #if the register cannot be written to by WB, read from input record 
+                           #if the register cannot be written to by WB, read from input record
                            s.append(self.wbReadExt % (name + op, baseSlice, name+ind, desc))
                    if((rwmafs.find('s') > -1)):             
                        s.append(self.wbStall % name)    
@@ -569,7 +569,7 @@ class wbsIf():
         self.pages      = pages
         self.dataWidth  = dataWidth
         self.v = wbsVhdlStr(pages, unitname, name, dataWidth, vendId, devId, sdbname, clocks)        
-        self.c = wbsCStr(pages, unitname, name)
+        self.c = wbsCStr(pages, unitname, name, vendId, devId)
     
     def sliceMsk(self, aMsk):
                 
@@ -644,7 +644,7 @@ class wbsIf():
         else:
             op = str()        
             if rwmafs.find('rw') > -1:
-                op = '_OWR'
+                op = '_RW '
             elif rwmafs.find('r') > -1:    
                 op = '_GET'
             elif rwmafs.find('w') > -1:
@@ -862,7 +862,10 @@ def mergeIfLists(slaveList=[], masterList = []):
             stubPortList[-1] += "\n"
             stubInstList[-1] += "\n"
         uglyPortList += ["\n"]    
-        cAdrList     += commentLine("//","Address Map", slave.name)
+        cAdrList     += slave.c.sdbVendorID
+        cAdrList     += slave.c.sdbDeviceID
+        cAdrList     += '\n'
+        cAdrList     += commentLine("//","Address Map", slave.name)        
         cAdrList     += slave.cAdrList
         cAdrList     += "\n"
         uglyAdrList  += iN(commentLine("--","WBS Adr", slave.name), 1) 
@@ -1149,16 +1152,12 @@ def writeStubVhd(filename):
     
     
     if os.path.isfile(mypath + filename):
-        print "!!! %s already exists !!!\n\nI don't want to accidentally trash your work.\nAre you sure you want to overwrite %s with a new stub entity? " % (filename, filename)
-        inp = 'dunno'        
-        
-        while ((inp.lower() != 'y') and (inp.lower() != 'n') and (inp.lower() != '')):       
-            inp = str(raw_input("(y/N) : "))
-        if ((inp.lower() == 'n') or (inp == '')):
-            print ""            
+        print "!!! Outer entity %s already exists !!!\n" % filename
+        if not force:
+            print "I don't want to accidentally trash your work. To force overwrite, use '-f' or '--force' option"
             return
         else:
-            print ""
+            print "Overwrite forced"
             
     print "Generating stub entity           %s" % filename        
     fo = open(mypath + filename, "w")
@@ -1537,13 +1536,14 @@ else:
     sIdx=2
     
 try:
-    opts, args = getopt.getopt(sys.argv[sIdx:], "hlq", ["help", "log", "quiet", "version"])
+    opts, args = getopt.getopt(sys.argv[sIdx:], "hlqf", ["help", "log", "quiet", "force", "version"])
 except getopt.GetoptError, err:
     # print help information and exit:
     print str(err) # will print something like "option -a not recognized"
     sys.exit(2)    
 
 needFile = True
+force    = False
 optFound = False
 for option, argument in opts:
     if option in ("-h", "-?", "--help"):
@@ -1554,6 +1554,9 @@ for option, argument in opts:
         optFound = True        
         needFile = False        
         version()
+    elif option in ("-f", "--force"):
+        optFound = True            
+        force = True    
     elif option in ("-q", "--quiet"):
         optFound = True            
         quiet = True
@@ -1618,10 +1621,11 @@ if(needFile):
         
         (portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
         
-        writeStubVhd(fileStubVhd)
+        
         writeMainVhd(fileMainVhd)
         writePkgVhd(filePkgVhd)
         writeHdrC(fileHdrC)
+        writeStubVhd(fileStubVhd)
         #writeTbVhd(fileTbVhd)
         print "\n%s" % ('*' * 80) 
         print "\nDone!"
