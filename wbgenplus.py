@@ -166,8 +166,10 @@ class wbsVhdlStr(object):
                                    "r_%s_out_ack1    <= '0';\n" % slaveIfName,
                                    "r_%s_out_err1    <= '0';\n" % slaveIfName,
                                    "r_%s_out_dat1    <= (others => '0');\n" % slaveIfName]
-        self.resetSignal        = "r_%s.%%s <= (others => '0');\n" % slaveIfName #registerName   
-        self.resetSignalArray   = "r_%s.%%s <= (others =>(others => '0'));\n" % slaveIfName #registerName
+        self.resetSignal        = "r_%s.%%s <= %%s;\n" % slaveIfName #registerName, resetvector
+        self.others             = "(others => '%s')"
+        self.int2slv            = "std_logic_vector(to_unsigned(%s, %s))"
+        self.resetSignalArray   = "r_%s.%%s <= (others =>%%s);\n" % slaveIfName #registerName, resetvector
         self.recordPortOut      = "%s_regs_o : out t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
         self.recordPortIn       = "%s_regs_i : in  t_%s_regs_i;\n" % (slaveIfName, slaveIfName) 
         self.recordRegStart     = "type t_%s_regs_%%s is record\n" % slaveIfName
@@ -224,7 +226,7 @@ class wbsVhdlStr(object):
     def fsmRead(self, regList):
         s = []    
         for elem in regList:        
-           (name, desc, rwmafs, width, opList, clkdomain) = elem
+           (name, desc, rwmafs, width, opList, _, _) = elem
            if(rwmafs.find('m') > -1):
                ind = '(v_page)'
            else:
@@ -280,7 +282,7 @@ class wbsVhdlStr(object):
     def fsmWrite(self, regList):
         s = []    
         for elem in regList:        
-            (name, desc, rwmafs, width, opList, clkdomain) = elem
+            (name, desc, rwmafs, width, opList, _, _) = elem
            
             if(rwmafs.find('m') > -1):
                 ind = '(v_page)'
@@ -328,13 +330,7 @@ class wbsVhdlStr(object):
     def fsmWritePulse(self, regList):
         s = []    
         for elem in regList:        
-            (name, desc, rwmafs, width, opList, clkdomain) = elem
-           
-            if(rwmafs.find('m') > -1):
-                ind = '(v_page)'
-            else:
-                ind = ""
-            
+            (name, _, rwmafs, _, _, _, _) = elem
             if(rwmafs.find('w') > -1):
                 if((rwmafs.find('f') > -1)):
                     s.append(self.wbWriteWeZero % (name, name))
@@ -350,7 +346,7 @@ class wbsVhdlStr(object):
                                 self.signalSl % ('ERR', 'Error control for outside entity')]
        types            = []
        for elem in regList:        
-           (name, desc, rwmafs, width, opList, clkdomain) = elem
+           (name, desc, rwmafs, width, opList, _, _) = elem
            if(rwmafs.find('m') > -1):
                types += self.multitype(elem)
                if(rwmafs.find('w') > -1):
@@ -378,7 +374,7 @@ class wbsVhdlStr(object):
        
        for clkd in self.clocks[1:]:
            for elem in regList:        
-               (name, desc, rwmafs, width, opList, clkdomain) = elem
+               (name, desc, rwmafs, width, opList, clkdomain, _) = elem
                           
                if(clkdomain == clkd):
                    if(rwmafs.find('m') > -1):
@@ -404,7 +400,7 @@ class wbsVhdlStr(object):
                    
     
     def reg(self, elem):
-        (name, desc, rwmafs, width, opList, clkdomain) = elem
+        (name, desc, _, width, _, _, _) = elem
         
         s = self.signalSlv % (name, width, desc)        
         return s
@@ -414,7 +410,7 @@ class wbsVhdlStr(object):
 
 
     def multitype(self, elem):
-        (name, desc, rwmafs, width, opList, clkdomain) = elem        
+        (name, _, _, width, _, _, _) = elem        
         s = []        
         s.append('\n')
         s.append(self.slvSubType % (name, width)) #shift mask to LSB
@@ -422,7 +418,7 @@ class wbsVhdlStr(object):
         return s 
     
     def multielement(self, elem, qty=1):
-        (name, desc, rwmafs, width, opList, clkdomain) = elem        
+        (name, desc, _, _, _, _, _) = elem        
         s = []        
         if(isinstance(self.pages, int)):
             prefix = ''
@@ -435,7 +431,7 @@ class wbsVhdlStr(object):
               
     
     def cRegAdr(self, elem):
-        (name, desc, rwmafs, width, opList, clkdomain) = elem
+        (name, desc, rwmafs, _, opList, _, _) = elem
         rw = rwmafs.replace('m', '').replace('a', '')
         for opLine in opList:
             (op, adrList) = opLine
@@ -448,12 +444,12 @@ class wbsVhdlStr(object):
     def resets(self, regList):
        s = []
        for elem in regList:
-           (name, desc, rwmafs, width, opList, clkdomain) = elem
+           (name, _, rwmafs, _, _, _, rstvec) = elem
            if(rwmafs.find('w') > -1):
                if(rwmafs.find('m') > -1):
-                   s.append(self.resetSignalArray % name)                      
+                   s.append(self.resetSignalArray % (name, rstvec))                      
                else:
-                   s.append(self.resetSignal % name)
+                   s.append(self.resetSignal % (name, rstvec))
                if(rwmafs.find('f') > -1):
                    s.append(self.wbWriteWeZero % (name, ""))    
        s += self.resetOutput           
@@ -588,7 +584,7 @@ class wbsIf():
     
     def getLastAdr(self, elem):
         
-        (_, _, _, _, opList, _) = elem
+        (_, _, _, _, opList, _, _) = elem
         #print opList
         (_, adrList) = opList[-1]
         #print adrList
@@ -626,7 +622,7 @@ class wbsIf():
         
         
     
-    def addReg(self, name, desc, bigMsk, rwmafs, startAdr=None, offs=4, clkdomain="sys"):
+    def addReg(self, name, desc, bigMsk, rwmafs, startAdr=None, offs=4, clkdomain="sys", rstvec=None):
         opList  = []        
         newElem = []            
         adr = startAdr
@@ -654,7 +650,7 @@ class wbsIf():
         
         (idxHi, idxLo) = mskWidth(bigMsk)
         width   = (idxHi-idxLo+1)
-        newElem = [name, desc, rwmafs, width, opList, clkdomain]
+        newElem = [name, desc, rwmafs, width, opList, clkdomain, rstvec]
         
         self.regs.append(newElem)      
     
@@ -739,7 +735,7 @@ class wbsIf():
         mskx = ("%0" + str(self.dataWidth/4) + "x")
         #print adrx, mskx
         for elem in self.regs:        
-            (name, desc, rwmafs, width, opList, clkdomain) = elem
+            (name, desc, rwmafs, width, opList, clkdomain, _) = elem
             rw = rwmafs.replace('m', '').replace('a', '')
             opIdx = 0            
             for opLine in opList:
@@ -1130,8 +1126,24 @@ def parseXML(xmlIn):
             else:        
                 print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
                 regmsk = 2**ifWidth-1
-            
-            tmpSlave.addReg(regname, regdesc, regmsk, regrwmf,  regadr, ifWidth/8, regclk)
+
+            rstvec = tmpSlave.v.others % "0"    
+            if reg.hasAttribute('reset'):
+                print "Found Reset for %s" % regname
+                aux = reg.getAttribute('reset')                 
+                if(aux == "zeroes"):
+                    rstvec = tmpSlave.v.others % "0"    
+                elif(aux == "ones"):
+                    rstvec = tmpSlave.v.others % "1"
+                else:    
+                    aux = str2int(aux)
+                    if(aux != None):
+                        [hi, lo] = mskWidth(regmsk)
+                        rstvec = tmpSlave.v.int2slv % (aux, hi-lo+1)
+                    else:
+                        rstvec = tmpSlave.v.others % "0"
+                     
+            tmpSlave.addReg(regname, regdesc, regmsk, regrwmf,  regadr, ifWidth/8, regclk, rstvec)
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
         if(isinstance(pages, int)):
             if((selector != '') and (pages > 0)):    
@@ -1479,7 +1491,9 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '               to allow word access of the register. Accepts either hex or binary values as',
                     '               masks (0x ... or 0b ...) or decimal values as the register bitwidth\n',
                     '   address:    Manually sets the offset for this register, default is auto addressing.',
-                    '               All follwing Registers will be enumerated from this address onward\n',                     
+                    '               All follwing Registers will be enumerated from this address onward\n',
+                    '   reset:      Defines the reset value for this register. Accepts "ones", "zeroes", binary, hex or decimal value.',
+                    '               Currently only works for registers that can be written to from WB. Default is "zeroes".\n',                      
                     '   weflag      Write enable flag, default is "no". If set to "yes", a additional flag register will be created,',
                     '               going HI for 1 clock cycle every time the parent register is written to.',
                     '               The flag register does not discriminate which page, word, or subword is accessed.\n',
