@@ -2,23 +2,28 @@
    
    <generics>
    </generics>
+   
+   <clockdomain name="wb"></clockdomain>
+   <clockdomain name="ref"></clockdomain>
+   <clockdomain name="aux"></clockdomain>
+   
     
    <slaveinterface name="slave" data="32" type="pipelined" pages="0">          
       <sdb vendorID="GSI" productID="0x18415778" version="1" date="auto" name="ECA ActChn WBM"></sdb>
       <registers>
            <reg   name="STATUS"     read="yes"  mask="0xff"                              comment="Shows if the device is rdy/busy"></reg>
-           <reg   name="MAX_MACROS" read="yes"  mask="8"                      comment="Shows maximum number of macros"></reg>
-           <reg   name="MAX_SPACE"  read="yes"  mask="16"                                comment="Shows maximum memory space"></reg>
+           <reg   name="MAX_MACROS" read="yes"  mask="8"  clockdomain="ref"                    comment="Shows maximum number of macros"></reg>
+           <reg   name="MAX_SPACE"  read="yes"  mask="16" clockdomain="ref"                               comment="Shows maximum memory space"></reg>
            <reg   name="ENABLE"     read="yes" write="yes" access="atomic" mask="0x1" reset="ones"   comment="Turns device on/off"></reg>
            <reg   name="EXEC"       write="yes" mask="8"   weflag="yes" autostall='yes'  comment="Executes macro at idx"></reg>            
            <reg   name="LAST_EXEC"  read="yes"  mask="8"                                 comment="Shows idx of last executed macro"></reg>
            <reg   name="REC"        write="yes" mask="8"   weflag="yes" autostall='yes'  comment="Records macro at idx"></reg> 
            <reg   name="LAST_REC"   read="yes"  mask="8"                                 comment="Shows idx of last recorded macro"></reg>
-           <reg   name="MACRO_QTY"  read="yes"  mask="8"                                 comment="Shows the number of macros in the ram"></reg>
-           <reg   name="SPACE_LEFT" read="yes"  write="yes" mask="16" reset="0x00f"                    comment="Shows number of free spaces in the RAM"></reg>
+           <reg   name="MACRO_QTY"  read="yes"  mask="8"    clockdomain="wb"                             comment="Shows the number of macros in the ram"></reg>
+           <reg   name="SPACE_LEFT" read="yes"  write="yes" mask="16" reset="0x00f" clockdomain="aux"                   comment="Shows number of free spaces in the RAM"></reg>
            <reg   name="CLEAR_ALL"  write="yes" mask="1"   autostall='yes' pulse='yes'   comment="Clears all macros"></reg>
            <reg   name="CLEAR_IDX"  write="yes" mask="8"   weflag="yes" autostall='yes'  comment="Clears macro at idx"></reg>
-           <reg   name="REC_FIFO"   write="yes"            weflag="yes"                  comment="Recording fifo. 3 word sequences: #ADR# #VAL# #META#"></reg>
+           <reg   name="REC_FIFO"   write="yes"            weflag="yes" clockdomain="ref"                  comment="Recording fifo. 3 word sequences: #ADR# #VAL# #META#"></reg>
       </registers>
    </slaveinterface>
    

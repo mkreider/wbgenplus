@@ -68,7 +68,7 @@ class wbsVhdlStr(object):
         self.clocks         = clocks
         #################################################################################        
         #Strings galore        
-        self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName,
+        self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\")" % slaveIfName,
                            "%s_o : out t_wishbone_slave_out" % slaveIfName] #name
         self.slaveSigs = ["signal s_%s_i : t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName,
                           "signal s_%s_o : t_wishbone_slave_out\n" % slaveIfName,
@@ -133,7 +133,27 @@ class wbsVhdlStr(object):
                            "%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName),                           
                            "%s_o.ack <= r_%s_out_ack1 and not %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
                            "%s_o.err <= r_%s_out_err1 or      %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)]                
+        self.syncProcStart0     = "sync_%s_clk_%%s_%%s : process(clk_%%s_i)\n   begin\n" % (slaveIfName)
+        self.syncProcStart1     = "   if rising_edge(clk_%s_i) then\n         if(rst_n_i = '0') then\n"
+        self.syncProcMid        = "      else\n"
+        self.syncProcEnd        = ["      end if; -- rst\n",
+                                  "   end if; -- clk edge\n",
+                                  "end process;\n\n"]             
+        
+        self.syncProcReg        = "         r_%s_regs_clk_%%s_%%s_%%s <= r_%s_regs_clk_%%s_%%s_%%s;\n"  % (slaveIfName, slaveIfName)   
+        self.syncAssignOutD     =  "%s_regs_clk_%%s_o.%%s <= r_%s.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] recordsOut[i] slaveIf clkdOut[i] recordsOut[i]
+        self.syncAssignOutI0    =  "%s_regs_clk_%%s_o.%%s <= r_%s_regs_clk_%%s_o_2.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] recordsOut[i] slaveIf clkdOut[i] recordsOut[i]
+        self.syncAssignOutI1    =  "r_%s_regs_clk_%%s_o_0.%%s <= r_%s.%%s;\n" % (slaveIfName, slaveIfName) #slave, clkd, slave
+        
+        self.syncAssignInD      =  "s_%s.%%s <= %s_regs_clk_%%s_i.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] recordsOut[i] slaveIf clkdOut[i] recordsOut[i]
+        self.syncAssignInI0     =  "r_%s_regs_clk_%%s_i_0.%%s <= %s_regs_clk_%%s_i.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] recordsOut[i] slaveIf clkdOut[i] recordsOut[i]
+        self.syncAssignInI1     =  "s_%s.%%s <= r_%s_regs_clk_%%s_i_2.%%s;\n" % (slaveIfName, slaveIfName) #slave, clkd, slave
+        
       
+        
+        self.syncReg            = "signal r_%s_regs_clk_%%s_%%s_%%s : t_%s_regs_clk_%%s_%%s;\n" % (slaveIfName, slaveIfName)
+        self.clkdomainComment   = "-- %s %%s domain %%s\n" % slaveIfName        
+              
         self.slvSubType         = "subtype t_slv_%s_%%s is std_logic_vector(%%s-1 downto 0);\n" % slaveIfName #name, idxHi
         self.slvArrayType       = "type    t_slv_%s_%%s_array is array(natural range <>) of t_slv_%s_%%s;\n" % (slaveIfName, slaveIfName)  #name, #name
         self.signalSlvArray     = "%%s : t_slv_%s_%%s_array(%%s downto 0); -- %%s\n"  % slaveIfName #name, name, idxHi, desc
@@ -170,8 +190,8 @@ class wbsVhdlStr(object):
         self.others             = "(others => '%s')"
         self.int2slv            = "std_logic_vector(to_unsigned(%s, %s))"
         self.resetSignalArray   = "r_%s.%%s <= (others =>%%s);\n" % slaveIfName #registerName, resetvector
-        self.recordPortOut      = "%s_regs_o : out t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
-        self.recordPortIn       = "%s_regs_i : in  t_%s_regs_i;\n" % (slaveIfName, slaveIfName) 
+        self.recordPortOut      = "%s_regs_%%s_o : out t_%s_regs_%%s_o" % (slaveIfName, slaveIfName)
+        self.recordPortIn       = "%s_regs_%%s_i : in  t_%s_regs_%%s_i" % (slaveIfName, slaveIfName)
         self.recordRegStart     = "type t_%s_regs_%%s is record\n" % slaveIfName
         self.recordRegEnd       = "end record t_%s_regs_%%s;\n\n" % slaveIfName
         self.recordAdrStart     = "type t_%s_adr is record\n" % slaveIfName
@@ -341,62 +361,55 @@ class wbsVhdlStr(object):
     
    
     def regs(self, regList):
+       namesOut         = []
+       namesIn          = []
        recordsOut       = []
+       clkdOut          = []        
        recordsIn        = [] + [self.signalSl % ('STALL', 'Stall control for outside entity'),
                                 self.signalSl % ('ERR', 'Error control for outside entity')]
+       namesIn          = [] + ['STALL',
+                                'ERR']                             
+       
+       clkdIn           = [] + [self.clocks[0], #clkdomain for STALL
+                                self.clocks[0]] #clkdomain for ERR
+                                
        types            = []
-       for elem in regList:        
-           (name, desc, rwmafs, width, opList, _, _) = elem
+       for elem in regList:
+           (name, desc, rwmafs, width, opList, clkd, _) = elem
+           
            if(rwmafs.find('m') > -1):
                types += self.multitype(elem)
                if(rwmafs.find('w') > -1):
                    recordsOut += self.multielement(elem)
+                   clkdOut.append(clkd)
+                   namesOut.append(name)
                    if(rwmafs.find('f') > -1):
-                       recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
+                       recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))
+                       clkdOut.append(clkd)
+                       namesOut.append(name + '_WE')
                elif(rwmafs.find('r') > -1):            
                    #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF                    
-                   recordsIn += self.multielement(elem)      
+                   recordsIn += self.multielement(elem)
+                   clkdIn.append(clkd)
+                   namesIn.append(name)
            else:
                if(rwmafs.find('w') > -1):
                    recordsOut.append(self.reg(elem))
+                   clkdOut.append(clkd)
+                   namesOut.append(name)
                    if(rwmafs.find('f') > -1):
-                       recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
+                       recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))
+                       clkdOut.append(clkd)
+                       namesOut.append(name + '_WE')
                elif(rwmafs.find('r') > -1):
                    #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF 
                    recordsIn.append(self.reg(elem))
+                   clkdIn.append(clkd)
+                   namesIn.append(name)
                    
-       return [types, recordsOut, recordsIn]           
+       return [types, recordsOut, recordsIn, clkdOut, clkdIn, namesOut, namesIn]           
 
-    def regsSync(self, regList):
-       recordListOut       = []
-       recordListIn        = [] 
-       typeList            = []
-       
-       for clkd in self.clocks[1:]:
-           for elem in regList:        
-               (name, desc, rwmafs, width, opList, clkdomain, _) = elem
-                          
-               if(clkdomain == clkd):
-                   if(rwmafs.find('m') > -1):
-                       types += self.multitype(elem)
-                       if(rwmafs.find('w') > -1):
-                           recordsOut += self.multielement(elem)
-                           if(rwmafs.find('f') > -1):
-                               recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
-                       elif(rwmafs.find('r') > -1):            
-                           #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF                    
-                           recordsIn += self.multielement(elem)      
-                   else:
-                       if(rwmafs.find('w') > -1):
-                           recordsOut.append(self.reg(elem))
-                           if(rwmafs.find('f') > -1):
-                               recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))    
-                       elif(rwmafs.find('r') > -1):
-                           #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF 
-                           recordsIn.append(self.reg(elem))
-                       recordListOut += recordsOut
-                       recordListIn  += recordsIn
-                       typeList      += types
+    
                    
     
     def reg(self, elem):
@@ -407,7 +420,7 @@ class wbsVhdlStr(object):
     
 
 
-
+    
 
     def multitype(self, elem):
         (name, _, _, width, _, _, _) = elem        
@@ -547,16 +560,18 @@ class gVhdlStr(object):
 class wbsIf():
     
     def __init__(self, unitname, name, startAdr, pageSelect, pages, dataWidth, vendId, devId, sdbname, clocks):
-        self.regs       = []        
-                 
-        self.portList   = []
-        self.stubPortList = []
-        self.stubInstList = []
-        self.stubSigList = []
-        self.regList    = []   
-        self.recordList = []
-        self.adrList    = []
-        self.fsm        = []
+        self.regs           = []        
+        self.syncAssignList = []
+        self.syncProcList   = []
+        self.syncRegList    = []         
+        self.portList       = []
+        self.stubPortList   = []
+        self.stubInstList   = []
+        self.stubSigList    = []
+        self.regList        = []   
+        self.recordList     = []
+        self.adrList        = []
+        self.fsm            = []
         
         self.clocks     = clocks
         self.name       = name        
@@ -672,10 +687,7 @@ class wbsIf():
         self.stubInstList = a # no need to indent, we'll do it later with all IF lists together    
   
     def renderPorts(self):
-        a = []        
-        a.append(self.v.recordPortIn)        
-        a.append(self.v.recordPortOut)
-        a.append('\n')
+        a = []
         a += self.v.slaveIf
         self.portList = a # no need to indent, we'll do it later with all IF lists together
                 
@@ -761,29 +773,153 @@ class wbsIf():
         self.vAdrList = adj(a, [ ':', ':=', '--', '0x', ':'], 2)
         self.cAdrList = adj(b, [ '   0x', '//', '_0x', ','], 0)
 
+    def renderSync(self):
+                
+        
+        a = []        
+        p = []
+        (_, _, _, clkdO, clkdI, namesO, namesI) = self.v.regs(self.regs)
+        
+        for clkd in self.clocks:
+            clkdOut     = []
+            clkdIn      = []
+            namesOut    = []
+            namesIn     = []            
+            a.append(self.v.clkdomainComment % (clkd,"out"))
+            
+            #rearrange
+            for i in range(0, len(namesO)):             
+                if(clkdO[i] == clkd):
+                    namesOut.append(namesO[i])                    
+                    clkdOut.append(clkdO[i])
+            for i in range(0, len(namesI)):             
+                if(clkdI[i] == clkd):
+                    namesIn.append(namesI[i])                    
+                    clkdIn.append(clkdI[i])
+            
+            for i in range(0, len(namesOut)):             
+                name = namesOut[i]
+                clkd = clkdOut[i]
+                           
+                if(clkdOut[i] == self.clocks[0]):
+                    #direct assign
+                    #slave_regs_clk_wb_o.X <= r_slave.X
+                    a.append(self.v.syncAssignOutD % (clkd, name, name))
+                else:
+                    #synced assign
+                    #slave_regs_clk_xyz_o.X      <= r_slave_regs_clk_xyz_o_2.X
+                    a.append(self.v.syncAssignOutI0 % (clkd, name, clkd, name))
+                    #r_slave_regs_clk_xyz_o_0.X  <= r_slave.X
+                    a.append(self.v.syncAssignOutI1 % (clkd, name, name)) 
+           #add process
+                   
+            
+            if(len(namesOut)>0 and not clkd == self.clocks[0]):
+                p.append(self.v.syncProcStart0 % (clkd, 'out', clkd))
+                p.append(self.v.syncProcStart1 % clkd)
+                p.append(self.v.syncProcMid)                
+                p.append(self.v.syncProcReg % (clkd, 'o', '1', clkd, 'o', '0'))
+                p.append(self.v.syncProcReg % (clkd, 'o', '2', clkd, 'o', '1'))
+                p += self.v.syncProcEnd
+                    
+            a.append(self.v.clkdomainComment % (clkd,"in"))
+            for i in range(0, len(namesIn)):
+                if(clkdIn[i] == self.clocks[0]):
+                    #direct assign
+                    #s_slave.X <= slave_regs_clk_wb_i.X
+                    a.append(self.v.syncAssignInD % (namesIn[i], clkdIn[i], namesIn[i]))
+                else:
+                    #synced assign
+                    #r_slave_regs_clk_xyz_i_0.X <= slave_regs_clk_xyz_i.X
+                    a.append(self.v.syncAssignInI0 % (clkdIn[i], namesIn[i], clkdIn[i], namesIn[i]))
+                    #s_slave.X <= r_slave_regs_clk_xyz_i_2.X
+                    a.append(self.v.syncAssignInI1 % (namesIn[i], clkdIn[i], namesIn[i])) 
+                    #add process
+                    #r_slave_regs_clk_xyz_o_1 <= r_slave_regs_clk_xyz_o_0;
+                    
+            
+            if(len(namesIn)>0 and not clkd == self.clocks[0]):
+                p.append(self.v.syncProcStart0 % (clkd, 'in', clkd))
+                p.append(self.v.syncProcStart1 % clkd)
+                p.append(self.v.syncProcMid)
+                p.append(self.v.syncProcReg % (clkd, 'i', '1', clkd, 'i', '0'))
+                p.append(self.v.syncProcReg % (clkd, 'i', '2', clkd, 'i', '1'))
+                p += self.v.syncProcEnd
+                
+            a.append("\n")
+        
+        
+        self.syncAssignList += a
+        self.syncProcList   += p
+        
     def renderRecords(self):
         a = []
         
-        (types, recordsOut, recordsIn) = self.v.regs(self.regs)
+        (types, recordsOut, recordsIn, clkdOut, clkdIn, _, _) = self.v.regs(self.regs)
         a += types
         a += self.v.nl
+        #render whole out record
         a.append(self.v.recordRegStart % 'o')
         a += iN(recordsOut, 1)        
         a.append(self.v.recordRegEnd % 'o')
-        a.append('\n')
+
+        #render sub sets of out record
+        for clkd in self.clocks:
+            tmp = []
+            for i in range(0, len(recordsOut)):             
+                if(clkdOut[i] == clkd):
+                    tmp.append(recordsOut[i])
+            if(len(tmp) > 0):
+                suffix = 'clk_'+clkd                
+                self.portList.append(self.v.recordPortOut % (suffix, suffix))
+                if(clkd != self.clocks[0]):                
+                    self.syncRegList.append(self.v.syncReg % (clkd, 'o', '0', clkd, 'o'))
+                    self.syncRegList.append(self.v.syncReg % (clkd, 'o', '1', clkd, 'o'))
+                    self.syncRegList.append(self.v.syncReg % (clkd, 'o', '2', clkd, 'o'))
+                a.append(self.v.recordRegStart % (suffix+'_o'))                
+                a += iN(tmp, 1) 
+                a.append(self.v.recordRegEnd   % (suffix+'_o'))
+            else:
+                print "no outgoing registers found for clk domain %s" % clkd 
+        #render whole in record
         a.append(self.v.recordRegStart % 'i')
         a += iN(recordsIn, 1)        
-        #a.append(i1(self.v.signalSl % ("stall", "Stall control for main entity"), 1))        
-        # a += (iN(records, 1))
         a.append(self.v.recordRegEnd % 'i')
+        for clkd in self.clocks:
+            tmp = []
+            for i in range(0, len(recordsIn)):             
+                if(clkdIn[i] == clkd):
+                    tmp.append(recordsIn[i])
+            if(len(tmp) > 0):
+                suffix = 'clk_'+clkd               
+                self.portList.append(self.v.recordPortIn % (suffix, suffix))               
+                if(clkd != self.clocks[0]):
+                    print "Me: %s 1st: %s" % (clkd, self.clocks[0])
+                    self.syncRegList.append(self.v.syncReg % (clkd, 'i', '0', clkd, 'i'))
+                    self.syncRegList.append(self.v.syncReg % (clkd, 'i', '1', clkd, 'i'))
+                    self.syncRegList.append(self.v.syncReg % (clkd, 'i', '2', clkd, 'i'))
+                a.append(self.v.recordRegStart % (suffix+'_i'))            
+                a += iN(tmp, 1) 
+                a.append(self.v.recordRegEnd   % (suffix+'_i'))
+            else:
+                print "no incoming registers found for clk domain %s" % clkd      
+        
+        #proper line endings for portlist
+        for i in range(0, len(self.portList)-1):
+            self.portList[i] += ";\n"
+                
         self.recordList = adj(a, [ ':', '--'], 0)
+        
+
     
+    
+                        
     def renderRegs(self):
         a = []
         a.append(self.v.wbs_reg_o)
         a.append(self.v.wbs_reg_i)
         a += (self.v.wbs_ackerr)        
-        self.regList = a # no need to indent, we'll do it later with all IF lists together
+        self.regList = a + self.syncRegList# no need to indent, we'll do it later with all IF lists together
 
     def renderAll(self):
         self.renderStubPorts()
@@ -791,6 +927,7 @@ class wbsIf():
         self.renderStubInst()
         self.renderPorts()
         self.renderRecords()
+        self.renderSync()
         self.renderAdr()        
         self.renderRegs()
         self.renderFsm()
@@ -821,7 +958,8 @@ vendorIdD   = {'GSI'       : 0x0000000000000651,
     
 def mergeIfLists(slaveList=[], masterList = []):
     uglyPortList = []
-    uglyInstList = []    
+    uglyInstList = []
+    syncList     = []    
     
     clocks = slaveList[0].clocks    
     for clock in clocks:
@@ -843,9 +981,9 @@ def mergeIfLists(slaveList=[], masterList = []):
     sdbList         = []
     
     v = gVhdlStr("")
-    
     for slave in slaveList:
         uglyPortList += slave.portList
+        print slave.portList
         stubPortList += slave.stubPortList
         stubInstList += slave.stubInstList
         #deal with vhdl not wanting a semicolon at the last port entry        
@@ -873,6 +1011,12 @@ def mergeIfLists(slaveList=[], masterList = []):
         fsmList      += iN(commentBox("--","WBS FSM", slave.name), 1)
         fsmList      += slave.fsmList   
         fsmList      += "\n\n"
+        syncList     += iN(commentBox("--","Sync Signal Assignments", slave.name), 1)
+        syncList     += adj(slave.syncAssignList, ['<='], 1)
+        syncList     += iN(commentBox("--","Sync Processes", slave.name), 1)        
+        syncList     += adj(slave.syncProcList, ['<='], 1) 
+        #syncList     += slave.syncAssignList
+        syncList     += "\n\n"
         recordList   += iN(commentLine("--","WBS Register Record", slave.name), 1) 
         recordList   += adj(slave.recordList, [ ':', '--'], 1)
              
@@ -935,7 +1079,7 @@ def mergeIfLists(slaveList=[], masterList = []):
     genList = adj(genList, [':', ':=', '--'], 1)
     instGenList = adj(instGenList, ['=>', '--'], 1)              
     #Todo: missing generics 
-    return [portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList]        
+    return [portList, recordList, regList, sdbList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList]        
 
 def parseXML(xmlIn):
     xmldoc      = minidom.parse(xmlIn)   
@@ -1094,12 +1238,10 @@ def parseXML(xmlIn):
                 if reg.getAttribute('selector') == 'yes':            
                     if(selector == ""):            
                         selector = regname
-            regclk = None                
+            regclk = clockList[0]                
             if reg.hasAttribute('clockdomain'):
                 regclk = reg.getAttribute('clockdomain')
-                
-                    #else:
-                        #Error, we can't have more than one pageselector!
+             
             if reg.hasAttribute('mask'):      
                 regmsk    = reg.getAttribute('mask')
                 genericMsk = False
@@ -1269,6 +1411,10 @@ def writeMainVhd(filename):
         fo.write(line)
     
     fo.write(v.archStart)
+
+    for line in syncList:
+        fo.write(line)    
+    
     for line in fsmList:
         fo.write(line)
     
@@ -1602,6 +1748,7 @@ if(needFile):
         vAdrList    = []
         cAdrList    = []
         fsmList     = []
+        syncList    = []
         genList     = []
         ifList      = []
         unitname    = "unknown unit"
@@ -1633,7 +1780,7 @@ if(needFile):
         fileHdrC        = unitname                  + ".h"
         
         
-        (portList, recordList, regList, sdbList, vAdrList, fsmList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
+        (portList, recordList, regList, sdbList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
         
         
         writeMainVhd(fileMainVhd)
