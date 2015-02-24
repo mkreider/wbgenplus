@@ -38,8 +38,8 @@ class wbsCStr(object):
         self.unitname     = unitname
         self.slaveIfName  = slaveIfName        
         self.pages        = pages
-        self.sdbVendorID  = '#define %s_%s_VENDOR_ID 0x%016xULL\n' % (unitname.upper(), slaveIfName.upper(), sdbVendorID)
-        self.sdbDeviceID  = '#define %s_%s_DEVICE_ID 0x%08xUL\n' % (unitname.upper(), slaveIfName.upper(), sdbDeviceID)
+        self.sdbVendorID  = '#define %s_%s_VENDOR_ID 0x%016xull\n' % (unitname.upper(), slaveIfName.upper(), sdbVendorID)
+        self.sdbDeviceID  = '#define %s_%s_DEVICE_ID 0x%08x\n' % (unitname.upper(), slaveIfName.upper(), sdbDeviceID)
         #################################################################################        
         #Strings galore        
         self.constRegAdr    = "#define %s_%%s   0x%%s // %%s _0x%%s, %%s\n" % slaveIfName.upper() #name, adrVal,  rw, msk, desc
@@ -228,7 +228,7 @@ class wbsVhdlStr(object):
                                    'version       => x"%s",\n' % '{message:{fill}{align}{width}}'.format(message=version.replace('.', ''), fill='0', align='>', width=8),
                                    'date          => x"%04u%02u%02u",\n' % (now.year, now.month, now.day),
                                    'name          => "%s")));\n' % sdbname.upper().ljust(19)]
-                                   
+        self.sdbReference       = "constant c_%s_%s_sdb : t_sdb_device := work.%s_pkg.c_%s_%s_sdb;\n" % (unitname, slaveIfName, (unitname + '_auto'), unitname, slaveIfName)                            
     
     wbWidth = {8   : '1',
                16  : '3',
@@ -751,7 +751,8 @@ class wbsIf():
     def renderAdr(self):
         a = []
         b = []
-        adrHi = self.getLastAdr(self.regs[-1])        
+        adrHi = self.getLastAdr(self.regs[-1])
+        print "AdrHi: %s" % adrHi        
         (idxHi, idxLo) = mskWidth(adrHi)
         
         adrx = ("%0" + str((idxHi+1+3)/4) + "x")
@@ -993,6 +994,7 @@ def mergeIfLists(slaveList=[], masterList = []):
     genList         = []
     instGenList     = []
     sdbList         = []
+    sdbRefList      = [] 
     
     v = gVhdlStr("")
     for slave in slaveList:
@@ -1036,7 +1038,7 @@ def mergeIfLists(slaveList=[], masterList = []):
              
         stubSigList  += slave.stubSigList
         sdbList      += slave.v.sdb + ['\n']
-        
+        sdbRefList   += [slave.v.sdbReference]
     
     for master in masterList:
         uglyPortList += master.portList
@@ -1093,7 +1095,7 @@ def mergeIfLists(slaveList=[], masterList = []):
     genList = adj(genList, [':', ':=', '--'], 1)
     instGenList = adj(instGenList, ['=>', '--'], 1)              
     #Todo: missing generics 
-    return [portList, recordList, regList, sdbList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList]        
+    return [portList, recordList, regList, sdbList, sdbRefList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList]        
 
 def parseXML(xmlIn):
     xmldoc      = minidom.parse(xmlIn)   
@@ -1335,7 +1337,7 @@ def writeStubVhd(filename):
     
     for line in header:
         fo.write(line)
-    
+    fo.write("--TODO: This is a stub, finish/update it yourself\n")
     fo.write("--! @brief *** ADD BRIEF DESCRIPTION HERE ***\n")
     fo.write("--!\n")
                       
@@ -1438,7 +1440,7 @@ def writeMainVhd(filename):
 
 def writePkgVhd(filename):
 
-    print "Generating WishBone core package %s" % filename    
+    print "Generating WishBone inner core package %s" % filename    
     
     fo = open(mypath + '/' + filename, "w")
     
@@ -1487,6 +1489,66 @@ def writePkgVhd(filename):
     for line in sdbList:
         decl.append(line)
    
+    decl = iN(decl, 1)
+    for line in decl:
+        fo.write(line)
+    
+        
+    
+    fo.write(v.packageEnd)
+    fo.write(v.packageBodyStart)
+    fo.write(v.packageEnd)
+    
+    fo.close
+
+def writeStubPkgVhd(filename):
+
+    if os.path.isfile(mypath + filename):
+        print "!!! Outer package stub %s already exists !!!\n" % filename
+        if not force:
+            return
+        else:
+            print "Overwrite forced"
+            
+    print "Generating stub outer package %s" % filename    
+    
+    fo = open(mypath + '/' + filename, "w")
+    
+    v = gVhdlStr(unitname, filename, author, email, version, date)
+
+    header = adj(v.header + ['\n'], [':'], 0)
+    for line in header:
+        fo.write(line)
+    fo.write("--TODO: This is a stub, finish/update it yourself\n")    
+    fo.write("--! @brief Package for %s.vhd\n" % unitname)
+    fo.write("--! If you modify the outer entity, don't forget to update this component! \n")
+    fo.write("--!\n")     
+    for line in v.headerLPGL:
+        fo.write(line)
+    
+    libraries = v.libraries
+    for line in libraries:
+        fo.write(line)    
+    
+    fo.write(v.packageStart)
+       
+    decl = []
+    decl += (iN(commentLine("--", "Component", unitname), 1)) 
+    decl.append(v.componentStart)
+    if(len(genIntD) + len(genMiscD) > 0):
+        decl.append(v.genStart)
+        for line in genList:   
+            decl.append(line)
+        decl.append(v.genEnd)
+    decl.append(v.entityMid)
+    for line in stubPortList:
+        decl.append(line)
+    decl += v.componentEnd
+    decl += sdbRefList
+    decl.append('\n')
+    #constant c_eca_ac_wbm_slave_sdb : t_sdb_device := work.eca_ac_wbm_auto_pkg.c_eca_ac_wbm_slave_sdb;
+    
+    
     decl = iN(decl, 1)
     for line in decl:
         fo.write(line)
@@ -1794,13 +1856,14 @@ if(needFile):
         fileHdrC        = unitname                  + ".h"
         
         
-        (portList, recordList, regList, sdbList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
+        (portList, recordList, regList, sdbList, sdbRefList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
         
         
         writeMainVhd(fileMainVhd)
         writePkgVhd(filePkgVhd)
         writeHdrC(fileHdrC)
         writeStubVhd(fileStubVhd)
+        writeStubPkgVhd(fileStubPkgVhd)
         #writeTbVhd(fileTbVhd)
         print "\n%s" % ('*' * 80) 
         print "\nDone!"
