@@ -68,18 +68,19 @@ class wbsVhdlStr(object):
         self.clocks         = clocks
         #################################################################################        
         #Strings galore        
-        self.slaveIf    = ["%s_i : in  t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\")" % slaveIfName,
+        self.slaveIf    = ["%s_i : in  t_wishbone_slave_in;\n" % slaveIfName,
                            "%s_o : out t_wishbone_slave_out" % slaveIfName] #name
-        self.slaveSigs = ["signal s_%s_i : t_wishbone_slave_in := ('0', '0', x\"00000000\", x\"F\", '0', x\"00000000\");\n" % slaveIfName,
-                          "signal s_%s_o : t_wishbone_slave_out\n" % slaveIfName,
-                          "signal s_%s_regs_o : t_%s_regs_o;\n" % (slaveIfName, slaveIfName),
-                          "signal s_%s_regs_i : t_%s_regs_i;\n" % (slaveIfName, slaveIfName)]
+                           
+                           
+        self.slaveSigsRegs = "signal s_%s_regs_clk_%%s_%%s : t_%s_regs_clk_%%s_%%s;\n" % (slaveIfName, slaveIfName)
+        self.slaveInstRegs = "%s_regs_clk_%%s_%%s => s_%s_regs_clk_%%s_%%s,\n" % (slaveIfName, slaveIfName)
+                          
+        self.slaveSigs = ["signal s_%s_i : t_wishbone_slave_in;\n" % slaveIfName,
+                          "signal s_%s_o : t_wishbone_slave_out;\n" % slaveIfName]
         
-        self.slaveInst = ["%s_regs_o => s_%s_regs_o,\n" % (slaveIfName, slaveIfName),
-                          "%s_regs_i => s_%s_regs_i,\n" % (slaveIfName, slaveIfName), 
-                          "%s_i => s_%s_i,\n" % (slaveIfName, slaveIfName),
-                          "%s_o => s_%s_o" % (slaveIfName, slaveIfName)] #name     
-           
+        self.slaveInst = ["%s_i => s_%s_i,\n" % (slaveIfName, slaveIfName),
+                          "%s_o => s_%s_o" % (slaveIfName, slaveIfName)] #name        
+        
         self.wbs0       = ["%s : process(clk_%s_i)\n" % (slaveIfName, clocks[0]),
                            "   variable v_dat_i  : t_wishbone_data;\n",
                            "   variable v_dat_o  : t_wishbone_data;\n",
@@ -92,13 +93,15 @@ class wbsVhdlStr(object):
                            "   if rising_edge(clk_%s_i) then\n" % clocks[0],
                            "      if(rst_n_i = '0') then\n"]
        
-        self.wbs1       = ["else\n",
+        self.wbs1_0     = ["else\n",
                            "   -- short names\n",
                            "   v_dat_i           := %s_i.dat;\n" % slaveIfName,
                            "   v_adr             := to_integer(unsigned(%s_i.adr(%%s)) & \"00\");\n" % slaveIfName,
-                           "   v_sel             := %s_i.sel;\n" % slaveIfName,
-                           "   v_en              := %s_i.cyc and %s_i.stb and not (r_%s_out_stall or %s_regs_i.STALL);\n" % (slaveIfName, slaveIfName, slaveIfName, slaveIfName),
-                           "   v_we              := %s_i.we;\n\n" % slaveIfName,
+                           "   v_sel             := %s_i.sel;\n" % slaveIfName]
+                           
+        self.wbs1_1     =  "   v_en              := %s_i.cyc and %s_i.stb and not (r_%s_out_stall or %s_regs_clk_%%s_i.STALL);\n" % (slaveIfName, slaveIfName, slaveIfName, slaveIfName)
+                        
+        self.wbs1_2     = ["   v_we              := %s_i.we;\n\n" % slaveIfName,
                            "   --interface outputs\n",
                            "   r_%s_out_stall   <= '0';\n" % slaveIfName,                            
                            "   r_%s_out_ack0    <= '0';\n" % slaveIfName,
@@ -106,8 +109,7 @@ class wbsVhdlStr(object):
                            "   r_%s_out_dat0    <= (others => '0');\n\n" % slaveIfName,
                            "   r_%s_out_ack1    <= r_%s_out_ack0;\n" % (slaveIfName, slaveIfName),
                            "   r_%s_out_err1    <= r_%s_out_err0;\n" % (slaveIfName, slaveIfName),
-                           "   r_%s_out_dat1    <= r_%s_out_dat0;\n\n" % (slaveIfName, slaveIfName),
-] 
+                           "   r_%s_out_dat1    <= r_%s_out_dat0;\n\n" % (slaveIfName, slaveIfName)] 
       
         self.wbs2       = ["if(v_en = '1') then\n",
                            "   r_%s_out_ack0  <= '1';\n" % slaveIfName,
@@ -132,7 +134,15 @@ class wbsVhdlStr(object):
                            "%s_o.stall <= r_%s_out_stall or %s_regs_i.STALL;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
                            "%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName),                           
                            "%s_o.ack <= r_%s_out_ack1 and not %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
-                           "%s_o.err <= r_%s_out_err1 or      %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)]                
+                           "%s_o.err <= r_%s_out_err1 or      %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)]
+                           
+        self.wbs5_0       = "%s_o.stall <= r_%s_out_stall or %s_regs_clk_%%s_i.STALL;\n" % (slaveIfName, slaveIfName, slaveIfName)                           
+        self.wbs5_1       = "%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName)                           
+        self.wbs5_2       = "%s_o.ack <= r_%s_out_ack1 and not %s_regs_clk_%%s_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)                           
+        self.wbs5_3       = "%s_o.err <= r_%s_out_err1 or      %s_regs_clk_%%s_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)                
+                           
+                           
+                           
         self.syncProcStart0     = "sync_%s_clk_%%s_%%s : process(clk_%%s_i)\n   begin\n" % (slaveIfName)
         self.syncProcStart1     = "   if rising_edge(clk_%s_i) then\n         if(rst_n_i = '0') then\n"
         self.syncProcMid        = "      else\n"
@@ -190,8 +200,8 @@ class wbsVhdlStr(object):
         self.others             = "(others => '%s')"
         self.int2slv            = "std_logic_vector(to_unsigned(%s, %s))"
         self.resetSignalArray   = "r_%s.%%s <= (others =>%%s);\n" % slaveIfName #registerName, resetvector
-        self.recordPortOut      = "%s_regs_%%s_o : out t_%s_regs_%%s_o" % (slaveIfName, slaveIfName)
-        self.recordPortIn       = "%s_regs_%%s_i : in  t_%s_regs_%%s_i" % (slaveIfName, slaveIfName)
+        self.recordPortOut      = "%s_regs_%%s_o : out t_%s_regs_%%s_o;\n" % (slaveIfName, slaveIfName)
+        self.recordPortIn       = "%s_regs_%%s_i : in  t_%s_regs_%%s_i;\n" % (slaveIfName, slaveIfName)
         self.recordRegStart     = "type t_%s_regs_%%s is record\n" % slaveIfName
         self.recordRegEnd       = "end record t_%s_regs_%%s;\n\n" % slaveIfName
         self.recordAdrStart     = "type t_%s_adr is record\n" % slaveIfName
@@ -515,7 +525,7 @@ class gVhdlStr(object):
                            "use ieee.std_logic_1164.all;\n",
                            "use ieee.numeric_std.all;\n",
                            "use work.wishbone_pkg.all;\n"]
-        self.pkg        =  "use work.%s_pkg.all;\n\n" % unitname                   
+        self.pkg        =  "use work.%s%%s_pkg.all;\n\n" % unitname                   
            
         self.packageStart       = "package %s_pkg is\n\n" % unitname
         self.componentStart     = "component %s is\n" % unitname
@@ -538,7 +548,7 @@ class gVhdlStr(object):
         self.archEnd     = "end rtl;\n"
         self.genport     = "g_%s : %s := %s%s -- %s\n" #name, type, default
         self.instGenPort    = "g_%s => g_%s%s\n" 
-        self.instStart      = "INST_%s : %s\n" % (unitname, unitname)
+        self.instStart      = "INST_%s_auto : %s_auto\n" % (unitname, unitname)
         self.instGenStart   = "generic map (\n"
         self.instGenEnd     = ")\n"
         self.instPortStart  = "port map (\n"
@@ -676,20 +686,14 @@ class wbsIf():
         self.stubPortList = a        
   
     def renderStubSigs(self):
-        a = []
-        a += self.v.slaveSigs
-        self.stubSigList = a # no need to indent, we'll do it later with all IF lists together
+        self.stubSigList += self.v.slaveSigs # no need to indent, we'll do it later with all IF lists together
 
         
     def renderStubInst(self):
-        a = []
-        a += self.v.slaveInst
-        self.stubInstList = a # no need to indent, we'll do it later with all IF lists together    
+        self.stubInstList += self.v.slaveInst # no need to indent, we'll do it later with all IF lists together    
   
     def renderPorts(self):
-        a = []
-        a += self.v.slaveIf
-        self.portList = a # no need to indent, we'll do it later with all IF lists together
+        self.portList += self.v.slaveIf # no need to indent, we'll do it later with all IF lists together
                 
     
 
@@ -716,7 +720,9 @@ class wbsIf():
         
         print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto 0\n" % (self.name, len(self.regs), hiAdr, adrRange, idxHi)
         print "\n%s" % ('*' * 80) 
-        hdr1 = self.v.wbs1
+        hdr1 = self.v.wbs1_0
+        hdr1.append(self.v.wbs1_1 % self.clocks[0]) 
+        hdr1 += self.v.wbs1_2
 
         szero = adj(self.v.fsmWritePulse(self.regs), ['<=', '--'], 4)
         
@@ -734,7 +740,12 @@ class wbsIf():
         
         srd     = adj(self.v.fsmRead(self.regs), ['=>', '<=', "--"], 7)
         ftr     = iN(self.v.wbs4, 1)
-        con     = adj(self.v.wbs5, ['<=', "--"], 1)
+        wbs5    = []
+        wbs5.append(self.v.wbs5_0 % self.clocks[0])
+        wbs5.append(self.v.wbs5_1)
+        wbs5.append(self.v.wbs5_2 % self.clocks[0])
+        wbs5.append(self.v.wbs5_3 % self.clocks[0])
+        con     = adj(wbs5, ['<=', "--"], 1)
         self.fsmList = hdr0 + rst + hdr1 + szero + psel +  hdr2 + swr + mid0 + mid1 + srd + mid0 + ftr + con
         
     def renderAdr(self):
@@ -872,6 +883,8 @@ class wbsIf():
             if(len(tmp) > 0):
                 suffix = 'clk_'+clkd                
                 self.portList.append(self.v.recordPortOut % (suffix, suffix))
+                self.stubSigList.append(self.v.slaveSigsRegs % (clkd, 'o', clkd, 'o'))
+                self.stubInstList.append(self.v.slaveInstRegs % (clkd, 'o', clkd, 'o'))
                 if(clkd != self.clocks[0]):                
                     self.syncRegList.append(self.v.syncReg % (clkd, 'o', '0', clkd, 'o'))
                     self.syncRegList.append(self.v.syncReg % (clkd, 'o', '1', clkd, 'o'))
@@ -892,9 +905,10 @@ class wbsIf():
                     tmp.append(recordsIn[i])
             if(len(tmp) > 0):
                 suffix = 'clk_'+clkd               
-                self.portList.append(self.v.recordPortIn % (suffix, suffix))               
+                self.portList.append(self.v.recordPortIn % (suffix, suffix))
+                self.stubSigList.append(self.v.slaveSigsRegs % (clkd, 'i', clkd, 'i'))
+                self.stubInstList.append(self.v.slaveInstRegs % (clkd, 'i', clkd, 'i'))
                 if(clkd != self.clocks[0]):
-                    print "Me: %s 1st: %s" % (clkd, self.clocks[0])
                     self.syncRegList.append(self.v.syncReg % (clkd, 'i', '0', clkd, 'i'))
                     self.syncRegList.append(self.v.syncReg % (clkd, 'i', '1', clkd, 'i'))
                     self.syncRegList.append(self.v.syncReg % (clkd, 'i', '2', clkd, 'i'))
@@ -905,8 +919,8 @@ class wbsIf():
                 print "no incoming registers found for clk domain %s" % clkd      
         
         #proper line endings for portlist
-        for i in range(0, len(self.portList)-1):
-            self.portList[i] += ";\n"
+        #for i in range(0, len(self.portList)-1):
+        #    self.portList[i] += ";\n"
                 
         self.recordList = adj(a, [ ':', '--'], 0)
         
@@ -922,11 +936,11 @@ class wbsIf():
         self.regList = a + self.syncRegList# no need to indent, we'll do it later with all IF lists together
 
     def renderAll(self):
+        self.renderRecords()        
         self.renderStubPorts()
         self.renderStubSigs()
         self.renderStubInst()
         self.renderPorts()
-        self.renderRecords()
         self.renderSync()
         self.renderAdr()        
         self.renderRegs()
@@ -1328,7 +1342,7 @@ def writeStubVhd(filename):
     for line in v.headerLPGL:
         fo.write(line)
     
-    libraries = v.libraries + [v.pkg]
+    libraries = v.libraries + [v.pkg % '_auto']
     for line in libraries:
         fo.write(line)
         
@@ -1389,7 +1403,7 @@ def writeMainVhd(filename):
     warning.append(v.headerModify % (unitname, unitname))    
     for line in warning:
         fo.write(line)
-    libraries = v.libraries + [v.pkg]
+    libraries = v.libraries + [v.pkg % '']
     for line in libraries:
         fo.write(line)
         
