@@ -65,6 +65,8 @@ def mskWidth(msk):
         tmpmsk  = tmpmsk[::-1]
         loIdx   = tmpmsk.find('1')
         result  = [hiIdx, loIdx]
+    else:
+        result = [0, 0]    
     return result
     
 def parseNumeral(num, default = None):

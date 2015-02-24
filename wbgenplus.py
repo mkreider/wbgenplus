@@ -715,17 +715,19 @@ class wbsIf():
         
         hiAdr = self.getLastAdr(self.regs[-1])
         #print hiAdr, type(hiAdr)
-        (idxHi, idxLo) = mskWidth(hiAdr)
+        (idxHi, _) = mskWidth(hiAdr)
+        if(idxHi < 2):
+           idxHi = 2 
         adrRange = 2**(idxHi+1)-1
         
         print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto 0\n" % (self.name, len(self.regs), hiAdr, adrRange, idxHi)
         print "\n%s" % ('*' * 80) 
-        hdr1 = self.v.wbs1_0
+        hdr1 = self.v.wbs1_0 
         hdr1.append(self.v.wbs1_1 % self.clocks[0]) 
         hdr1 += self.v.wbs1_2
 
         szero = adj(self.v.fsmWritePulse(self.regs), ['<=', '--'], 4)
-        
+
         hdr1[3] = hdr1[3] % ('%u downto %u' % (idxHi, 2))
         hdr1    = iN(hdr1, 3)
         
@@ -871,53 +873,56 @@ class wbsIf():
         a += types
         a += self.v.nl
         #render whole out record
-        a.append(self.v.recordRegStart % 'o')
-        a += iN(recordsOut, 1)        
-        a.append(self.v.recordRegEnd % 'o')
-
-        #render sub sets of out record
-        for clkd in self.clocks:
-            tmp = []
-            for i in range(0, len(recordsOut)):             
-                if(clkdOut[i] == clkd):
-                    tmp.append(recordsOut[i])
-            if(len(tmp) > 0):
-                suffix = 'clk_'+clkd                
-                self.portList.append(self.v.recordPortOut % (suffix, suffix))
-                self.stubSigList.append(self.v.slaveSigsRegs % (clkd, 'o', clkd, 'o'))
-                self.stubInstList.append(self.v.slaveInstRegs % (clkd, 'o', clkd, 'o'))
-                if(clkd != self.clocks[0]):                
-                    self.syncRegList.append(self.v.syncReg % (clkd, 'o', '0', clkd, 'o'))
-                    self.syncRegList.append(self.v.syncReg % (clkd, 'o', '1', clkd, 'o'))
-                    self.syncRegList.append(self.v.syncReg % (clkd, 'o', '2', clkd, 'o'))
-                a.append(self.v.recordRegStart % (suffix+'_o'))                
-                a += iN(tmp, 1) 
-                a.append(self.v.recordRegEnd   % (suffix+'_o'))
-            else:
-                print "no outgoing registers found for clk domain %s" % clkd 
-        #render whole in record
-        a.append(self.v.recordRegStart % 'i')
-        a += iN(recordsIn, 1)        
-        a.append(self.v.recordRegEnd % 'i')
-        for clkd in self.clocks:
-            tmp = []
-            for i in range(0, len(recordsIn)):             
-                if(clkdIn[i] == clkd):
-                    tmp.append(recordsIn[i])
-            if(len(tmp) > 0):
-                suffix = 'clk_'+clkd               
-                self.portList.append(self.v.recordPortIn % (suffix, suffix))
-                self.stubSigList.append(self.v.slaveSigsRegs % (clkd, 'i', clkd, 'i'))
-                self.stubInstList.append(self.v.slaveInstRegs % (clkd, 'i', clkd, 'i'))
-                if(clkd != self.clocks[0]):
-                    self.syncRegList.append(self.v.syncReg % (clkd, 'i', '0', clkd, 'i'))
-                    self.syncRegList.append(self.v.syncReg % (clkd, 'i', '1', clkd, 'i'))
-                    self.syncRegList.append(self.v.syncReg % (clkd, 'i', '2', clkd, 'i'))
-                a.append(self.v.recordRegStart % (suffix+'_i'))            
-                a += iN(tmp, 1) 
-                a.append(self.v.recordRegEnd   % (suffix+'_i'))
-            else:
-                print "no incoming registers found for clk domain %s" % clkd      
+        if(len(recordsOut)>0):
+            a.append(self.v.recordRegStart % 'o')
+            a += iN(recordsOut, 1)        
+            a.append(self.v.recordRegEnd % 'o')
+    
+            #render sub sets of out record
+            for clkd in self.clocks:
+                tmp = []
+                for i in range(0, len(recordsOut)):             
+                    if(clkdOut[i] == clkd):
+                        tmp.append(recordsOut[i])
+                if(len(tmp) > 0):
+                    suffix = 'clk_'+clkd                
+                    self.portList.append(self.v.recordPortOut % (suffix, suffix))
+                    self.stubSigList.append(self.v.slaveSigsRegs % (clkd, 'o', clkd, 'o'))
+                    self.stubInstList.append(self.v.slaveInstRegs % (clkd, 'o', clkd, 'o'))
+                    if(clkd != self.clocks[0]):                
+                        self.syncRegList.append(self.v.syncReg % (clkd, 'o', '0', clkd, 'o'))
+                        self.syncRegList.append(self.v.syncReg % (clkd, 'o', '1', clkd, 'o'))
+                        self.syncRegList.append(self.v.syncReg % (clkd, 'o', '2', clkd, 'o'))
+                    a.append(self.v.recordRegStart % (suffix+'_o'))                
+                    a += iN(tmp, 1) 
+                    a.append(self.v.recordRegEnd   % (suffix+'_o'))
+                else:
+                    print "no outgoing registers found for clk domain %s" % clkd 
+        
+        if(len(recordsIn)>0):                
+            #render whole in record
+            a.append(self.v.recordRegStart % 'i')
+            a += iN(recordsIn, 1)        
+            a.append(self.v.recordRegEnd % 'i')
+            for clkd in self.clocks:
+                tmp = []
+                for i in range(0, len(recordsIn)):             
+                    if(clkdIn[i] == clkd):
+                        tmp.append(recordsIn[i])
+                if(len(tmp) > 0):
+                    suffix = 'clk_'+clkd               
+                    self.portList.append(self.v.recordPortIn % (suffix, suffix))
+                    self.stubSigList.append(self.v.slaveSigsRegs % (clkd, 'i', clkd, 'i'))
+                    self.stubInstList.append(self.v.slaveInstRegs % (clkd, 'i', clkd, 'i'))
+                    if(clkd != self.clocks[0]):
+                        self.syncRegList.append(self.v.syncReg % (clkd, 'i', '0', clkd, 'i'))
+                        self.syncRegList.append(self.v.syncReg % (clkd, 'i', '1', clkd, 'i'))
+                        self.syncRegList.append(self.v.syncReg % (clkd, 'i', '2', clkd, 'i'))
+                    a.append(self.v.recordRegStart % (suffix+'_i'))            
+                    a += iN(tmp, 1) 
+                    a.append(self.v.recordRegEnd   % (suffix+'_i'))
+                else:
+                    print "no incoming registers found for clk domain %s" % clkd      
         
         #proper line endings for portlist
         #for i in range(0, len(self.portList)-1):
@@ -931,8 +936,11 @@ class wbsIf():
                         
     def renderRegs(self):
         a = []
-        a.append(self.v.wbs_reg_o)
-        a.append(self.v.wbs_reg_i)
+        (_, recordsOut, recordsIn, _, _, _, _) = self.v.regs(self.regs)
+        if(len(recordsOut)>0):
+            a.append(self.v.wbs_reg_o)
+        if(len(recordsIn)>0):        
+            a.append(self.v.wbs_reg_i)
         a += (self.v.wbs_ackerr)        
         self.regList = a + self.syncRegList# no need to indent, we'll do it later with all IF lists together
 
