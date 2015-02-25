@@ -174,6 +174,8 @@ class wbsVhdlStr(object):
         self.wbWriteWeZero      = "r_%s.%%s_WE <= '0'; -- %%s pulse\n" % (slaveIfName)
         self.wbStall            = "r_%s_out_stall  <= '1'; --    %%s auto stall\n" % (slaveIfName)
         self.wbWritePulseZero   = "r_%s.%%s <= (others => '0'); -- %%s pulse\n" % (slaveIfName) #registerName        
+        self.wbWritePulseZeroArray = "r_%s.%%s <= (others => (others => '0')); -- %%s pulse\n" % (slaveIfName) #registerName        
+                
         self.wbReadExt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= s_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
         self.wbReadInt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= r_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
                 
@@ -365,8 +367,11 @@ class wbsVhdlStr(object):
             if(rwmafs.find('w') > -1):
                 if((rwmafs.find('f') > -1)):
                     s.append(self.wbWriteWeZero % (name, name))
-                if((rwmafs.find('p') > -1)):             
-                    s.append(self.wbWritePulseZero % (name, name))
+                if((rwmafs.find('p') > -1)):
+                    if((rwmafs.find('m') > -1)):
+                        s.append(self.wbWritePulseZeroArray % (name, name))
+                    else:                
+                        s.append(self.wbWritePulseZero % (name, name))
                                 
         return s 
     
