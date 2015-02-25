@@ -1277,8 +1277,8 @@ def parseXML(xmlIn):
                     if(selector == ""):            
                         selector = regname
             regclk = clockList[0]                
-            if reg.hasAttribute('clockdomain'):
-                regclk = reg.getAttribute('clockdomain')
+            if reg.hasAttribute('clock'):
+                regclk = reg.getAttribute('clock')
              
             if reg.hasAttribute('mask'):      
                 regmsk    = reg.getAttribute('mask')
@@ -1648,6 +1648,7 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '- forces comments for all registers in order to produce self-explaining code',                    
                     '- multiple slave interfaces in one core',                       
                     '- auto-generated SDB records',
+                    '- automatic clock crossing',
                     '- address offsets can be generated manually, automatically or by a mix of both',                    
                     '- optional autogeneration of get/set/clear adresses for registers (atomic bit manipulation)',                        
                     '- auto-splitting of registers wider than the bus data width',                    
@@ -1661,8 +1662,8 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '- optional autogeneration of write enable (WE) flag for a register (e.g. easy fifo connection)',
                     '\n'
                     'Planned features / currently under development:\n'
-                    '- RAM block generation',                    
-                    '- automatic clock crossing',
+                    '- named bit fields in registers',
+                    '- automatic RAM block generation',                    
                     '\n',
                     '+%s+' % ("-" * 78),
                      '|                            Wishbone-Descriptor-XMLs                          |',
