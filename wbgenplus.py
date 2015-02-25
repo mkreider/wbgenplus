@@ -11,6 +11,7 @@ import textformatting
 import os.path
 import sys
 import getopt
+import math
 
 
 myVersion = "0.3"
@@ -96,7 +97,7 @@ class wbsVhdlStr(object):
         self.wbs1_0     = ["else\n",
                            "   -- short names\n",
                            "   v_dat_i           := %s_i.dat;\n" % slaveIfName,
-                           "   v_adr             := to_integer(unsigned(%s_i.adr(%%s)) & \"00\");\n" % slaveIfName,
+                           "   v_adr             := to_integer(unsigned(%s_i.adr(%%s)) %%s);\n" % slaveIfName,
                            "   v_sel             := %s_i.sel;\n" % slaveIfName]
                            
         self.wbs1_1     =  "   v_en              := %s_i.cyc and %s_i.stb and not (r_%s_out_stall or %s_regs_clk_%%s_i.STALL);\n" % (slaveIfName, slaveIfName, slaveIfName, slaveIfName)
@@ -198,7 +199,7 @@ class wbsVhdlStr(object):
                                    "r_%s_out_dat1    <= (others => '0');\n" % slaveIfName]
         self.resetSignal        = "r_%s.%%s <= %%s;\n" % slaveIfName #registerName, resetvector
         self.others             = "(others => '%s')"
-        self.int2slv            = "std_logic_vector(to_unsigned(%s, %s))"
+        self.int2slv            = "std_logic_vector(to_unsigned(16#%x#, %s))"
         self.resetSignalArray   = "r_%s.%%s <= (others =>%%s);\n" % slaveIfName #registerName, resetvector
         self.recordPortOut      = "%s_regs_%%s_o : out t_%s_regs_%%s_o;\n" % (slaveIfName, slaveIfName)
         self.recordPortIn       = "%s_regs_%%s_i : in  t_%s_regs_%%s_i;\n" % (slaveIfName, slaveIfName)
@@ -227,7 +228,7 @@ class wbsVhdlStr(object):
                                    'device_id     => x"%08x",\n' % devId,
                                    'version       => x"%s",\n' % '{message:{fill}{align}{width}}'.format(message=version.replace('.', ''), fill='0', align='>', width=8),
                                    'date          => x"%04u%02u%02u",\n' % (now.year, now.month, now.day),
-                                   'name          => "%s")));\n' % sdbname.upper().ljust(19)]
+                                   'name          => "%s")));\n' % sdbname.ljust(19)]
         self.sdbReference       = "constant c_%s_%s_sdb : t_sdb_device := work.%s_pkg.c_%s_%s_sdb;\n" % (unitname, slaveIfName, (unitname + '_auto'), unitname, slaveIfName)                            
     
     wbWidth = {8   : '1',
@@ -714,21 +715,30 @@ class wbsIf():
         rst = adj(self.v.resets(self.regs), ['<='], 4)       
         
         hiAdr = self.getLastAdr(self.regs[-1])
-        #print hiAdr, type(hiAdr)
-        (idxHi, _) = mskWidth(hiAdr)
-        if(idxHi < 2):
-           idxHi = 2 
-        adrRange = 2**(idxHi+1)-1
+        #if there's only a single register, hiAdr would be 0. Doesnt work with log2, change to highest non-aligned value 
+        if(hiAdr == 0):
+           msbIdx = 0
+        else:   
+            msbIdx = (math.ceil(math.log( hiAdr ) / math.log( 2 )))
         
-        print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto 0\n" % (self.name, len(self.regs), hiAdr, adrRange, idxHi)
+        lsbIdx = (math.ceil(math.log( self.dataWidth/8 ) / math.log( 2 )))
+        if lsbIdx > 0:
+            padding = '& "%s"' % ('0' * int(lsbIdx))
+        else:
+            padding = ''
+            
+        adrMsk = 2**msbIdx-1 
+           
+        
+        print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.regs), hiAdr, adrMsk, msbIdx-1, lsbIdx)
         print "\n%s" % ('*' * 80) 
         hdr1 = self.v.wbs1_0 
         hdr1.append(self.v.wbs1_1 % self.clocks[0]) 
         hdr1 += self.v.wbs1_2
 
         szero = adj(self.v.fsmWritePulse(self.regs), ['<=', '--'], 4)
-
-        hdr1[3] = hdr1[3] % ('%u downto %u' % (idxHi, 2))
+        
+        hdr1[3] = hdr1[3] % (('%u downto %u' % (msbIdx-1, lsbIdx)), padding)
         hdr1    = iN(hdr1, 3)
         
         psel    = iN([self.v.fsmPageSel(self.pageSelect)], 4)
@@ -754,7 +764,6 @@ class wbsIf():
         a = []
         b = []
         adrHi = self.getLastAdr(self.regs[-1])
-        print "AdrHi: %s" % adrHi        
         (idxHi, idxLo) = mskWidth(adrHi)
         
         adrx = ("%0" + str((idxHi+1+3)/4) + "x")
@@ -897,7 +906,7 @@ class wbsIf():
                     a += iN(tmp, 1) 
                     a.append(self.v.recordRegEnd   % (suffix+'_o'))
                 else:
-                    print "no outgoing registers found for clk domain %s" % clkd 
+                    print "Info: no outgoing registers found for clk domain %s" % clkd 
         
         if(len(recordsIn)>0):                
             #render whole in record
@@ -922,7 +931,7 @@ class wbsIf():
                     a += iN(tmp, 1) 
                     a.append(self.v.recordRegEnd   % (suffix+'_i'))
                 else:
-                    print "no incoming registers found for clk domain %s" % clkd      
+                    print "Info: no incoming registers found for clk domain %s" % clkd      
         
         #proper line endings for portlist
         #for i in range(0, len(self.portList)-1):
@@ -1007,7 +1016,6 @@ def mergeIfLists(slaveList=[], masterList = []):
     v = gVhdlStr("")
     for slave in slaveList:
         uglyPortList += slave.portList
-        print slave.portList
         stubPortList += slave.stubPortList
         stubInstList += slave.stubInstList
         #deal with vhdl not wanting a semicolon at the last port entry        
@@ -1037,10 +1045,10 @@ def mergeIfLists(slaveList=[], masterList = []):
         fsmList      += "\n\n"
         syncList     += iN(commentBox("--","Sync Signal Assignments", slave.name), 1)
         syncList     += adj(slave.syncAssignList, ['<='], 1)
-        syncList     += iN(commentBox("--","Sync Processes", slave.name), 1)        
-        syncList     += adj(slave.syncProcList, ['<='], 1) 
-        #syncList     += slave.syncAssignList
-        syncList     += "\n\n"
+        if(len(slave.syncProcList)>0):        
+            syncList     += iN(commentBox("--","Sync Processes", slave.name), 1)        
+            syncList     += adj(slave.syncProcList, ['<='], 1) 
+            syncList     += "\n\n"
         recordList   += iN(commentLine("--","WBS Register Record", slave.name), 1) 
         recordList   += adj(slave.recordList, [ ':', '--'], 1)
              
@@ -1112,7 +1120,10 @@ def parseXML(xmlIn):
     global version
     global email    
     
-    
+    if (len(xmldoc.getElementsByTagName('wbdevice'))==0):
+        print "No <wbdevice> tag found"
+        sys.exit(2)
+        
     author   = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
     version  = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('version')
     email    = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('email')
@@ -1131,31 +1142,33 @@ def parseXML(xmlIn):
             
     
     genericsParent = xmldoc.getElementsByTagName('generics')
-    if len(genericsParent) != 1:
+    if len(genericsParent) > 1:
         print "There must be exactly 1 generics tag!"
         sys.exit(2)
-    genericsList = genericsParent[0].getElementsByTagName('item')
-    print "Found %u generics\n" % len(genericsList)   
-    for generic in genericsList:
-        genName = generic.getAttribute('name')
-        genType = generic.getAttribute('type')
-        genVal  = generic.getAttribute('value')
-        genDesc = generic.getAttribute('comment')
-        if genTypes.has_key(genType):
-            genType = genTypes[genType]               
-            if(genType == 'natural'):
-                aux = str2int(genVal)
-                if(aux == None):            
-                    print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
-                else:        
-                    genVal = aux
-                    genIntD[genName] = [ genType , genVal, genDesc ]
+    elif len(genericsParent) == 1:    
+        genericsList = genericsParent[0].getElementsByTagName('item')
+        print "Found %u generics\n" % len(genericsList)   
+        for generic in genericsList:
+            genName = generic.getAttribute('name')
+            genType = generic.getAttribute('type')
+            genVal  = generic.getAttribute('value')
+            genDesc = generic.getAttribute('comment')
+            if genTypes.has_key(genType):
+                genType = genTypes[genType]               
+                if(genType == 'natural'):
+                    aux = str2int(genVal)
+                    if(aux == None):            
+                        print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
+                    else:        
+                        genVal = aux
+                        genIntD[genName] = [ genType , genVal, genDesc ]
+                else:
+                    genMiscD[genName] = [ genType , genVal, genDesc ]    
             else:
-                genMiscD[genName] = [ genType , genVal, genDesc ]    
-        else:
-            print "%s is not a valid type" % generic.getAttribute('type')
-            sys.exit(2)
-    
+                print "%s is not a valid type" % generic.getAttribute('type')
+                sys.exit(2)
+ 
+        
     slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
     print "Found %u slave interfaces\n" % len(slaveIfList)    
     for slaveIf in slaveIfList:
@@ -1233,8 +1246,9 @@ def parseXML(xmlIn):
                 regadr = reg.getAttribute('address')            
                 aux = str2int(regadr)
                 if(aux == None):            
-                    print "Slave <%s>: Register <%s>'s supplied address <%x> is invalid, defaulting to auto" % (name, regname, regadr)
+                    print "Slave <%s>: Register <%s>'s supplied address <0x%x> is invalid, defaulting to auto" % (name, regname, regadr)
                 regadr = aux            
+                print "Slave <%s>: Register <%s> using supplied address <0x%x>, enumerating from there" % (name, regname, regadr)
                 
             regrwmf    = str()
             if reg.hasAttribute('read'):
