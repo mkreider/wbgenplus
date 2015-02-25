@@ -1,0 +1,16 @@
+<wbdevice author="M. Kreider" version="0.0.1">
+   
+   <clockdomain name="sys"></clockdomain>
+    
+   <slaveinterface name="slave" data="32" type="pipelined">          
+      <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="A simple slave"></sdb>
+      <registers>
+           <reg   name="STATUS"     read="yes"              mask="0xff"                                     comment="Shows if the device is rdy/busy"></reg>
+           <reg   name="CMD"        read="yes"  write="yes" mask="0x1f"       access="atomic"               comment="b0: Enable, b4-b1: Mode"></reg>
+           <reg   name="CLEAR_FIFO"             write="yes" mask="1"          autostall='yes' pulse='yes'   comment="Clears Fifo"></reg>
+           <reg   name="FIFO_IN"                write="yes" mask="0xffffffff" weflag="yes"                  comment="Recording fifo"></reg>
+           <reg   name="SPACE_LEFT" read="yes"              mask="0xffff"                                   comment="Shows free memory space"></reg>
+      </registers>
+   </slaveinterface>
+
+</wbdevice>
