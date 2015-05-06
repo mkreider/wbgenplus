@@ -4,82 +4,131 @@ Created on Fri Nov 14 10:35:39 2014
 
 @author: mkreider
 """
+import math
 
-def setColIndent(sLine, level, tabsize=3):
-    if(sLine == ""):
-        s = ""
-    else:    
+_TAB_SIZE_ = 3
+
+def is_sequence(arg):
+    return (not hasattr(arg, "strip") and
+            hasattr(arg, "__getitem__") or
+            hasattr(arg, "__iter__"))
+
+def srepr(arg):
+    if is_sequence(arg):
+        return "\n".join(srepr(x) for x in arg)
+    return arg
+
+def setColIndent(sLine, level, tabsize=_TAB_SIZE_):
+    #provide a solution for list
+    line = ""
+    s = ""    
+    if(is_sequence(sLine)):    
+        #print sLine        
+        for line in sLine:
+            setColIndent(line, level, tabsize)
+    else:
+        line += sLine
+        #print "line = %s" % line
+        #if(line != ""):
         ind = ' ' * (tabsize * level)        
-        s = ind + sLine#s = sLine.lstrip(' ')    
+        s = ind + line    
     return s      
 
-def i1(sLine, level, tabsize=3):
-    return setColIndent(sLine, level, tabsize)
-    
-def setColsIndent(sLines, level, tabsize=3):
-    l = []    
-    for i in range(0, len(sLines)):    
-        l.append(setColIndent(sLines[i], level, tabsize))    
+  
+def setColsIndent(sLines, level, tabsize=_TAB_SIZE_):
+    l = []
+    if(is_sequence(sLines)):    
+        for i in range(0, len(sLines)):    
+            l.append(setColIndent(sLines[i], level, tabsize))
+    else:
+         l.append(setColIndent(sLines, level, tabsize))       
     return l
 
-def iN(sLines, level, tabsize=3):
-    return setColsIndent(sLines, level, tabsize)
-
-def getMaxBlockColByMark(sLines, cMark, tabsize):
-    offs = 0
+def getMaxBlockColByMark(sLines, cMark, tabsize=_TAB_SIZE_, offs=0):
     for line in sLines:
-        if(line.find(cMark) > offs):
-            offs = line.find(cMark)
-            
+        if(is_sequence(line)):
+           #print "seq"     
+           offs = getMaxBlockColByMark(line, cMark, tabsize, offs)
+        else:   
+            #print line            
+            if(line.find(cMark) > offs):
+                offs = line.find(cMark)
+    
+    
+        
     alignedOffs = ((offs + tabsize - 1) // tabsize) * tabsize;        
     
     return alignedOffs 
 
 def adjColByMark(sLine, cMark, offs):
-    pos = sLine.find(cMark)
-    if(pos > -1):
-        ins = ' ' * (offs - pos)
-        s = sLine[:pos] + ins + sLine[pos:]
+    s = []    
+    if(is_sequence(sLine)):
+       #print "seq"    
+       s += sLine 
+       for i in range(0, len(sLine)):    
+            s[i] = adjColByMark(s[i], cMark, offs)   
+       return s
     else:
-        s = sLine
-    return s
+                    
+        pos = sLine.find(cMark)
+        if(pos > -1):
+            ins = ' ' * (offs - pos)
+            s = sLine[:pos] + ins + sLine[pos:]
+        else:
+            s = sLine
+        #print "A: %s" % s     
+        return s
 
-def adjBlockByMarks(sLines, cMarks, indentLvl, tabsize=3):
-    l  = setColsIndent(sLines, indentLvl, tabsize)
-    
+def adjBlockByMarks(sLines, cMarks, tabsize=_TAB_SIZE_):
+    l = []
+    l += sLines    
     for mark in cMarks:
         offs    = getMaxBlockColByMark(l, mark, tabsize)
         for i in range(0, len(l)):    
             sLine = l[i]
             sLine = adjColByMark(sLine, mark, offs)   
             l[i] = sLine    
+      
+    return l
     
+def beautify(sLines, cMarks, indentLvl, tabsize=_TAB_SIZE_):
+    l = []    
+    
+    l   += adjBlockByMarks(sLines, cMarks, tabsize)
+    #print "*!*"    
+    #print "l: %s" % l
+    l   = setColsIndent(l, indentLvl, tabsize)
+    #print "*!!*"    
+    #print "l: %s" % l
     return l
 
 def mskWidth(msk):
     result  = 0
-    if(msk != 0): 
-        aux     = bin(msk).split('b')
-        tmpmsk  = aux[-1];
-        hiIdx   = len(tmpmsk)-1 - tmpmsk.find('1')        
-        tmpmsk  = tmpmsk[::-1]
-        loIdx   = tmpmsk.find('1')
-        result  = [hiIdx, loIdx]
+    inp = str(msk)
+    if(inp != 0):
+        aux     = parseNumeral(inp)
+        if(aux > 1):
+            width = (math.ceil(math.log( aux) / math.log( 2 )))
+        else:
+            width = 1
+        print "Breite: %s, inout %s" % (width, aux)
+        result  = int( width)
     else:
-        result = [0, 0]    
+        result = 0    
     return result
     
 def parseNumeral(num, default = None):
-    result = default 
-    if(num.find('0x') == 0):       
+    result = default
+    x = str(num)
+    if(x.find('0x') == 0):       
         base = 16
-    elif(num.find('0b') == 0):
+    elif(x.find('0b') == 0):
         base = 2  
     else:
         base = 10
     
     try:
-        result = int(num, base)
+        result = int(x, base)
     except ValueError:
         result = default
     return result
