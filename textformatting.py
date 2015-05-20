@@ -54,8 +54,6 @@ def getMaxBlockColByMark(sLines, cMark, tabsize=_TAB_SIZE_, offs=0):
             if(line.find(cMark) > offs):
                 offs = line.find(cMark)
     
-    
-        
     alignedOffs = ((offs + tabsize - 1) // tabsize) * tabsize;        
     
     return alignedOffs 
@@ -111,8 +109,7 @@ def mskWidth(msk):
             width = (math.ceil(math.log( aux) / math.log( 2 )))
         else:
             width = 1
-        print "Breite: %s, inout %s" % (width, aux)
-        result  = int( width)
+        result  = int(width)
     else:
         result = 0    
     return result

@@ -20,7 +20,7 @@ myUpdate  = "10 Jan 2015"
 myCreator = "M. Kreider <m.kreider@gsi.de>"
 
 
-
+is_seq      = textformatting.is_sequence
 i1          = textformatting.setColIndent
 iN          = textformatting.setColsIndent    
 adj         = textformatting.beautify
@@ -31,11 +31,25 @@ commentBox  = textformatting.commentBox
 now = datetime.datetime.now()
 
 
-      
+class generic(object):
+
+    def __init__(self, name, gtype, default, desc):
+        self.name       = name
+        self.vname      = "g_" + self.name 
+        self.gtype      = gtype
+        self.desc       = desc
+        self.default    = default
+        
+        def getGenericEntityStrings(self):
+            gen        = "%s : %s := %s -- %s\n"  % ( self.vname, self.gtype, self.default, self.desc)     
+            return gen
+        
+        
 
 class register(object):
 
-    def __init__(self, slaveIf, pages, datawidth, addresswidth, name, desc, bigMsk, rwmafs, clkdomain="sys", rstvec=None, startAdr=None, offs=4):
+    def __init__(self, slaveIf, pages, datawidth, addresswidth, name, desc, bigMsk, flags, clkbase="sys", clkdomain="sys", rstvec=None, startAdr=None, offs=4):
+        #print "Adding REgister %s to domain %s" % (name, clkdomain)        
         self.slaveIf    = slaveIf
         self.pages      = pages         
         self.dwidth     = datawidth
@@ -44,39 +58,100 @@ class register(object):
         self.desc       = desc
         self.startAdr   = startAdr
         self.offs       = offs
+        self.clkbase    = clkbase
         self.clkdomain  = clkdomain
         self.rstvec     = rstvec        
-        self.rwmafs     = rwmafs
-        print "mask: %s" % bigMsk
-        self.width      = mskWidth(bigMsk)
+        self.flags      = flags
+        self.width      = bigMsk
+        if not self.isGenericWidth():
+            self.width  = mskWidth(bigMsk)
+        self.checkGeneric()
         self.opList     = []
         
         adr = startAdr
-              
-        if(rwmafs.find('a') > -1): # atomic
-            if rwmafs.find('r') > -1:
+        
+        #add operations according to register flags
+        if self.isAtomic():
+            if self.isRead():
                 self.addOp(adr, '_GET')
-                adr = None
-            if rwmafs.find('w') > -1:    
-                if rwmafs.find('r') > -1:            
-                    self.addOp(None, '_CLR')        
+                adr = None 
+            if self.isWrite():    
+                self.addOp(adr, '_CLR')
+                adr = None    
                 self.addOp(adr, '_SET')
         else:
-            op = str()        
-            if rwmafs.find('rw') > -1:
-                op = '_RW '
-            elif rwmafs.find('r') > -1:    
-                op = '_GET'
-            elif rwmafs.find('w') > -1:
-                op = '_OWR'
-            self.addOp(adr, op)
-        if rwmafs.find('f') > -1:    
+            if self.isRead() and self.isWrite():
+                self.addOp(adr, '_RW ')
+            elif self.isRead():    
+                self.addOp(adr, '_GET')
+            elif self.isWrite():
+                self.addOp(adr, '_OWR')
+        if self.hasWriteEnableFlag():    
             self.addOp(None, '_WE')   
 
+    def isWrite(self):
+        if(self.flags.find('w') > -1):
+            return True
+        return False
+        
+    def isRead(self):
+        if(self.flags.find('r') > -1):
+            return True
+        return False
+        
+    def isPaged(self):
+        if(self.flags.find('m') > -1):
+            return True
+        return False
+        
+    def isAtomic(self):
+        if(self.flags.find('a') > -1):
+            return True
+        return False
+        
+    def isPulsed(self):
+        if(self.flags.find('p') > -1):
+            return True
+        return False
+        
+    def hasWriteEnableFlag(self):
+        if(self.flags.find('f') > -1):
+            return True
+        return False
+        
+    def isStalling(self):
+        if(self.flags.find('s') > -1):
+            return True
+        return False    
+
+    def checkGeneric(self):
+         if( self.isPaged() and genIntD.has_key(self.width)):
+             print "\n\nERROR: Register %s has a generic width AND is part of a memory page! This is impossible, hardcode the width instead!" % self.name
+             exit(2)
+            
+    def isGeneric(self):          
+        return self.isGenericPaged() or self.isGenericWidth()
+    
+    def isGenericPaged(self):
+        if self.isPaged():
+            if(genIntD.has_key(self.pages)):
+                return True
+        return False  
+        
+    def isGenericWidth(self):
+        if(genIntD.has_key(self.width)):
+            return True
+        return False    
+
+    def getGenericPrefix(self):
+        if self.isGeneric():
+            return "g_"
+        return ""    
+
     def addOp(self, adr, op):
-        print "myop %s" % op        
+        #print "myop %s" % op        
         adrList = []
-        print "addop adr: %s" % adr        
+        #print "addop adr: %s" % adr        
         if adr == None:
             
             if len(self.opList) ==  0:
@@ -94,7 +169,7 @@ class register(object):
         #print "msk: %s %u" % (mskList, len(mskList))
         for msk in mskList:
             adrList.append([msk, adr])
-            print "Reg: %s msk: %s adr: %s offs: %s" % (self.name, msk, adr, self.offs)
+            #print "Reg: %s msk: %s adr: %s offs: %s" % (self.name, msk, adr, self.offs)
             adr += self.offs
         self.opList.append([op, adrList])    
 
@@ -110,58 +185,74 @@ class register(object):
             
     def sliceMsk(self):
         mskList = []
-        print "self.bigMsk = %s" % self.width
         regWidth    = self.width
-        words       = regWidth / self.dwidth
-        for i in range(0, words):
-            mskList.append(self.dwidth)                
-            regWidth %= self.dwidth
+        if not self.isGenericWidth():
+            words       = int(regWidth / self.dwidth)           
+            for i in range(0, words):
+                mskList.append(self.dwidth)                
+                regWidth %= self.dwidth
         if(regWidth):
             mskList.append(regWidth)
         return (mskList)
 
     def getTypeStrings(self):
-        slvSubType   = "subtype t_slv_%s_%%s is std_logic_vector(%%s-1 downto 0);\n" % self.slaveIf #name, idxHi
-        slvArrayType = "type    t_slv_%s_%%s_array is array(natural range <>) of t_slv_%s_%%s;\n" % ( self.slaveIf, self.slaveIf)  #name, #name
+        slvSubType   = "subtype t_slv_%s_%s is std_logic_vector(%s%s-1 downto 0);\n" % (self.slaveIf, self.name, self.getGenericPrefix(), self.width) #name, idxHi
+        slvArrayType = "type    t_slv_%s_%s_array is array(natural range <>) of t_slv_%s_%s;\n" % ( self.slaveIf, self.name, self.slaveIf, self.name)  #name, #name
        
         s = []
-        if(self.rwmafs.find('m') > -1):        
+        if(self.flags.find('m') > -1):        
             s.append('\n')
-            s.append(slvSubType % (self.name, self.width)) #shift mask to LSB
-            s.append(slvArrayType % (self.name, self.name))
-                       
+            s.append(slvSubType) #shift mask to LSB
+            s.append(slvArrayType)
         return s
-        
-    def getRegisterStrings(self):
-        reg          = "signal r_%s_%%s : std_logic_vector(%%s-1 downto 0); -- %%s\n" % self.slaveIf
-        regArray     = "signal r_%s_%%s : t_slv_%s_%%s_array(%%s downto 0); -- %%s\n"  % ( self.slaveIf, self.slaveIf) #name, name, idxHi, desc
+    
+    def getRegisterName(self):
+        regname = "r_%s_%s" % (self.slaveIf, self.name)
+        return regname
+    
+    def getRegisterStrings(self, showComment=False):
+        syncsigs     = ["signal s_%s_%s_push  : std_logic; -- Sync signals\n" % (self.slaveIf, self.name),
+                        "signal s_%s_%s_pop   : std_logic;\n" % (self.slaveIf, self.name),
+                        "signal s_%s_%s_full  : std_logic;\n" % (self.slaveIf, self.name),
+                        "signal s_%s_%s_empty : std_logic;\n" % (self.slaveIf, self.name)
+                        ]
+        comment = (" -- " +  self.desc) if showComment else ""
+        reg          = "signal %s : std_logic_vector(%s%s-1 downto 0);%s\n" % (self.getRegisterName(), self.getGenericPrefix(), self.width, comment)
+        regArray     = "signal %s : t_slv_%s_%s_array(%s%s-1 downto 0);%s\n"  % (self.getRegisterName(), self.slaveIf, self.name, self.getGenericPrefix(), self.pages, comment) #name, name, idxHi, desc
        
         s = []
-        if(self.rwmafs.find('m') > -1):
-            if(isinstance(self.pages, int)):
-                prefix = ''
-            else:
-                prefix = 'c_g_' 
-            s.append(regArray % (self.name, self.name, prefix + str(self.pages) + '-1', self.desc))
-        else:
-            s.append(reg % (self.name, self.width, self.desc))
-        return s    
-    
-    def getPortStrings(self):
-        port        = "%s_%s%%s : %%s std_logic_vector(%s-1 downto 0); -- %s\n" % (self.slaveIf, self.name, self.width, self.desc)     
-        portArray   = "%s_%s%%s : %%s t_slv_%s_%s_array(%s-1 downto 0); -- %s\n" % (self.slaveIf, self.name, self.slaveIf, self.name, self.pages, self.desc)
+        if(self.clkdomain != self.clkbase):
+            s += syncsigs
         
-        if(self.rwmafs.find('w') > -1):
-            direction   = "out"
+        if self.isPaged(): 
+            s.append(regArray)
+        else:
+            s.append(reg)
+        return s    
+        
+    
+    def getPortName(self):
+        if self.isWrite():
             suffix      = "_o"    
         else:
-            direction   = "in"
             suffix      = "_i"
+            
+        portname = "%s_%s_%s%s" % (self.slaveIf, self.name, self.clkdomain, suffix)
+        return portname
         
-        if(self.rwmafs.find('m') > -1):
-            return [portArray % (suffix, direction)]            
+    def getPortStrings(self):
+        if self.isWrite():
+            direction   = "out"   
         else:
-            return [port % (suffix, direction)]             
+            direction   = "in"
+        
+        port        = "%s : %s std_logic_vector(%s%s-1 downto 0); -- %s\n" % (self.getPortName(), direction, self.getGenericPrefix(), self.width, self.desc)     
+        portArray   = "%s : %s t_slv_%s_%s_array(%s%s-1 downto 0); -- %s\n" % (self.getPortName(), direction, self.name, direction, self.getGenericPrefix(), self.pages, self.desc)
+        
+        if self.isPaged():
+            return portArray            
+        else:
+            return port             
             
            
             
@@ -169,11 +260,11 @@ class register(object):
         resetSignal       = "r_%s_%s <= %s;\n"                  % (self.slaveIf, self.name, self.rstvec)
         resetSignalArray  = "r_%s_%s <= (others =>%s);\n"       % (self.slaveIf, self.name, self.rstvec)       
         
-        if(self.rwmafs.find('w') > -1):
-            if(self.rwmafs.find('m') > -1):
-               return [resetSignalArray]                      
+        if self.isWrite():
+            if self.isPaged():
+               return resetSignalArray
             else:
-               return [resetSignal]
+               return resetSignal
         else:
             return []
 
@@ -181,11 +272,11 @@ class register(object):
         wbWritePulseZero        = "r_%s_%s <= (others => '0'); -- %s pulse\n" % (self.slaveIf, self.name, self.desc) #registerName        
         wbWritePulseZeroArray   = "r_%s_%s <= (others => (others => '0')); -- %s pulse\n" % (self.slaveIf, self.name, self.desc) #registerName             
         
-        if( (self.rwmafs.find('w') > -1) and ( (self.rwmafs.find('f') > -1) or (self.rwmafs.find('p') > -1))  ):
-            if(self.rwmafs.find('m') > -1):
-               return [wbWritePulseZeroArray]                      
+        if( self.isWrite() and ( self.hasWriteEnableFlag() or self.isPulsed()  )):
+            if self.isPaged():
+               return wbWritePulseZeroArray
             else:
-               return [wbWritePulseZero]
+               return wbWritePulseZero
         else:
             return []       
     
@@ -196,7 +287,6 @@ class register(object):
         s = []
         adrHi = self.getLastAdr()
         idxHi = mskWidth(adrHi) -1
-        idxLo = 0
         adrx = ("%0" + str((idxHi+1+3)/4) + "x")
         mskx = ("%0" + str(self.dwidth/4) + "x")
         
@@ -223,30 +313,116 @@ class register(object):
                     comment = self.desc
                 else:
                     comment = '\"\"'
+                
+                if(genIntD.has_key(msk)):
+                    bitmask = "g_%s" % msk
+                else:
+                    bitmask = mskx % int(2**msk-1)
                 if(language == "C"):
-                    s.append(adrC % (self.slaveIf, self.name + op + idx, adrx % adr, rw, mskx % int(2**msk-1), comment ))
+                    s.append(adrC % (self.slaveIf, self.name + op + idx, adrx % adr, rw, bitmask, comment ))
                 else:    
-                    s.append(adrV % (self.slaveIf, self.name + op + idx, adrx % adr, rw, mskx % int(2**msk-1), comment ))
+                    s.append(adrV % (self.slaveIf, self.name + op + idx, adrx % adr, rw, bitmask, comment ))
                 
                 adrIdx += 1
             opIdx += 1
         
         return s        
         
-
-            
-            
-    def getSyncStrings(self):
-        return None
+    def getInterfaceDocStrings(self, adressNibbles):
+        doc = "0x%s %s %s_%s : %s -> %s\n" #adr, rw, name_operation_(idx), bitwidth, description           
         
-    def getFsmReadStrings(self):
-        wbReadExt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= s_%s_%%s; -- %%s\n" % (self.slaveIf, self.slaveIf, self.slaveIf) #registerName, registerName, desc
-        wbReadInt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= r_%s_%%s; -- %%s\n" % (self.slaveIf, self.slaveIf, self.slaveIf) #registerName, registerName, desc
+        s = []
+        adrx = ("%0" + str(adressNibbles) + "x")       
+        
+        opIdx = 0            
+        for opLine in self.opList:
+            (op, adrList) = opLine
+            if(op.find('_GET') > -1):
+                rw = 'ro'
+            elif (op.find('_SET') > -1) or (op.find('_CLR') > -1) or (op.find('_OWR') > -1):
+                rw = 'wo'    
+            elif(op.find('_RW') > -1):
+                rw = 'rw'
+                
+            adrIdx = 0
+            for adrLine in adrList:
+                #if this reg has multiple words, add the index to the name                    
+                if(len(adrList) > 1):                
+                    idx = '_%u' % adrIdx
+                else:
+                    idx = ''
+                (msk, adr) = adrLine
+                #Show comment only the first occurrance of a register name                    
+                if((opIdx == 0) and (adrIdx == 0)):
+                    comment = self.desc
+                else:
+                    comment = '\"\"'
+                
+                if(genIntD.has_key(msk)):
+                    bitmask = "g_%s" % msk
+                else:
+                    bitmask = msk
+                s.append(doc % (adrx % adr, rw, self.slaveIf, self.name + op + idx, bitmask, comment))
+                
+                adrIdx += 1
+            opIdx += 1
+        
+        return s    
+            
+            
+    def getInstanceStrings(self):
+        if self.isWrite():
+            #it's an output of our entity
+            sigin  = self.getRegisterName() 
+            sigout = self.getPortName()
+            clkin  = self.clkbase
+            clkout = self.clkdomain
+        else:
+            sigin  = self.getPortName() 
+            sigout = self.getRegisterName()
+            clkin  = self.clkdomain
+            clkout = self.clkbase           
+            #it's an input to our entity        
+        
+        
+        sync_fifo   = ["\n%s_%s_FIFO : generic_async_fifo\n" % (self.slaveIf, self.name),
+                       "generic map(\n",
+                       "  g_data_width   => %s,\n" % (self.getGenericPrefix() + str(self.width)), 
+                       "  g_size         => %s,\n" % (8),
+                       "  g_show_ahead   => true,\n",
+                       "  g_with_rd_empty   => true,\n",
+                       "  g_with_wr_full    => true)\n",
+                       "port map(\n",
+                       "  rst_n_i  => rst_n_i,\n",
+                       "  clk_wr_i => clk_%s_i,\n" % clkin,                        
+                       "  clk_rd_i => clk_%s_i,\n" % clkout,
+                       "  we_i     => s_fifo_push_%s_%s,\n" % (self.slaveIf, self.name),
+                       "  rd_i     => s_fifo_pop_%s_%s,\n" % (self.slaveIf, self.name),
+                       "  d_i      => %s,\n" % sigin,
+                       "  q_o      => %s,\n" % sigout,
+                       "  rd_empty_o  => s_fifo_empty_%s_%s,\n" % (self.slaveIf, self.name),
+                       "  wr_full_o   => s_fifo_full_%s_%s);\n" % (self.slaveIf, self.name),
+                       "  s_fifo_pop_%s_%s    <= not s_fifo_empty_%s_%s;\n" % (self.slaveIf, self.name, self.slaveIf, self.name),
+                       "  s_fifo_push_%s_%s   <= not s_fifo_full_%s_%s;\n\n" % (self.slaveIf, self.name, self.slaveIf, self.name)
+                      ]     
+        
+        simple_assign = "%s <= %s;\n" % (sigout, sigin)
+        
+        if(self.clkdomain != self.clkbase):
+            s = sync_fifo
+        else:
+            s = simple_assign
+        
+        
+        return s   
+        
+    def getFsmReadStrings(self, showComment=False):
+        wbRead             = "when c_%s_%%s => r_%s_out_dat0(%%s) <= r_%s_%%s;\n" % (self.slaveIf, self.slaveIf, self.slaveIf) #registerName, registerName, desc
         wbStall            = "r_%s_out_stall  <= '1'; --    %%s auto stall\n" % (self.slaveIf)
              
         
         s = []    
-        if(self.rwmafs.find('m') > -1):
+        if self.isPaged():
             ind = '(v_page)'
         else:
             ind = ""            
@@ -260,7 +436,7 @@ class register(object):
                     for adrLine in adrList:
                         idx = '_%u' % adrIdx
                         (msk, adr) = adrLine
-                        print "msk: %s adr %s" % (msk, adr)
+                        #print "msk: %s adr %s" % (msk, adr)
                         #Show comment only the first occurrance of a register name                    
                         if(adrIdx == 0):
                             comment  = self.desc
@@ -272,29 +448,24 @@ class register(object):
                         curSlice         = "(%u downto %u)" % ( sliceWidth + adrIdx*self.dwidth -1, adrIdx*self.dwidth)
                         baseSlice        = "%u downto %u" % ( sliceWidth -1, 0)
                         adrIdx += 1
-                        if(self.rwmafs.find('w') > -1):
-                            #if the register can be written to by WB, it is internal. read from WB register 
-                            s.append(wbReadInt % (self.name + op + idx, baseSlice, self.name + ind + curSlice, comment))
-                        else:
-                            #if the register cannot be written to by WB, it is external. read from input record 
-                            s.append(wbReadExt % (self.name + op + idx, baseSlice, self.name + ind + curSlice, comment))
+                        if showComment:
+                            s.append("-- %s\n" % comment)
+                        s.append(wbRead % (self.name + op + idx, baseSlice, self.name + ind + curSlice))
+                    
                 else:
                     (msk, adr) = adrList[0]
                     sliceWidth       = mskWidth(msk) 
                     baseSlice        = "%u downto %u" % ( sliceWidth -1, 0)
-                    if(self.rwmafs.find('w') > -1):
-                        #if the register can be written to by WB, read from WB register
-                        s.append(wbReadInt % (self.name + op, baseSlice, self.name+ind, self.desc))
-                    else:
-                        #if the register cannot be written to by WB, read from input record
-                        s.append(wbReadExt % (self.name + op, baseSlice, self.name+ind, self.desc))
-                if((self.rwmafs.find('s') > -1)):             
+                    if showComment:                    
+                        s.append("-- %s\n" % self.desc)                    
+                    s.append(wbRead % (self.name + op, baseSlice, self.name+ind))
+                    
+                if self.isStalling():             
                     s.append(wbStall % self.name)    
-        print s
         return s
 
-    def getFsmWriteStrings(self):
-        wbWrite            = "when c_%s_%%s => r_%s_%%s <= f_wb_wr(r_%s_%%s, v_dat_i, v_sel, \"%%s\"); -- %%s\n" % (self.slaveIf, self.slaveIf, self.slaveIf) #registerName, registerName, (set/clr/owr), desc
+    def getFsmWriteStrings(self, showComment=False):
+        wbWrite            = "when c_%s_%%s => r_%s_%%s <= f_wb_wr(r_%s_%%s, v_dat_i, v_sel, \"%%s\");\n" % (self.slaveIf, self.slaveIf, self.slaveIf) #registerName, registerName, (set/clr/owr), desc
         wbWriteWe          = "r_%s_%%s_WE <= '1'; --    %%s write enable\n" % (self.slaveIf) 
         wbWriteWeZero      = "r_%s_%%s_WE <= '0'; -- %%s pulse\n" % (self.slaveIf)
         wbStall            = "r_%s_out_stall  <= '1'; --    %%s auto stall\n" % (self.slaveIf)
@@ -308,7 +479,7 @@ class register(object):
                '_RW '  : 'owr'}         
         
         s = []    
-        if(self.rwmafs.find('m') > -1):
+        if self.isPaged():
             ind = '(v_page)'
         else:
             ind = ""
@@ -332,6 +503,8 @@ class register(object):
                         sliceWidth   = (idxHi-idxLo+1) 
                         curSlice = "(%u downto %u)" % ( sliceWidth + adrIdx*self.dataWidth -1, adrIdx*self.dataWidth)
                         adrIdx += 1
+                        if showComment:                        
+                            s.append("-- %s\n" % comment)
                         s.append(wbWrite % (self.name + op + idx, self.name + ind + curSlice, self.name + ind + curSlice, self.wrModes[op], comment))
                 else:
                     (msk, adr) = adrList[0]
@@ -339,17 +512,19 @@ class register(object):
                         comment = self.desc
                     else:
                         comment = '\"\"'
-                    s.append(wbWrite % (self.name + op, self.name+ind, self.name+ind, wrModes[op], comment))
-                if(self.rwmafs.find('f') > -1):
+                    if showComment:    
+                        s.append("-- %s\n" % comment)    
+                    s.append(wbWrite % (self.name + op, self.name+ind, self.name+ind, wrModes[op]))
+                if self.hasWriteEnableFlag():
                     s.append(wbWriteWe % (self.name, self.name))
-                if((self.rwmafs.find('s') > -1)):             
+                if self.isStalling():             
                     s.append(wbStall % self.name)     
                 opIdx += 1
         
-        if((self.rwmafs.find('f') > -1)):
+        if self.hasWriteEnableFlag():
             s.append(wbWriteWeZero % (self.name, self.name))
-            if((self.rwmafs.find('p') > -1)):
-                if((self.rwmafs.find('m') > -1)):
+            if self.isPulsed():
+                if self.isPaged():
                     s.append(wbWritePulseZeroArray % (self.name, self.name))
                 else:                
                     s.append(wbWritePulseZero % (self.name, self.name))
@@ -357,45 +532,33 @@ class register(object):
         return s  
     
 class internalregister(register):
-    def __init__(self, slaveIf, pages, name, desc, bigMsk, rwmafs, clkdomain="sys", rstvec=None):
+    def __init__(self, slaveIf, pages, name, desc, bigMsk, flags, clkbase="sys", clkdomain="sys", rstvec=None):
+        print "Adding internal Register %s" % name        
         self.slaveIf    = slaveIf
         self.pages      = pages         
         self.name       = name
         self.desc       = desc
+        self.clkbase  = clkbase
         self.clkdomain  = clkdomain
         self.rstvec     = rstvec        
-        self.rwmafs     = rwmafs
-        (idxHi, idxLo) = mskWidth(bigMsk)
-        self.width      = (idxHi-idxLo+1)
-        self.opList     = []
+        self.flags     = flags
+        self.width      = mskWidth(bigMsk)
+        self.opList     = []        
         
     def getLastAdr(self):
-        return None 
+        pass 
        
-    def sliceMsk(self):
-        pass
-
-    def getDefinitionStrings(self):
-        pass
-    
-    def getPortStrings(self):
-        pass
-            
-    def getResetStrings(self):
-        pass
-    
-    def getPulsedStrings(self):
-        pass
-    
     def getAdrStrings(self, language="VHDL"):
-        return None      
+        return []      
             
-    def getFsmReadStrings(self):
-        return None
+    def getFsmReadStrings(self, showComment=False):
+        return []
 
-    def getFsmWriteStrings(self):
-        return None   
+    def getFsmWriteStrings(self, showComment=False):
+        return []   
 
+    def getInterfaceDocStrings(self, addressNibbles):
+        return []
 
 class wbslave(object):
     def __init__(self, unitname, slaveIfName, startaddress, selector, pages, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks):    
@@ -411,38 +574,38 @@ class wbslave(object):
         self.sdbVendorID    = sdbVendorID
         self.sdbDeviceID    = sdbDeviceID
         self.sdbname        = sdbname        
-        
+        self.offs           = int(math.ceil(ifwidth/8))
         self.v = wbsVhdlStr(pages, unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks)        
         self.c = wbsCStr(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
+        self.addIntReg("wb_stall", "flow control", "1", "r")
+        self.addIntReg("wb_err", "signal unsuccessful wb op", "1", "r")      
         
-              
         
         
+    def addReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None, startAdr=None):
+        self.registers.append(register(self.name, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr), self.offs))    
         
-    def addReg(self, name, desc, bigMsk, rwmafs, clkdomain="sys", rstvec=None, startAdr=None, offs=4):
-        self.registers.append(register(self.name, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, rwmafs, clkdomain, rstvec, self.getAddress(startAdr), offs))    
-        
-    def addIntReg(self, name, desc, bigMsk, rwmafs, clkdomain="sys", rstvec=None):
-        self.registers.append(internalregister(self.name, self.pages, name, desc, bigMsk, rwmafs, clkdomain, rstvec))    
+    def addIntReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None):
+        self.registers.append(internalregister(self.name, self.pages, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec))    
     
     def getAddress(self, startAdr=None):
         regList = self.registers
-        lastadr = None
+        lastadr = 0
       
-        if len(regList) > 0:
+        if len(regList) > 0:        
             for reg in regList[::-1]:            
                 if(reg.getLastAdr() != None):
                     lastadr = reg.getLastAdr()
                     break        
             if(startAdr):
-                if(startAdr >= lastadr + reg.offs):
+                if(startAdr >= lastadr + self.offs):
                     return startAdr
                 else:
                     print "ERROR: Wrong address specified for Register %s_%s: %08x must be greater %08x!" % (self.name, reg.name, int(startAdr), int(lastadr) + int(reg.offs))
                     exit(2)
             else:
                 #find the last valid address (skip internal registers)
-                return lastadr + reg.offs
+                return lastadr + self.offs
         else:
             if(startAdr):
                 return startAdr
@@ -469,57 +632,112 @@ class wbslave(object):
     def getAddressListVHDL(self):
         s = []        
         for reg in self.registers:
-            s += reg.getAdrStrings("VHDL")
+            tmp = reg.getAdrStrings("VHDL")
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)
         return s       
     
     def getInterfacePortList(self):
         return None    
         
     def getRegisterPortList(self):
-        s = []        
-        for reg in self.registers:
-            s += reg.getPortStrings()
+        s = []
+        s += self.v.slaveIf
+        t = []
+        
+        sortedregs = sorted(self.registers, key=lambda x: (x.clkdomain, x.isWrite(), x.name), reverse=False)
+        regold = sortedregs[0]        
+        for reg in sortedregs:
+            
+            if( (regold.clkdomain != reg.clkdomain) or ( regold.isWrite() != reg.isWrite() )):
+                t.append("\n")
+            regold = reg
+            tmp = reg.getPortStrings()
+            if is_seq(tmp):
+                for line in tmp:
+                    t.append(line)
+            else:
+                t.append(tmp)  
+        
+        s += t
         return s
 
     def getRegisterDefinitionList(self):
         s = []        
         for reg in self.registers:
-            s += reg.getRegisterStrings()
+            tmp = reg.getRegisterStrings()
+            
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)
         
         return s
 
     def getRegisterTypeList(self):
         s = []        
         for reg in self.registers:
-            s += reg.getTypeStrings()
-        
+            tmp = reg.getTypeStrings()
+            
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)    
         return s
 
     def getResetList(self):
         s = []        
         for reg in self.registers:
-            s += reg.getResetStrings()
+            tmp = reg.getResetStrings()
+            
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)
         return s
         
     def getPulsedList(self):
         s = []        
         for reg in self.registers:
-            s += reg.getPulsedStrings()
+            tmp = reg.getPulsedStrings()
+            
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)
         return s    
 
-    def getFsmReadList(self):
+    def getFsmReadList(self, showComment=False):
         s = []        
         for reg in self.registers:
-            s += reg.getFsmReadStrings()
+            tmp = reg.getFsmReadStrings(showComment)
+            
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)
         return s
             
-    def getFsmWriteList(self):
+    def getFsmWriteList(self, showComment=False):
         s = []        
         for reg in self.registers:
-            s += reg.getFsmWriteStrings()
+            tmp = reg.getFsmWriteStrings(showComment)
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)
         return s
     
-    def getFsmList(self):
+    def getFsmList(self, showComment=False):
         s = []
         
         hiAdr = self.getLastAddress()
@@ -534,7 +752,7 @@ class wbslave(object):
         else:
             padding = ''
         adrMsk = 2**msbIdx-1 
-        
+        print "%s" % ('*' * 80) 
         print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.registers), hiAdr, adrMsk, msbIdx-1, lsbIdx)
         print "\n%s" % ('*' * 80) 
         
@@ -544,27 +762,59 @@ class wbslave(object):
         pulsed  = adj(self.getPulsedList(), ['<=', '--'], 4)        
         psel    =  iN(self.getPageSelectStrings(), 4)
         hdr2    =  iN(self.v.wbs2, 4)  
-        writes  = adj(self.getFsmWriteList(), ['=>', 'r_', '<=', 'v_dat_i', '--'], 7)    
+        writes  = adj(self.getFsmWriteList(showComment), ['=>', '<=', 'v_dat_i', "--" if showComment else ""], 7)    
+ 
         mid0    =  iN(self.v.wbOthers, 7)
         mid1    =  iN(self.v.wbs3, 5)
-        reads   = adj(self.getFsmReadList(), ['=>', '<=', "--"], 7)
+        reads   = adj(self.getFsmReadList(showComment), ['=>', '<=', "--" if showComment else ""], 7)
         ftr     =  iN(self.v.wbs4, 1)
         con     = adj(self.v.wbs5, ['<=', "--"], 1)
         
-        s += hdr0 + rst + hdr1 + pulsed + psel +  hdr2 + writes + mid0 + mid1 + reads + mid0 + ftr + con
+        s += (hdr0 + rst + hdr1 + pulsed + psel +  hdr2 + writes + mid0 + mid1 + reads + mid0 + ftr + con)
         return s
     
-    def getSyncDefinitionList(self):
-        return None 
-        
-    def getSyncInstanceList(self):     
-        return None
+       
+    def getInstanceList(self):     
+        s = []        
+        for reg in self.registers:
+            tmp = reg.getInstanceStrings()
+            if is_seq(tmp):
+                for line in tmp:
+                    s.append(line)
+            else:
+                s.append(tmp)
+        return s
         
     def getPageSelectStrings(self):
         if(self.selector == ""):
             return "\n"
         else:    
             return self.v.wbsPageSelect % self.selector
+            
+    def getDocList(self, language):
+        if language == "VHDL":
+           mark = "--"     
+        elif language == "C":
+            mark = "//"
+        else:
+            mark = ""
+            
+        adrHi = "%x" % self.getLastAddress()
+        nibbles = len(adrHi)
+        sHex = "0x"
+        sAdr = "Adr"        
+        
+        s = []
+        s += commentBox(mark,"Register map", self.sdbname)
+        s.append(mark + " " + sAdr + ' ' * ((len(sHex)+nibbles)+1 - len(sAdr)) + "D  Name : Width -> Comment\n")
+        s.append(mark + '-' * 92 + '\n')
+        
+        for reg in self.registers:
+            docList = reg.getInterfaceDocStrings(nibbles)            
+            for line in docList:
+                s.append("-- " + line)
+        s.append('\n')        
+        return s
         
 class wbsCStr(object):
    
@@ -600,7 +850,7 @@ class wbsVhdlStr(object):
         #################################################################################        
         #Strings galore        
         self.slaveIf    = ["%s_i : in  t_wishbone_slave_in;\n" % slaveIfName,
-                           "%s_o : out t_wishbone_slave_out" % slaveIfName] #name
+                           "%s_o : out t_wishbone_slave_out;\n\n" % slaveIfName] #name
                            
                            
         self.slaveSigsRegs = "signal s_%s_regs_clk_%%s_%%s : t_%s_regs_clk_%%s_%%s;\n" % (slaveIfName, slaveIfName)
@@ -658,27 +908,14 @@ class wbsVhdlStr(object):
                            "   end if; -- clk edge\n",
                            "end process;\n\n"]
                            
-        self.wbs5       = ["%s_regs_o <= r_%s;\n" % (slaveIfName, slaveIfName),
-                           "s_%s <= %s_regs_i;\n" % (slaveIfName, slaveIfName),
-                           "%s_o.stall <= r_%s_out_stall or %s_regs_i.STALL;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
+     
+                           
+        self.wbs5       = ["%s_o.stall <= r_%s_out_stall or %s_WB_STALL_%s_i;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0]),  
                            "%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName),                           
-                           "%s_o.ack <= r_%s_out_ack1 and not %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName),                           
-                           "%s_o.err <= r_%s_out_err1 or      %s_regs_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName)]
+                           "%s_o.ack <= r_%s_out_ack1 and not %s_WB_ERR_%s_i;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0]),
+                           "%s_o.err <= r_%s_out_err1 or      %s_WB_ERR_%s_i;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0])]                
                            
-        self.wbs5       = ["%s_o.stall <= r_%s_out_stall or %s_regs_clk_%s_i.STALL;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0]),  
-                           "%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName),                           
-                           "%s_o.ack <= r_%s_out_ack1 and not %s_regs_clk_%s_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0]),
-                           "%s_o.err <= r_%s_out_err1 or      %s_regs_clk_%s_i.ERR;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0])]                
-                           
-                           
-                           
-        self.syncProcStart0     = "sync_%s_clk_%%s_%%s : process(clk_%%s_i)\n   begin\n" % (slaveIfName)
-        self.syncProcStart1     = "   if rising_edge(clk_%s_i) then\n         if(rst_n_i = '0') then\n"
-        self.syncProcMid        = "      else\n"
-        self.syncProcEnd        = ["      end if; -- rst\n",
-                                  "   end if; -- clk edge\n",
-                                  "end process;\n\n"]             
-        
+     
         self.syncProcReg        = "         r_%s_regs_clk_%%s_%%s_%%s <= r_%s_regs_clk_%%s_%%s_%%s;\n"  % (slaveIfName, slaveIfName)   
         self.syncAssignOutD     =  "%s_regs_clk_%%s_o.%%s <= r_%s.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
         self.syncAssignOutI0    =  "%s_regs_clk_%%s_o.%%s <= r_%s_regs_clk_%%s_o_2.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
@@ -704,8 +941,8 @@ class wbsVhdlStr(object):
         self.wbWritePulseZero   = "r_%s_%%s <= (others => '0'); -- %%s pulse\n" % (slaveIfName) #registerName        
         self.wbWritePulseZeroArray = "r_%s_%%s <= (others => (others => '0')); -- %%s pulse\n" % (slaveIfName) #registerName        
                 
-        self.wbReadExt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= s_%s_%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
-        self.wbReadInt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= r_%s_%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+        self.wbRead          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= s_%s_%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
+        self.wbRead          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= r_%s_%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
                 
         self.wbOthers           = ["when others => r_%s_out_ack0 <= '0'; r_%s_out_err0 <= '1';\n" % (slaveIfName, slaveIfName)]
         self.wbs_ackerr         = ["signal r_%s_out_stall : std_logic;\n" % slaveIfName,
@@ -772,20 +1009,6 @@ class wbsVhdlStr(object):
   
     
   
-
-
-       #   def renderAdr(self):
-         
-       # self.vAdrList = adj(a, [ ':', ':=', '--', '0x', ':'], 2)
-       # self.cAdrList = adj(b, [ '   0x', '//', '_0x', ','], 0)
-
-   
-
-
-
-
-
-    
    
     def sortRegs(self, regList):
         
@@ -804,33 +1027,33 @@ class wbsVhdlStr(object):
                                 
        types            = []
        for elem in regList:
-           (name, desc, rwmafs, width, opList, clkd, _) = elem
+           (name, desc, flags, width, opList, clkd, _) = elem
            
-           if(rwmafs.find('m') > -1):
+           if(flags.find('m') > -1):
                types += self.multitype(elem)
-               if(rwmafs.find('w') > -1):
+               if(flags.find('w') > -1):
                    outp += self.multielement(elem)
                    clkdOut.append(clkd)
                    namesOut.append(name)
-                   if(rwmafs.find('f') > -1):
+                   if(flags.find('f') > -1):
                        outp.append(self.signalSl % (name + '_WE', 'WE flag'))
                        clkdOut.append(clkd)
                        namesOut.append(name + '_WE')
-               elif(rwmafs.find('r') > -1):            
+               elif(flags.find('r') > -1):            
                    #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF                    
                    inp += self.multielement(elem)
                    clkdIn.append(clkd)
                    namesIn.append(name)
            else:
-               if(rwmafs.find('w') > -1):
+               if(flags.find('w') > -1):
                    outp.append(self.reg(elem))
                    clkdOut.append(clkd)
                    namesOut.append(name)
-                   if(rwmafs.find('f') > -1):
+                   if(flags.find('f') > -1):
                        outp.append(self.signalSl % (name + '_WE', 'WE flag'))
                        clkdOut.append(clkd)
                        namesOut.append(name + '_WE')
-               elif(rwmafs.find('r') > -1):
+               elif(flags.find('r') > -1):
                    #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF 
                    inp.append(self.reg(elem))
                    clkdIn.append(clkd)
@@ -924,8 +1147,8 @@ class gVhdlStr(object):
         self.archDecl    = "architecture rtl of %s is\n\n" % unitname
         self.archStart   = "\n\nbegin\n\n"
         self.archEnd     = "end rtl;\n"
-        self.genport     = "g_%s : %s := %s%s -- %s\n" #name, type, default
-        self.instGenPort    = "g_%s => g_%s%s\n" 
+        self.generic     = "g_%s : %s := %s%s -- %s\n" #name, type, default
+        self.instGenPort    = "%s => %s%s\n" 
         self.instStart      = "INST_%s_auto : %s_auto\n" % (unitname, unitname)
         self.instGenStart   = "generic map (\n"
         self.instGenEnd     = ")\n"
@@ -1208,7 +1431,7 @@ class wbsIf():
                 else:
                     print "Info: no incoming registers found for clk domain %s" % clkd      
                 (testHdr, testFunc) = self.renderSlv2Rec(tmp, "myRec")
-                print testHdr
+                
                 for line in testFunc:
                   print line
         
@@ -1271,18 +1494,16 @@ vendorIdD   = {'GSI'       : 0x0000000000000651,
 def mergeIfLists(slaveList=[], masterList = []):
     uglyPortList = []
     uglyTypeList = []
-    uglyInstList = []
+    instList = []
+    stubInstList = []
     syncList     = []    
+    docList      = []    
     
     clocks = slaveList[0].clocks    
     for clock in clocks:
-        uglyPortList += ["clk_%s_i   : in  std_logic;\n" % clock]
-        uglyInstList += ["clk_%s_i => clk_%s_i,\n" % (clock, clock)]    
-    
+        uglyPortList += ["clk_%s_i   : in  std_logic;\n" % clock]   
     uglyPortList    += ["rst_n_i   : in  std_logic;\n\n"]
-    uglyInstList    += ["rst_n_i => rst_n_i,\n\n"]                   
     stubPortList    = [] + uglyPortList
-    stubInstList    = [] + uglyInstList
     stubSigList     = []                   
     uglyRegList     = []
     uglyAdrList     = []
@@ -1295,9 +1516,9 @@ def mergeIfLists(slaveList=[], masterList = []):
     
     v = gVhdlStr("")
     for slave in slaveList:
+        
         uglyPortList += slave.getRegisterPortList()
         stubPortList += slave.getRegisterPortList()
-        stubInstList += slave.getRegisterPortList()
         #deal with vhdl not wanting a semicolon at the last port entry        
         if(slave != slaveList[-1]):
             uglyPortList[-1] += ";\n"
@@ -1306,7 +1527,6 @@ def mergeIfLists(slaveList=[], masterList = []):
         else:
             uglyPortList[-1] += "\n"
             stubPortList[-1] += "\n"
-            stubInstList[-1] += "\n"
         uglyPortList += ["\n"]    
         #cAdrList     += slave.c.sdbVendorID
         #cAdrList     += slave.c.sdbDeviceID
@@ -1315,18 +1535,19 @@ def mergeIfLists(slaveList=[], masterList = []):
         #cAdrList     += slave.cAdrList
         #cAdrList     += "\n"
         uglyTypeList += slave.getRegisterTypeList()
-        print "uuut"        
+         
         uglyAdrList  += iN(commentLine("--","WBS Adr", slave.name), 1) 
         uglyAdrList  += slave.getAddressListVHDL()
         
-        uglyAdrList  += "\n"
+        uglyAdrList  += ["\n"]
         uglyRegList  += iN(commentLine("--","WBS Regs", slave.name),1)
         uglyRegList  += adj(slave.getRegisterDefinitionList(), [' is ', ':', ':=', '--'], 1)
-        uglyRegList  += "\n"
+        uglyRegList  += ["\n"]
         
-
+        instList     += adj(slave.getInstanceList(), ['=>', '<='], 1) 
         fsmList      += iN(commentBox("--","WBS FSM", slave.name), 1)
-        fsmList      += slave.getFsmList()  
+        fsmList      += slave.getFsmList()
+        docList      += slave.getDocList("VHDL") 
         #fsmList      += "\n\n"
         #syncList     += iN(commentBox("--","Sync Signal Assignments", slave.name), 1)
         #syncList     += adj(slave.syncAssignList, ['<='], 1)
@@ -1344,14 +1565,13 @@ def mergeIfLists(slaveList=[], masterList = []):
    #     uglyAdrList  += master.AdrList       
    #     uglyRegList  += master.regList    
     
-        
     portList        = adj(uglyPortList, [':', ':=', '--'], 1)
+       
     typeList        = adj(uglyTypeList, [' is ', ':', ':=', '--'], 1)    
     stubPortList    = adj(stubPortList, [':', ':=', '--'], 1) 
-    stubInstList    = adj(stubInstList, ['=>', '--'], 1) 
     stubSigList     = adj(stubSigList,  [':', ':=', '--'], 1)      
-
-    
+    docList         = adj(docList,  [' : ', ' -> '], 0)   
+    #exit(1)
     regList     = iN(commentBox("--","", "WB Registers"), 1) + ['\n']\
                 + uglyRegList
                 
@@ -1375,7 +1595,7 @@ def mergeIfLists(slaveList=[], masterList = []):
         else:
             lineEnd = ';'
             instLineEnd = ','
-        genList.append(v.genport % (genName, genType, genVal, lineEnd, genDesc))
+        genList.append(v.generic % (genName, genType, genVal, lineEnd, genDesc))
         instGenList.append(v.instGenPort % (genName, genName, instLineEnd))
         idx += 1
     for genName in genMiscD.iterkeys():
@@ -1392,7 +1612,7 @@ def mergeIfLists(slaveList=[], masterList = []):
     genList = adj(genList, [':', ':=', '--'], 1)
     instGenList = adj(instGenList, ['=>', '--'], 1)              
     #Todo: missing generics 
-    return [portList, typeList, regList, sdbList, sdbRefList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList]        
+    return [portList, typeList, regList, sdbList, sdbRefList, vAdrList, fsmList, instList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList, docList]        
 
 def parseXML(xmlIn):
     xmldoc      = minidom.parse(xmlIn)   
@@ -1531,28 +1751,28 @@ def parseXML(xmlIn):
                 regadr = aux            
                 print "Slave <%s>: Register <%s> using supplied address <0x%x>, enumerating from there" % (name, regname, regadr)
                 
-            regrwmf    = str()
+            regflags    = str()
             if reg.hasAttribute('read'):
                 if reg.getAttribute('read') == 'yes':            
-                    regrwmf += 'r'    
+                    regflags += 'r'    
             if reg.hasAttribute('write'):        
                 if reg.getAttribute('write') == 'yes':
-                    regrwmf += 'w'
+                    regflags += 'w'
             if reg.hasAttribute('paged'):
                 if reg.getAttribute('paged') == 'yes':
-                    regrwmf += 'm'
+                    regflags += 'm'
             if reg.hasAttribute('access'):
                 if reg.getAttribute('access') == 'atomic':
-                    regrwmf += 'a'
+                    regflags += 'a'
             if reg.hasAttribute('weflag'):
                 if reg.getAttribute('weflag') == 'yes':            
-                    regrwmf += 'f'
+                    regflags += 'f'
             if reg.hasAttribute('autostall'):
                 if reg.getAttribute('autostall') == 'yes':            
-                    regrwmf += 's'
+                    regflags += 's'
             if reg.hasAttribute('pulse'):
                 if reg.getAttribute('pulse') == 'yes':            
-                    regrwmf += 'p'        
+                    regflags += 'p'        
             if reg.hasAttribute('selector'):            
                 if reg.getAttribute('selector') == 'yes':            
                     if(selector == ""):            
@@ -1604,7 +1824,7 @@ def parseXML(xmlIn):
                     else:
                         rstvec = tmpSlave.v.others % "0"
                      
-            tmpSlave.addReg(regname, regdesc, regmsk, regrwmf,  regadr, ifWidth/8, regclk, rstvec)
+            tmpSlave.addReg(regname, regdesc, regmsk, regflags,  regadr, ifWidth/8, regclk, rstvec)
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
         if(isinstance(pages, int)):
             if((selector != '') and (pages > 0)):    
@@ -1659,20 +1879,20 @@ def parseXMLNew(xmlIn):
             genType = generic.getAttribute('type')
             genVal  = generic.getAttribute('value')
             genDesc = generic.getAttribute('comment')
-            if genTypes.has_key(genType):
-                genType = genTypes[genType]               
-                if(genType == 'natural'):
-                    aux = str2int(genVal)
-                    if(aux == None):            
-                        print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
-                    else:        
-                        genVal = aux
-                        genIntD[genName] = [ genType , genVal, genDesc ]
-                else:
-                    genMiscD[genName] = [ genType , genVal, genDesc ]    
+            #if genTypes.has_key(genType):
+            #    genType = genTypes[genType]               
+            if(genType == 'natural'):
+                aux = str2int(genVal)
+                if(aux == None):            
+                    print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
+                else:        
+                    genVal = aux
+                    genIntD[genName] = [ genType , genVal, genDesc ]
             else:
-                print "%s is not a valid type" % generic.getAttribute('type')
-                sys.exit(2)
+                genMiscD[genName] = [ genType , genVal, genDesc ]    
+            #else:
+            #    print "%s is not a valid type" % generic.getAttribute('type')
+            #    sys.exit(2)
  
         
     slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
@@ -1756,28 +1976,28 @@ def parseXMLNew(xmlIn):
                 regadr = aux            
                 print "Slave <%s>: Register <%s> using supplied address <0x%x>, enumerating from there" % (name, regname, regadr)
                 
-            regrwmf    = str()
+            regflags    = str()
             if reg.hasAttribute('read'):
                 if reg.getAttribute('read') == 'yes':            
-                    regrwmf += 'r'    
+                    regflags += 'r'    
             if reg.hasAttribute('write'):        
                 if reg.getAttribute('write') == 'yes':
-                    regrwmf += 'w'
+                    regflags += 'w'
             if reg.hasAttribute('paged'):
                 if reg.getAttribute('paged') == 'yes':
-                    regrwmf += 'm'
+                    regflags += 'm'
             if reg.hasAttribute('access'):
                 if reg.getAttribute('access') == 'atomic':
-                    regrwmf += 'a'
+                    regflags += 'a'
             if reg.hasAttribute('weflag'):
                 if reg.getAttribute('weflag') == 'yes':            
-                    regrwmf += 'f'
+                    regflags += 'f'
             if reg.hasAttribute('autostall'):
                 if reg.getAttribute('autostall') == 'yes':            
-                    regrwmf += 's'
+                    regflags += 's'
             if reg.hasAttribute('pulse'):
                 if reg.getAttribute('pulse') == 'yes':            
-                    regrwmf += 'p'        
+                    regflags += 'p'        
             if reg.hasAttribute('selector'):            
                 if reg.getAttribute('selector') == 'yes':            
                     if(selector == ""):            
@@ -1785,14 +2005,14 @@ def parseXMLNew(xmlIn):
             regclk = clockList[0]                
             if reg.hasAttribute('clock'):
                 regclk = reg.getAttribute('clock')
-             
+                print "Slave <%s>: Register <%s> is in clockdomain %s and will be synced" % (name, regname, regclk)
+                
             if reg.hasAttribute('mask'):      
                 regmsk    = reg.getAttribute('mask')
                 genericMsk = False
                 #check integer generic list
-                for genName in genIntD.iterkeys():
-                    if(regmsk.find(genName) > -1):
-                        genericMsk = True          
+                
+                genericMsk = (regmsk in genIntD)
 
                 #check conversion function list
                 if(not genericMsk):
@@ -1815,30 +2035,47 @@ def parseXMLNew(xmlIn):
 
             rstvec = tmpSlave.v.others % "0"    
             if reg.hasAttribute('reset'):
-                print "Found Reset for %s" % regname
-                aux = reg.getAttribute('reset')                 
+                                
+                
+                aux = reg.getAttribute('reset')
+
                 if(aux == "zeroes"):
                     rstvec = tmpSlave.v.others % "0"    
                 elif(aux == "ones"):
                     rstvec = tmpSlave.v.others % "1"
+                elif(aux in genIntD):
+                    if (regmsk in genIntD):
+                        width = regmsk
+                    else:
+                        [hi, lo] = mskWidth(regmsk)
+                        width = hi-lo+1
+                        
+                    (_, val, _) = genIntD[aux]
+                    print "Slave <%s>: Register <%s>'s Reset using supplied generic value <%s>" % (name, regname, val)
+                    
+                    rstvec = tmpSlave.v.int2slv % (val, width)
+                #elif(aux in genMiscD):
                 else:    
                     aux = str2int(aux)
                     if(aux != None):
                         [hi, lo] = mskWidth(regmsk)
                         rstvec = tmpSlave.v.int2slv % (aux, hi-lo+1)
+                        print "Slave <%s>: Register <%s>'s Reset using supplied value <%s>" % (name, regname, aux)
+                    
                     else:
+                        print "Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val)
+                    
                         rstvec = tmpSlave.v.others % "0"
-            print "Adding Reg: %s Mode %s Mask: %s Adr: %s" % (regname, regrwmf, regmsk, regadr)         
-            tmpSlave.addReg(regname, regdesc, regmsk, regrwmf, regclk, rstvec, regadr, ifWidth/8)
+            tmpSlave.addReg(regname, regdesc, regmsk, regflags, regclk, rstvec, regadr)
       
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
         if(isinstance(pages, int)):
             if((selector != '') and (pages > 0)):    
-                print "Slave <%s>: Interface has %u memory pages. Selector register is %s" % (name, pages, selector)    
+                print "Slave <%s>: Interface has <%u> memory pages. Selector register is <%s>" % (name, pages, selector)    
                 tmpSlave.selector = selector    
                 tmpSlave.pages      = pages
         elif(selector != ''):
-                print "Slave <%s>: Interface has %s memory pages. Selector register is %s" % (name, pages, selector)                 
+                print "Slave <%s>: Interface has <%s> memory pages. Selector register is <%s>" % (name, pages, selector)                 
                 tmpSlave.selector = selector    
                 tmpSlave.pages      = pages    
         
@@ -1929,9 +2166,13 @@ def writeMainVhd(filename):
     for line in v.headerLPGL:
         fo.write(line)
     warning = [] + v.headerWarning
-    warning.append(v.headerModify % (unitname, unitname))    
+    warning.append(v.headerModify % (unitname, unitname))
     for line in warning:
         fo.write(line)
+    
+    for line in docList:
+        fo.write(line)   
+        
     libraries = v.libraries + [v.pkg % '']
     for line in libraries:
         fo.write(line)
@@ -1944,18 +2185,21 @@ def writeMainVhd(filename):
         fo.write(v.genEnd)
     
     fo.write(v.entityMid)
+    
     for line in portList:
         fo.write(line)
         
     fo.write(v.entityEnd)
     
     fo.write(v.archDecl)
+    
+
     for line in regList:
         fo.write(line)
     
     fo.write(v.archStart)
 
-    for line in syncList:
+    for line in instList:
         fo.write(line)    
     
     for line in fsmList:
@@ -2352,9 +2596,10 @@ if(needFile):
         vAdrList    = []
         cAdrList    = []
         fsmList     = []
-        syncList    = []
+        instList    = []
         genList     = []
         ifList      = []
+        docList     = []
         unitname    = "unknown unit"
         author      = "unknown author"
         email       = "unknown mail"
@@ -2386,7 +2631,7 @@ if(needFile):
         
         
         
-        (portList, typeList, regList, sdbList, sdbRefList, vAdrList, fsmList, syncList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList) = mergeIfLists(ifList)
+        (portList, typeList, regList, sdbList, sdbRefList, vAdrList, fsmList, instList, genList, cAdrList, stubPortList, stubInstList, stubSigList, instGenList, docList) = mergeIfLists(ifList)
         
         
         writeMainVhd(fileMainVhd)
