@@ -170,8 +170,10 @@ class wbsVhdlStr(object):
         self.signalSlvArray     = "%%s : t_slv_%s_%%s_array(%%s downto 0); -- %%s\n"  % slaveIfName #name, name, idxHi, desc
         self.wbsPageSelect      = "v_page := to_integer(unsigned(r_%s.%%s));\n\n"  % slaveIfName #pageSelect Register
         self.wbWrite            = "when c_%s_%%s => r_%s.%%s <= f_wb_wr(r_%s.%%s, v_dat_i, v_sel, \"%%s\"); -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, (set/clr/owr), desc
-        self.wbWriteWe          = "r_%s.%%s_WE <= '1'; --    %%s write enable\n" % (slaveIfName) 
+        self.wbWriteWe          = "r_%s.%%s_WE <= '1'; --    %%s write enable\n" % (slaveIfName)
+        self.wbWriteRe          = "r_%s.%%s_RE <= '1'; --    %%s read enable\n" % (slaveIfName) 
         self.wbWriteWeZero      = "r_%s.%%s_WE <= '0'; -- %%s pulse\n" % (slaveIfName)
+        self.wbWriteReZero      = "r_%s.%%s_RE <= '0'; -- %%s pulse\n" % (slaveIfName)
         self.wbStall            = "r_%s_out_stall  <= '1'; --    %%s auto stall\n" % (slaveIfName)
         self.wbWritePulseZero   = "r_%s.%%s <= (others => '0'); -- %%s pulse\n" % (slaveIfName) #registerName        
         self.wbReadExt          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= s_%s.%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
@@ -304,6 +306,8 @@ class wbsVhdlStr(object):
                        else:
                            #if the register cannot be written to by WB, read from input record
                            s.append(self.wbReadExt % (name + op, baseSlice, name+ind, desc))
+                   if(rwmafs.find('f') > -1):
+                        s.append(self.wbWriteRe % (name, name))                   
                    if((rwmafs.find('s') > -1)):             
                        s.append(self.wbStall % name)    
         return s
@@ -365,6 +369,7 @@ class wbsVhdlStr(object):
             if(rwmafs.find('w') > -1):
                 if((rwmafs.find('f') > -1)):
                     s.append(self.wbWriteWeZero % (name, name))
+                    s.append(self.wbWriteReZero % (name, name))
                 if((rwmafs.find('p') > -1)):             
                     s.append(self.wbWritePulseZero % (name, name))
                                 
@@ -398,6 +403,9 @@ class wbsVhdlStr(object):
                        recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))
                        clkdOut.append(clkd)
                        namesOut.append(name + '_WE')
+                       recordsOut.append(self.signalSl % (name + '_RE', 'RE flag'))
+                       clkdOut.append(clkd)
+                       namesOut.append(name + '_RE')
                elif(rwmafs.find('r') > -1):            
                    #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF                    
                    recordsIn += self.multielement(elem)
@@ -412,6 +420,9 @@ class wbsVhdlStr(object):
                        recordsOut.append(self.signalSl % (name + '_WE', 'WE flag'))
                        clkdOut.append(clkd)
                        namesOut.append(name + '_WE')
+                       recordsOut.append(self.signalSl % (name + '_RE', 'RE flag'))
+                       clkdOut.append(clkd)
+                       namesOut.append(name + '_RE')
                elif(rwmafs.find('r') > -1):
                    #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF 
                    recordsIn.append(self.reg(elem))
@@ -475,7 +486,8 @@ class wbsVhdlStr(object):
                else:
                    s.append(self.resetSignal % (name, rstvec))
                if(rwmafs.find('f') > -1):
-                   s.append(self.wbWriteWeZero % (name, ""))    
+                   s.append(self.wbWriteWeZero % (name, ""))
+                   s.append(self.wbWriteReZero % (name, "")) 
        s += self.resetOutput           
        return s
 
@@ -1263,8 +1275,8 @@ def parseXML(xmlIn):
             if reg.hasAttribute('access'):
                 if reg.getAttribute('access') == 'atomic':
                     regrwmf += 'a'
-            if reg.hasAttribute('weflag'):
-                if reg.getAttribute('weflag') == 'yes':            
+            if reg.hasAttribute('accessflag'):
+                if reg.getAttribute('accessflag') == 'yes':            
                     regrwmf += 'f'
             if reg.hasAttribute('autostall'):
                 if reg.getAttribute('autostall') == 'yes':            
@@ -1739,8 +1751,8 @@ detailedHelpText = ['%s' % ("*" * 80),
                     '               All follwing Registers will be enumerated from this address onward\n',
                     '   reset:      Defines the reset value for this register. Accepts "ones", "zeroes", binary, hex or decimal value.',
                     '               Currently only works for registers that can be written to from WB. Default is "zeroes".\n',                      
-                    '   weflag      Write enable flag, default is "no". If set to "yes", a additional flag register will be created,',
-                    '               going HI for 1 clock cycle every time the parent register is written to.',
+                    '   accessflag  Access flags, default is "no". If set to "yes", two additional flag registers will be created,',
+                    '               going HI for 1 clock cycle every time the parent register is accessed.',
                     '               The flag register does not discriminate which page, word, or subword is accessed.\n',
                     '   autostall:  If set to "yes", raises the stall line for 1 cycle after each access. Default is "no"',
                     '               The outer entity can, only raise a stall request 2 cycles AFTER the bus operation.',

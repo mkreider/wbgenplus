@@ -8,7 +8,7 @@
            <reg   name="STATUS"     read="yes"              mask="36"                                                                     comment="b35-b0: status bits"></reg>
            <reg   name="FLAGS"      read="yes"  write="yes" mask="0b11111"    access="atomic"                                             comment="Individually controllable flag bits"></reg>
            <reg   name="SEMA"       read="yes"  write="yes"                   reset="0xDEADBEEF"                                          comment="Semaphore word register"></reg>
-           <reg   name="CH_SEL"     read="yes"  write="yes" mask="2"          selector="yes" weflag="yes" address="0x20"                  comment="Channel select register"></reg>
+           <reg   name="CH_SEL"     read="yes"  write="yes" mask="2"          selector="yes" accessflag="yes" address="0x20"                  comment="Channel select register"></reg>
            <reg   name="CLEAR_FIFO"             write="yes" mask="1"          paged="yes"    autostall='yes' pulse='yes' address="0x100"  comment="Clears Fifo"></reg>
            <reg   name="POP_FIFO"               write="yes" mask="1"          paged="yes"    pulse='yes'                                  comment="Pop Fifo"></reg>
            <reg   name="FIFO_OUT"   read="yes"              mask="0xffffffff" paged="yes"                                                 comment="Timestamp fifo"></reg>

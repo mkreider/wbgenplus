@@ -8,7 +8,7 @@
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="Complex slave Data"></sdb>
       <registers>
            <reg   name="SEMA"       read="yes"  write="yes"                   reset="0xDEADBEEF"                                          comment="Semaphore word register"></reg>
-           <reg   name="CH_SEL"     read="yes"  write="yes" mask="2"          selector="yes" weflag="yes" address="0x20"                  comment="Channel select register"></reg>
+           <reg   name="CH_SEL"     read="yes"  write="yes" mask="2"          selector="yes" accessflag="yes" address="0x20"                  comment="Channel select register"></reg>
            <reg   clock="ref" name="CLEAR_FIFO"             write="yes" mask="1"          paged="yes"    autostall='yes' pulse='yes' address="0x100"  comment="Clears Fifo"></reg>
            <reg   clock="ref" name="POP_FIFO"               write="yes" mask="1"          paged="yes"    pulse='yes'                                  comment="Pop Fifo"></reg>
            <reg   clock="ref" name="FIFO_OUT"   read="yes"              mask="0xffffffff" paged="yes"                                                 comment="Timestamp fifo"></reg>
