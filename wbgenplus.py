@@ -428,6 +428,10 @@ class wbsVhdlStr(object):
                    recordsIn.append(self.reg(elem))
                    clkdIn.append(clkd)
                    namesIn.append(name)
+                   if(rwmafs.find('f') > -1):
+                       recordsOut.append(self.signalSl % (name + '_RE', 'RE flag'))
+                       clkdOut.append(clkd)
+                       namesOut.append(name + '_RE')
                    
        return [types, recordsOut, recordsIn, clkdOut, clkdIn, namesOut, namesIn]           
 
