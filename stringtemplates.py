@@ -29,19 +29,175 @@ class gCStr(object):
         self.hdrfileEnd     =  "#endif\n"        
        
 
-class wbsVhdlStr(object):
+
+class registerVhdlStr(object):
+    others             = "(others => '%s')"
+    
+   
+    def __init__(self, wbsStr, name, description, reset, width, genWidthPrefix, pages, genPagePrefix, clock, wbclock):
+        self.hex2slv    = "std_logic_vector(to_unsigned(%%s, %s))" % (width)
+        self.int2slv    = "std_logic_vector(to_unsigned(16#%%x#, %s))" % (width)    
+        self.resetvector = ""
+        self.mask = ""        
+        self.syncNameIn = ""
+        self.name = name
+        self.regname = "r_" + name
+        self.signame = "s_" + name
+        
+        self.matrix       = "signal %%s : t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n" % (genPagePrefix, pages, width, description)
+        self.slv          = "signal %%s : std_logic_vector(%s%s-1 downto 0); -- %s\n" % (genWidthPrefix, width, description)
+        self.sl           = "signal %%s : std_logic; -- %s\n" % (description)
+        
+        if pages > 0:
+            self.sigIn = self.slv % (self.signame)
+        else:
+            self.sigIn = self.InMat % (self.signame)
+
+        self.AssignPort_out = ["%s_o <= %s\n;" % (self.name, self.regname)]
+        self.AssignPort_in  = ["%s_i <= %s_i\n;" % (self.signame, self.name)]             
+        
+        if clock != wbclock:        
+            self.syncOut   = ["signal s_%s_fifo_out_push  : std_logic; -- Sync signals\n" % (self.signame),
+                              "signal s_%s_fifo_out_pop   : std_logic;\n"  % (self.signame),
+                              "signal s_%s_fifo_out_full  : std_logic;\n"  % (self.signame),
+                              "signal s_%s_fifo_out_empty : std_logic;\n"  % (self.signame)]
+            
+            self.syncIn     = ["signal s_%s_fifo_in_push  : std_logic; -- Sync signals\n" % (self.signame),
+                              "signal s_%s_fifo_in_pop   : std_logic;\n"  % (self.signame),
+                              "signal s_%s_fifo_in_full  : std_logic;\n"  % (self.signame),
+                              "signal s_%s_fifo_in_empty : std_logic;\n"  % (self.signame),
+                               ]    
+               
+            
+            
+
+            
+            self.syncInst1_out  = [
+                           "  %s_fifo_out_pop    <= not %s_fifo_out_empty;\n" % (self.signame, self.signame),
+                           "  %s_fifo_out_push   <= not %s_fifo_out_full;\n\n" % (self.signame, self.signame),                         
+                           "\n%s_FIFO_out : generic_async_fifo\n" % (self.name),
+                           "generic map(\n",
+                           "  g_data_width   => %s,\n" % (genWidthPrefix + str(width)), 
+                           "  g_size         => %s,\n" % (8),
+                           "  g_show_ahead   => true,\n",
+                           "  g_with_rd_empty   => true,\n",
+                           "  g_with_wr_full    => true)\n",
+                           "port map(\n",
+                           "  rst_n_i  => rst_n_i,\n",
+                           "  we_i     => %s_fifo_out_push,\n" % (self.signame),
+                           "  rd_i     => %s_fifo_out_pop,\n" % (self.signame),
+                           "  rd_empty_o  => s_%s_fifo_out_empty,\n" % (self.signame),
+                           "  wr_full_o   => s_%s_fifo_out_full,\n" % (self.signame),
+                          ]
+            
+                 
+            
+            self.syncInst1_in  = [
+                           "  %s_fifo_in_pop    <= not %s_fifo_in_empty;\n" % (self.signame, self.signame),
+                           "  %s_fifo_in_push   <= not %s_fifo_in_full;\n\n" % (self.signame, self.signame),                         
+                           "\n%s_FIFO_out : generic_async_fifo\n" % (self.name),
+                           "generic map(\n",
+                           "  g_data_width   => %s,\n" % (genWidthPrefix + str(width)), 
+                           "  g_size         => %s,\n" % (8),
+                           "  g_show_ahead   => true,\n",
+                           "  g_with_rd_empty   => true,\n",
+                           "  g_with_wr_full    => true)\n",
+                           "port map(\n",
+                           "  rst_n_i  => rst_n_i,\n",
+                           "  we_i     => %s_fifo_in_push,\n" % (self.signame),
+                           "  rd_i     => %s_fifo_in_pop,\n" % (self.signame),
+                           "  rd_empty_o  => s_%s_fifo_in_empty,\n" % (self.signame),
+                           "  wr_full_o   => s_%s_fifo_in_full,\n" % (self.signame),
+                          ]
+                                        
+                          
+            self.syncInst3_in  = ["  clk_wr_i => clk_%s_i,\n" % clock,                        
+                                  "  clk_rd_i => clk_%s_i);\n" % wbclock]
+            self.syncInst3_out = ["  clk_wr_i => clk_%s_i,\n" % wbclock,                        
+                                  "  clk_rd_i => clk_%s_i);\n" % clock]
+                                  
+            self.syncInst2_out_mat  = ["  d_i      => mflat(%s),\n" % (self.regname),
+                                       "  q_o      => minfl(%s_o),\n" % (self.name)]
+            
+            self.syncInst2_in_mat   = ["  d_i      => mflat(%s_i),\n" % (self.name),
+                                       "  q_o      => minfl(%s_i),\n" % (self.signame)]                           
+            
+            self.syncInst2_out      = ["  d_i      => %s,\n" % (self.regname),
+                                       "  q_o      => %s_o,\n" % (self.name)]
+            
+            self.syncInst2_in       = ["  d_i      => %s_i,\n" % (self.name),
+                                       "  q_o      => %s_i,\n" % (self.signame)]          
+        
+        self.clkdomainComment   = "-- %s domain\n" % clock        
+        
+        #Enable Flags
+        self.wbRd               = "%s_RD_o <= '1'; -- %s Read enable\n" % (self.name, self.name)
+        self.wbRdZero           = "%s_RD_o <= '0'; -- %s pulse\n" % (self.name, self.name)            
+        self.wbWe               = "%s_WE_o <= '1'; -- %s write enable\n" % (self.name, self.name)
+        self.wbWeZero           = "%s_WE_o <= '0'; -- %s pulse\n" % (self.name, self.name)
+        
+        #Resets & Fire and Forget
+        self.wbPulseZero        = "%s <= %s;\n" % (self.regname,  (self.others % '0'))
+        self.wbPulseZeroMatrix  = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.int2slv % 0))
+        self.reset              = "%s <= %s;\n" % (self.regname, self.resetvector)
+        self.resetMatrix        = "%s <= mrst(r_%s, %s);\n" % (self.regname, self.regname, self.resetvector)        
+        
+        # derived from wbslave strings
+        self.wbRead             = wbsStr.wbRead % (self.regname, self.regname, description) # Slice
+        self.wbWrite            = wbsStr.wbWrite % (self.regname, self.regname, description) # Slice, Slice
+        self.wbStall            = wbsStr.wbStall
+        self.constRegAdr        = wbsStr.constRegAdr % (self.name, description) #address, operation, address, mask
+        
+        self.portWEOut          = "%s_o : out std_logic; -- %s write enable\n" % (self.name, description)
+        self.portRDOut          = "%s_o : out std_logic; -- %s write enable\n" % (self.name, description) 
+        self.portIn             = "%s_i : in  std_logic_vector(%s%s-1 downto 0); -- %s\n" % (self.name, width, description)
+        self.portOut            = "%s_o : out std_logic_vector(%s%s-1 downto 0); -- %s\n" % (self.name, width, description)  
+        self.portMatrixIn       = "%s_i : in  t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n" % (self.name, genPagePrefix, pages, genWidthPrefix, width, description)  
+        self.portMatrixOut      = "%s_o : out t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n" % (self.name, genPagePrefix, pages, genWidthPrefix, width, description)  
+        #################################################################################        
+        
+                         
+     
+        #self.syncProcReg        = "         r_%s_regs_clk_%%s_%%s_%%s <= r_%s_regs_clk_%%s_%%s_%%s;\n"  % (slaveIfName, slaveIfName)   
+        #self.syncAssignOutD     =  "%s_regs_clk_%%s_o.%%s <= r_%s.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
+        #self.syncAssignOutI0    =  "%s_regs_clk_%%s_o.%%s <= r_%s_regs_clk_%%s_o_2.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
+        #self.syncAssignOutI1    =  "r_%s_regs_clk_%%s_o_0.%%s <= r_%s.%%s;\n" % (slaveIfName, slaveIfName) #slave, clkd, slave
+        
+        #self.syncAssignInD      =  "s_%s.%%s <= %s_regs_clk_%%s_i.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
+        #self.syncAssignInI0     =  "r_%s_regs_clk_%%s_i_0.%%s <= %s_regs_clk_%%s_i.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
+        #self.syncAssignInI1     =  "s_%s.%%s <= r_%s_regs_clk_%%s_i_2.%%s;\n" % (slaveIfName, slaveIfName) #slave, clkd, slave
+              
+        
+                
+
+class wbsVhdlStrRegister(object):
    
 
-    def __init__(self, pages, unitname, slaveIfName, dataWidth, vendId, devId, sdbname, clocks):
+    def __init__(self, slaveIfName):
+        self.slaveIfName    = slaveIfName        
+        self.wbRead             = "when c_%s_%%s%%%s => r_%s_out_dat0(%%%s) <= %%s%%%s; -- %%s\n" % (slaveIfName, slaveIfName) #registerName, op, slice, registerName, slice, description
+        self.wbReadMatrix       = "when c_%s_%%s => r_%s_out_dat0(%%s) <= rget(%%s, v_page)%%s; -- %%s\n" % (slaveIfName, slaveIfName) #regname, op, registerName, desc
+        self.wbWrite            = "when c_%s_%%s%%%s => %%s%%%s <= f_wb_wr(%%s%%%s, v_dat_i, v_sel, \"%%%s\"); -- %%s\n" % (slaveIfName) #registerName, op, slice, registerName, slice, opmode, description
+        self.wbWriteMatrix      = "when c_%s_%%s => %%s <= rset(%%s, v_page, f_wb_wr(rget(%%s, v_page)%%s, v_dat_i, v_sel, \"%%s\")); -- %%s\n" % (slaveIfName) #registerName, registerName, (set/clr/owr), desc
+        self.constRegAdr        = "constant c_%%s_%%%s : natural := 16#%%%s#; -- %%%s 0x%%%s, %%s\n" % slaveIfName #name, adrVal, adrVal, rw, msk, desc
+        self.wbStall            = "r_%s_out_stall  <= '1'; --    %%s auto stall\n" % (slaveIfName) 
+        
+     
+class wbsVhdlStrGeneral(object):
+   
+
+    def __init__(self, unitname, slaveIfName, dataWidth, vendId, devId, sdbname, clocks, version, now):
         self.unitname       = unitname
         self.slaveIfName    = slaveIfName        
-        self.pages          = pages
         self.dataWidth      = dataWidth
         self.clocks         = clocks
         #################################################################################        
-        #Strings galore        
+        #Strings galore
+        
+
+        
         self.slaveIf    = ["%s_i : in  t_wishbone_slave_in;\n" % slaveIfName,
-                           "%s_o : out t_wishbone_slave_out;\n\n" % slaveIfName] #name
+                           "%s_o : out t_wishbone_slave_out;\n\n" % slaveIfName]
                            
                            
         self.slaveSigsRegs = "signal s_%s_regs_clk_%%s_%%s : t_%s_regs_clk_%%s_%%s;\n" % (slaveIfName, slaveIfName)
@@ -51,7 +207,7 @@ class wbsVhdlStr(object):
                           "signal s_%s_o : t_wishbone_slave_out;\n" % slaveIfName]
         
         self.slaveInst = ["%s_i => s_%s_i,\n" % (slaveIfName, slaveIfName),
-                          "%s_o => s_%s_o" % (slaveIfName, slaveIfName)] #name        
+                          "%s_o => s_%s_o" % (slaveIfName, slaveIfName)]         
         
         self.wbs0       = ["%s : process(clk_%s_i)\n" % (slaveIfName, clocks[0]),
                            "   variable v_dat_i  : t_wishbone_data;\n",
@@ -98,8 +254,10 @@ class wbsVhdlStr(object):
                            "      end if; -- rst\n",
                            "   end if; -- clk edge\n",
                            "end process;\n\n"]
+        
                            
-     
+        self.wbsPageSelect      = "v_page := to_integer(unsigned(r_%s));\n\n"  % selector #pageSelect Register
+                          
                            
         self.wbs5       = ["%s_o.stall <= r_%s_out_stall or %s_WB_STALL_%s_i;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0]),  
                            "%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName),                           
@@ -107,34 +265,6 @@ class wbsVhdlStr(object):
                            "%s_o.err <= r_%s_out_err1 or      %s_WB_ERR_%s_i;\n" % (slaveIfName, slaveIfName, slaveIfName, clocks[0])]                
                            
      
-        self.syncProcReg        = "         r_%s_regs_clk_%%s_%%s_%%s <= r_%s_regs_clk_%%s_%%s_%%s;\n"  % (slaveIfName, slaveIfName)   
-        self.syncAssignOutD     =  "%s_regs_clk_%%s_o.%%s <= r_%s.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
-        self.syncAssignOutI0    =  "%s_regs_clk_%%s_o.%%s <= r_%s_regs_clk_%%s_o_2.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
-        self.syncAssignOutI1    =  "r_%s_regs_clk_%%s_o_0.%%s <= r_%s.%%s;\n" % (slaveIfName, slaveIfName) #slave, clkd, slave
-        
-        self.syncAssignInD      =  "s_%s.%%s <= %s_regs_clk_%%s_i.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
-        self.syncAssignInI0     =  "r_%s_regs_clk_%%s_i_0.%%s <= %s_regs_clk_%%s_i.%%s;\n" % (slaveIfName, slaveIfName) #slaveIf clkdOut[i] outp[i] slaveIf clkdOut[i] outp[i]
-        self.syncAssignInI1     =  "s_%s.%%s <= r_%s_regs_clk_%%s_i_2.%%s;\n" % (slaveIfName, slaveIfName) #slave, clkd, slave
-        
-      
-        
-        self.syncReg            = "signal r_%s_regs_clk_%%s_%%s_%%s : t_%s_regs_clk_%%s_%%s;\n" % (slaveIfName, slaveIfName)
-        self.clkdomainComment   = "-- %s %%s domain %%s\n" % slaveIfName        
-              
-        self.slvSubType         = "subtype t_slv_%s_%%s is std_logic_vector(%%s-1 downto 0);\n" % slaveIfName #name, idxHi
-        self.slvArrayType       = "type    t_slv_%s_%%s_array is array(natural range <>) of t_slv_%s_%%s;\n" % (slaveIfName, slaveIfName)  #name, #name
-        self.signalSlvArray     = "%%s : t_slv_%s_%%s_array(%%s downto 0); -- %%s\n"  % slaveIfName #name, name, idxHi, desc
-        self.wbsPageSelect      = "v_page := to_integer(unsigned(r_%s_%%s));\n\n"  % slaveIfName #pageSelect Register
-        self.wbWrite            = "when c_%s_%%s => r_%s_%%s <= f_wb_wr(r_%s_%%s, v_dat_i, v_sel, \"%%s\"); -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, (set/clr/owr), desc
-        self.wbWriteWe          = "r_%s_%%s_WE <= '1'; --    %%s write enable\n" % (slaveIfName) 
-        self.wbWriteWeZero      = "r_%s_%%s_WE <= '0'; -- %%s pulse\n" % (slaveIfName)
-        self.wbStall            = "r_%s_out_stall  <= '1'; --    %%s auto stall\n" % (slaveIfName)
-        self.wbWritePulseZero   = "r_%s_%%s <= (others => '0'); -- %%s pulse\n" % (slaveIfName) #registerName        
-        self.wbWritePulseZeroArray = "r_%s_%%s <= (others => (others => '0')); -- %%s pulse\n" % (slaveIfName) #registerName        
-                
-        self.wbRead          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= s_%s_%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
-        self.wbRead          = "when c_%s_%%s => r_%s_out_dat0(%%s) <= r_%s_%%s; -- %%s\n" % (slaveIfName, slaveIfName, slaveIfName) #registerName, registerName, desc
-                
         self.wbOthers           = ["when others => r_%s_out_ack0 <= '0'; r_%s_out_err0 <= '1';\n" % (slaveIfName, slaveIfName)]
         self.wbs_ackerr         = ["signal r_%s_out_stall : std_logic;\n" % slaveIfName,
                                    "signal r_%s_out_ack0,\n" % slaveIfName,
@@ -155,16 +285,8 @@ class wbsVhdlStr(object):
                                    "r_%s_out_ack1    <= '0';\n" % slaveIfName,
                                    "r_%s_out_err1    <= '0';\n" % slaveIfName,
                                    "r_%s_out_dat1    <= (others => '0');\n" % slaveIfName]
-        self.resetSignal        = "r_%s.%%s <= %%s;\n" % slaveIfName #registerName, resetvector
-        self.others             = "(others => '%s')"
-        self.int2slv            = "std_logic_vector(to_unsigned(16#%x#, %s))"
-        self.resetSignalArray   = "r_%s.%%s <= (others =>%%s);\n" % slaveIfName #registerName, resetvector
-        self.recordPortOut      = "%s_regs_%%s_o : out t_%s_regs_%%s_o;\n" % (slaveIfName, slaveIfName)
-        self.recordPortIn       = "%s_regs_%%s_i : in  t_%s_regs_%%s_i;\n" % (slaveIfName, slaveIfName)
-        self.recAdr             = "%s : natural;\n"
-        self.constRegAdr        = "constant c_%s_%%s : natural := 16#%%s#; -- %%s 0x%%s, %%s\n" % slaveIfName #name, adrVal, adrVal, rw, msk, desc
-        self.signalSlv          = "%s : std_logic_vector(%s-1 downto 0); -- %s\n" #name, idxHi, idxLo, desc
-        self.signalSl           = "%s : std_logic; -- %s\n" #name, desc
+                                   
+                                   
         self.sdb                = ['constant c_%s_%s_sdb : t_sdb_device := (\n' % (unitname, slaveIfName),
                                    'abi_class     => x"%s", -- %s\n' % ("0000", "undocumented device"),
                                    'abi_ver_major => x"%s",\n' % "01",
@@ -182,21 +304,12 @@ class wbsVhdlStr(object):
                                    'name          => "%s")));\n' % sdbname.ljust(19)]
         self.sdbReference       = "constant c_%s_%s_sdb : t_sdb_device := work.%s_pkg.c_%s_%s_sdb;\n" % (unitname, slaveIfName, (unitname + '_auto'), unitname, slaveIfName)                            
     
-    wbWidth = {8   : '1',
-               16  : '3',
-               32  : '7', 
-               64  : 'f'} 
-     
-                           
-    wrModes = {'_GET'  : 'owr',
-               '_SET'  : 'set',
-               '_CLR'  : 'clr', 
-               '_OWR'  : 'owr',
-               '_RW '  : 'owr'} 
+        self.wbWidth = {8   : '1',
+                        16  : '3',
+                        32  : '7', 
+                        64  : 'f'}                            
 
-    nl          = "\n"
-    snl         = ";\n"
-    lnl         = "\n)\n" 
+
   
     codeGen = set(['vhdl', 'C', 'C++'])    
 
@@ -208,81 +321,6 @@ class wbsVhdlStr(object):
             'sl'       : 'std_logic',
             'slv'      : 'std_logic_vector'}    
 
-
-
-
-  
-   
-    def sortRegs(self, regList):
-        
-       
-       namesOut         = []
-       namesIn          = []
-       outp       = []
-       clkdOut          = []        
-       inp        = [] + [self.signalSl % ('STALL', 'Stall control for outside entity'),
-                                self.signalSl % ('ERR', 'Error control for outside entity')]
-       namesIn          = [] + ['STALL',
-                                'ERR']                             
-       
-       clkdIn           = [] + [self.clocks[0], #clkdomain for STALL
-                                self.clocks[0]] #clkdomain for ERR
-                                
-       types            = []
-       for elem in regList:
-           (name, desc, flags, width, opList, clkd, _) = elem
-           
-           if(flags.find('m') > -1):
-               types += self.multitype(elem)
-               if(flags.find('w') > -1):
-                   outp += self.multielement(elem)
-                   clkdOut.append(clkd)
-                   namesOut.append(name)
-                   if(flags.find('f') > -1):
-                       outp.append(self.signalSl % (name + '_WE', 'WE flag'))
-                       clkdOut.append(clkd)
-                       namesOut.append(name + '_WE')
-               elif(flags.find('r') > -1):            
-                   #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF                    
-                   inp += self.multielement(elem)
-                   clkdIn.append(clkd)
-                   namesIn.append(name)
-           else:
-               if(flags.find('w') > -1):
-                   outp.append(self.reg(elem))
-                   clkdOut.append(clkd)
-                   namesOut.append(name)
-                   if(flags.find('f') > -1):
-                       outp.append(self.signalSl % (name + '_WE', 'WE flag'))
-                       clkdOut.append(clkd)
-                       namesOut.append(name + '_WE')
-               elif(flags.find('r') > -1):
-                   #We can't have two drivers. Only include register in the inputs list if it's not written to be WB IF 
-                   inp.append(self.reg(elem))
-                   clkdIn.append(clkd)
-                   namesIn.append(name)
-                   
-       return [types, outp, inp, clkdOut, clkdIn, namesOut, namesIn]           
-
-    
-                   
-    
-
-    
-        
-        
-        
-
-        
-        
-        
-        
-        
-        
-        
-
-
-
 class gVhdlStr(object):
    
 
@@ -291,13 +329,15 @@ class gVhdlStr(object):
         self.filename   = filename        
         self.author     = author
         self.version    = version
+        self.date       = date
+        self.dateStr    = "%02u/%02u/%04u" % (date.day, date.month, date.year)
         
         self.header     = ["--! @file        %s\n" % filename,                 
                            "--  DesignUnit   %s\n" % unitname,                           
                            "--! @author      %s <%s>\n" % (author, email),
-                           "--! @date        %s\n" % date,
+                           "--! @date        %s\n" % self.dateStr,
                            "--! @version     %s\n" % version,                     
-                           "--! @copyright   %s GSI Helmholtz Centre for Heavy Ion Research GmbH\n" % now.year,
+                           "--! @copyright   %04u GSI Helmholtz Centre for Heavy Ion Research GmbH\n" % (date.year),
                            "--!\n"]
 
         self.headerLPGL =    ["--------------------------------------------------------------------------------\n" 
@@ -358,19 +398,6 @@ class gVhdlStr(object):
         self.instPortStart  = "port map (\n"
         self.instPortEnd    = ");\n"
   
-
-
-          
-    nl          = "\n"
-    snl         = ";\n"
-    lnl         = "\n)\n"    
-
-    masterIf    = ["%s_o : out t_wishbone_master_out;\n", # name
-                   "%s_i : in  t_wishbone_master_in := ('0', '0', '0', '0', '0', x\"00000000\")"] # name
-                   
-                   
-                   
-                   
                    
                    
 class sysIfStr(object):                   

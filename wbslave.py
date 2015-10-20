@@ -8,9 +8,11 @@ from register import *
 
 
 class wbslave(object):
-    def __init__(self, unitname, slaveIfName, startaddress, selector, pages, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, genIntD, genMiscD):    
+    def __init__(self, unitname, version, date, slaveIfName, startaddress, selector, pages, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, genIntD, genMiscD):    
                 
         self.unitname       = unitname
+        self.version        = version        
+        self.date           = date
         self.name           = slaveIfName
         self.dataWidth      = ifwidth
         self.addressWidth   = 32
@@ -23,15 +25,19 @@ class wbslave(object):
         self.sdbDeviceID    = sdbDeviceID
         self.sdbname        = sdbname        
         self.offs           = int(math.ceil(ifwidth/8))
-        self.v = wbsVhdlStr(pages, unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks)        
-        self.c = wbsCStr(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
         self.addIntReg("wb_stall", "flow control", "1", "r")
         self.addIntReg("wb_err", "signal unsuccessful wb op", "1", "r")      
+
+        #Fill in string templates
+        self.v      = wbsVhdlStr(unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, version, date)
+        self.vreg   = wbsVhdlStrRegister(slaveIfName)
+        self.c      = wbsCStr(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
         
+                
         
-        
+                  
     def addReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None, startAdr=None):
-        self.registers.append(register(self.name, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr), self.offs))    
+        self.registers.append(register(self.vreg, self.name, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr), self.offs))    
         
     def addIntReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None):
         self.registers.append(internalregister(self.name, self.pages, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec))    

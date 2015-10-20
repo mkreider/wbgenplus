@@ -294,7 +294,6 @@ def main():
 
     s = sysStr(sys.argv[0], myCreator, myVersion, myStart, myUpdate)             
              
-                             
     def usage():
         for line in s.helpText:        
             print line
@@ -307,14 +306,10 @@ def main():
         for line in s.versionText:        
             print line 
                     
-            
     xmlIn = ""  
     log = False
     quiet = False
     
-    
-    
-            
     if(len(sys.argv) > 1):
         xmlIn = sys.argv[1]
     else:
@@ -370,7 +365,7 @@ def main():
                 mypath += './'
                 
             now = datetime.datetime.now()
-            date    = "%02u/%02u/%04u" % (now.day, now.month, now.year)
+            
             
             unitname = os.path.splitext(myfile)[0]        
             #path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
@@ -382,7 +377,7 @@ def main():
                         
             [unitname, author, version, email, slaves] = parseXMLNew(xmlIn)
             
-            wo = writeout(unitname, myfile, mypath, author, email, version, date, slaves)
+            wo = writeout(unitname, myfile, mypath, author, email, version, now, slaves)
             
             wo.writeMainVhd()
             wo.writePkgVhd()
