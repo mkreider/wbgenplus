@@ -13,23 +13,26 @@ import os.path
 import sys
 import getopt
 from stringtemplates import sysIfStr as sysStr
+from stringtemplates import wbsVhdlStrGeneral
+from writeout import writeout
+from wbslave import wbslave as wbs
 
 myVersion = "1.1"
 myStart   = "15 Dec 2014"
 myUpdate  = "10 Jan 2015"
 myCreator = "M. Kreider <m.kreider@gsi.de>"
 
-def parseXMLNew(xmlIn):
+def parseXMLNew(xmlIn, now):
     xmldoc      = minidom.parse(xmlIn)   
 
     #defaults
     dictVendId  = {'GSI'       : 0x0000000000000651,
                    'CERN'      : 0x000000000000ce42}    
     
-    unitname    = "unknown unit"
-    author      = "unknown author"
-    email       = "unknown mail"
-    version     = "unknown version"
+    unitname    = "unknown_unit"
+    author      = "unknown_author"
+    email       = "unknown_mail"
+    version     = "unknown_version"
         
     ifList      = []
     clockList   = []
@@ -137,8 +140,8 @@ def parseXMLNew(xmlIn):
         if(len(sdbname) > 19):
             print "Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname))
             sys.exit(2)
-   
-        tmpSlave    = wbslave(unitname, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList) 
+        
+        tmpSlave    = wbs(unitname, version, now, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList, genIntD, genMiscD) 
         
         selector = ""
         #name, adr, pages, selector
@@ -223,17 +226,13 @@ def parseXMLNew(xmlIn):
                 print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
                 regmsk = 2**ifWidth-1
 
-            rstvec = tmpSlave.v.others % "0"    
+            rstvec = 0    
             if reg.hasAttribute('reset'):
                 if reg.hasAttribute('write'):                
                     
                     aux = reg.getAttribute('reset')
     
-                    if(aux == "zeroes"):
-                        rstvec = tmpSlave.v.others % "0"    
-                    elif(aux == "ones"):
-                        rstvec = tmpSlave.v.others % "1"
-                    elif(aux in genIntD):
+                    if(aux in genIntD):
                         if (regmsk in genIntD):
                             width = "g_" + regmsk
                         else:
@@ -243,13 +242,12 @@ def parseXMLNew(xmlIn):
                         (_, val, _) = genIntD[aux]
                         print "Slave <%s>: Register <%s>'s Reset using supplied generic value <%s>" % (name, regname, val)
                         
-                        rstvec = tmpSlave.v.int2slv % (val, width)
+                        rstvec = wbsVhdlStrGeneral.int2slv % (val, width)
                     #elif(aux in genMiscD):
                     else:    
                         aux = str2int(aux)
                         if(aux != None):
-                            [hi, lo] = mskWidth(regmsk)
-                            rstvec = tmpSlave.v.int2slv % (aux, hi-lo+1)
+                            rstvec = wbsVhdlStrGeneral.int2slv % (aux, mskWidth(regmsk))
                             print "Slave <%s>: Register <%s>'s Reset using supplied value <%s>" % (name, regname, aux)
                         
                         else:
@@ -375,12 +373,12 @@ def main():
             print "Unit:             %s" % unitname
             print "\n%s" % ('*' * 80)
                         
-            [unitname, author, version, email, slaves] = parseXMLNew(xmlIn)
+            [unitname, author, version, email, slaves] = parseXMLNew(xmlIn, now)
+            wo = writeout(unitname, myfile, mypath, author, email, version, now)
             
-            wo = writeout(unitname, myfile, mypath, author, email, version, now, slaves)
-            
-            wo.writeMainVhd()
-            wo.writePkgVhd()
+            for slave in slaves:
+                wo.writeMainVhd(slave)
+            #wo.writePkgVhd()
             #writeHdrC(fileHdrC)
             #writeStubVhd(fileStubVhd)
             #writeStubPkgVhd(fileStubPkgVhd)

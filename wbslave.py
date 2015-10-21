@@ -4,7 +4,18 @@ Created on Mon Oct 19 16:51:23 2015
 
 @author: mkreider
 """
-from register import * 
+import math
+from register import register
+from register import internalregister
+from stringtemplates import wbsVhdlStrGeneral
+from stringtemplates import wbsVhdlStrRegister
+from stringtemplates import wbsCStr
+ 
+
+from textformatting import beautify as adj
+from textformatting import setColsIndent as iN
+from textformatting import commentLine as cline
+from textformatting import commentBox as cbox
 
 
 class wbslave(object):
@@ -25,22 +36,24 @@ class wbslave(object):
         self.sdbDeviceID    = sdbDeviceID
         self.sdbname        = sdbname        
         self.offs           = int(math.ceil(ifwidth/8))
-        self.addIntReg("wb_stall", "flow control", "1", "r")
-        self.addIntReg("wb_err", "signal unsuccessful wb op", "1", "r")      
-
         #Fill in string templates
-        self.v      = wbsVhdlStr(unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, version, date)
+        self.genIntD = genIntD
+        self.genMiscD = genMiscD
+        self.v      = wbsVhdlStrGeneral(unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, version, date, selector)
         self.vreg   = wbsVhdlStrRegister(slaveIfName)
         self.c      = wbsCStr(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
-        
+        self.addIntReg("wb_stall", "flow control", "1", "r")
+        self.addIntReg("wb_err", "signal unsuccessful wb op", "1", "r")            
                 
         
                   
     def addReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None, startAdr=None):
-        self.registers.append(register(self.vreg, self.name, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr), self.offs))    
+                                        #wbStr, pages, datawidth, addresswidth, name, desc, bigMsk, flags, clkbase="sys", clkdomain="sys", rstvec=None, startAdr=None, offs=4, genIntD=dict(), genMiscD=dict()):
+        self.registers.append(register(self.vreg, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags,
+                                       self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr), self.offs, self.genIntD, self.genMiscD))    
         
     def addIntReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None):
-        self.registers.append(internalregister(self.name, self.pages, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec))    
+        self.registers.append(internalregister(self.vreg, self.pages, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.genIntD, self.genMiscD))    
     
     def getAddress(self, startAdr=None):
         regList = self.registers
@@ -80,26 +93,25 @@ class wbslave(object):
     def getAddressListC(self):
         s = []        
         for reg in self.registers:
-            s += reg.getAdrStrings("C")
-        return s
+            s += reg.getStrAddress("C")
+        return s    
         
     def getAddressListVHDL(self):
         s = []        
         for reg in self.registers:
-            tmp = reg.getAdrStrings("VHDL")
-            if is_seq(tmp):
-                for line in tmp:
-                    s.append(line)
-            else:
-                s.append(tmp)
+            s += reg.getStrAddress("VHDL")
         return s       
-    
-    def getInterfacePortList(self):
-        return None    
-        
-    def getRegisterPortList(self):
+
+    def getAssignmentList(self):
         s = []
-        s += self.v.slaveIf
+        s += self.v.wbs5
+        for reg in self.registers:
+            s += reg.getStrPortAssignment()
+        return s
+        
+    def getPortList(self):
+        s = []
+        
         t = []
         
         sortedregs = sorted(self.registers, key=lambda x: (x.clkdomain, x.isWrite(), x.name), reverse=False)
@@ -109,87 +121,52 @@ class wbslave(object):
             if( (regold.clkdomain != reg.clkdomain) or ( regold.isWrite() != reg.isWrite() )):
                 t.append("\n")
             regold = reg
-            tmp = reg.getPortStrings()
-            if is_seq(tmp):
-                for line in tmp:
-                    t.append(line)
-            else:
-                t.append(tmp)  
-        
+            s += reg.getStrPortDeclaration()
+        s += self.v.slaveIf    
         s += t
-        return s
+        return adj(s, [':', ':=', '--'], 1)
 
-    def getRegisterDefinitionList(self):
+    def getDeclarationList(self):
         s = []        
         for reg in self.registers:
-            tmp = reg.getRegisterStrings()
-            
-            if is_seq(tmp):
-                for line in tmp:
-                    s.append(line)
-            else:
-                s.append(tmp)
+            s += reg.getStrSignalDeclaration()
+        return s 
         
-        return s
-
-#    def getRegisterTypeList(self):
-#        s = []        
-#        for reg in self.registers:
-#            tmp = reg.getTypeStrings()
-#            
-#            if is_seq(tmp):
-#                for line in tmp:
-#                    s.append(line)
-#            else:
-#                s.append(tmp)    
-#        return s
+        
+    def getReadUpdateList(self):
+        s = []        
+        for reg in self.registers:
+            s += reg.getStrReadUpdate()
+        return s 
+        
 
     def getResetList(self):
         s = []        
         for reg in self.registers:
-            tmp = reg.getResetStrings()
-            
-            if is_seq(tmp):
-                for line in tmp:
-                    s.append(line)
-            else:
-                s.append(tmp)
-        return s
+            s += reg.getStrReset()
+        return s        
+        
         
     def getPulsedList(self):
         s = []        
         for reg in self.registers:
-            tmp = reg.getPulsedStrings()
-            
-            if is_seq(tmp):
-                for line in tmp:
-                    s.append(line)
-            else:
-                s.append(tmp)
-        return s    
+            s += reg.getStrPulsed()
+        return s         
+          
 
-    def getFsmReadList(self, showComment=False):
+    def getFsmReadList(self):
         s = []        
         for reg in self.registers:
-            tmp = reg.getFsmReadStrings(showComment)
+            s += reg.getStrFsmRead()
+        return s         
+        
             
-            if is_seq(tmp):
-                for line in tmp:
-                    s.append(line)
-            else:
-                s.append(tmp)
-        return s
-            
-    def getFsmWriteList(self, showComment=False):
+    def getFsmWriteList(self):
         s = []        
         for reg in self.registers:
-            tmp = reg.getFsmWriteStrings(showComment)
-            if is_seq(tmp):
-                for line in tmp:
-                    s.append(line)
-            else:
-                s.append(tmp)
-        return s
+            s += reg.getStrFsmWrite()
+        return s 
+        
     
     def getFsmList(self, showComment=False):
         s = []
@@ -213,37 +190,28 @@ class wbslave(object):
         hdr0    =  iN(self.v.wbs0, 1) 
         rst     = adj(self.getResetList(), ['<='], 4)         
         hdr1    =  iN(self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1, 3)
-        pulsed  = adj(self.getPulsedList(), ['<=', '--'], 4)        
-        psel    =  iN(self.getPageSelectStrings(), 4)
+        pulsed  = adj(self.getPulsedList(), ['<=', '--'], 4)
+        update  = adj(self.getReadUpdateList(), ['<=', '--'], 4)
+        psel    =  iN(self.getPageSelect(), 4)
         hdr2    =  iN(self.v.wbs2, 4)  
-        writes  = adj(self.getFsmWriteList(showComment), ['=>', '<=', 'v_dat_i', "--" if showComment else ""], 7)    
+        writes  = adj(self.getFsmWriteList(), ['=>', '<=', 'v_dat_i', "--"], 7)    
  
         mid0    =  iN(self.v.wbOthers, 7)
         mid1    =  iN(self.v.wbs3, 5)
-        reads   = adj(self.getFsmReadList(showComment), ['=>', '<=', "--" if showComment else ""], 7)
+        reads   = adj(self.getFsmReadList(), ['=>', '<=', "--"], 7)
         ftr     =  iN(self.v.wbs4, 1)
         con     = adj(self.v.wbs5, ['<=', "--"], 1)
         
-        s += (hdr0 + rst + hdr1 + pulsed + psel +  hdr2 + writes + mid0 + mid1 + reads + mid0 + ftr + con)
+        s += (hdr0 + rst + hdr1 + pulsed + update + psel +  hdr2 + writes + mid0 + mid1 + reads + mid0 + ftr + con)
         return s
     
-       
-    def getInstanceList(self):     
-        s = []        
-        for reg in self.registers:
-            tmp = reg.getInstanceStrings()
-            if is_seq(tmp):
-                for line in tmp:
-                    s.append(line)
-            else:
-                s.append(tmp)
-        return s
+   
         
-    def getPageSelectStrings(self):
+    def getPageSelect(self):
         if(self.selector == ""):
-            return "\n"
+            return ["\n"]
         else:    
-            return self.v.wbsPageSelect % self.selector
+            return [self.v.wbsPageSelect % self.selector]
             
     def getDocList(self, language):
         if language == "VHDL":
@@ -259,7 +227,7 @@ class wbslave(object):
         sAdr = "Adr"        
         
         s = []
-        s += commentBox(mark,"Register map", self.sdbname)
+        s += cbox(mark,"Register map", self.sdbname)
         s.append(mark + " " + sAdr + ' ' * ((len(sHex)+nibbles)+1 - len(sAdr)) + "D  Name : Width -> Comment\n")
         s.append(mark + '-' * 92 + '\n')
         
