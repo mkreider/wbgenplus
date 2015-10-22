@@ -60,29 +60,25 @@ def parseXMLNew(xmlIn, now):
         clockList += ["sys"]        
             
     
-    genericsParent = xmldoc.getElementsByTagName('generics')
-    if len(genericsParent) > 1:
-        print "There must be exactly 1 generics tag!"
-        sys.exit(2)
-    elif len(genericsParent) == 1:    
-        genericsList = genericsParent[0].getElementsByTagName('item')
-        print "Found %u generics\n" % len(genericsList)   
-        for generic in genericsList:
-            genName = generic.getAttribute('name')
-            genType = generic.getAttribute('type')
-            genVal  = generic.getAttribute('value')
-            genDesc = generic.getAttribute('comment')
-            #if genTypes.has_key(genType):
-            #    genType = genTypes[genType]               
-            if(genType == 'natural'):
-                aux = str2int(genVal)
-                if(aux == None):            
-                    print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
-                else:        
-                    genVal = aux
-                    genIntD[genName] = [ genType , genVal, genDesc ]
-            else:
-                genMiscD[genName] = [ genType , genVal, genDesc ]    
+    generics = xmldoc.getElementsByTagName('generic')
+   
+    print "Found %u generics\n" % len(generics)   
+    for generic in generics:
+        genName = generic.getAttribute('name')
+        genType = generic.getAttribute('type')
+        genVal  = generic.getAttribute('default')
+        genDesc = generic.getAttribute('comment')
+        #if genTypes.has_key(genType):
+        #    genType = genTypes[genType]               
+        if(genType == 'natural'):
+            aux = str2int(genVal)
+            if(aux == None):            
+                print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
+            else:        
+                genVal = aux
+                genIntD[genName] = [ genType , genVal, genDesc ]
+        else:
+            genMiscD[genName] = [ genType , genVal, genDesc ]    
             #else:
             #    print "%s is not a valid type" % generic.getAttribute('type')
             #    sys.exit(2)
@@ -96,7 +92,7 @@ def parseXMLNew(xmlIn, now):
         name    = slaveIf.getAttribute('name')
         ifWidth = str2int(slaveIf.getAttribute('data'))
         print "Slave <%s>: %u Bit wordsize" % (name, ifWidth)
-        pages   = slaveIf.getAttribute('pages')
+        pages  = slaveIf.getAttribute('pages')
         #check integer generic list
         for genName in genIntD.iterkeys():
             if(pages.find(genName) > -1):
@@ -141,7 +137,7 @@ def parseXMLNew(xmlIn, now):
             print "Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname))
             sys.exit(2)
         
-        tmpSlave    = wbs(unitname, version, now, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList, genIntD, genMiscD) 
+        tmpSlave    = wbs(unitname, version, now, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList, genIntD, genMiscD, 'g_') 
         
         selector = ""
         #name, adr, pages, selector
@@ -176,6 +172,9 @@ def parseXMLNew(xmlIn, now):
             if reg.hasAttribute('write'):        
                 if reg.getAttribute('write') == 'yes':
                     regflags += 'w'
+            if reg.hasAttribute('drive'):        
+                if reg.getAttribute('drive') == 'yes':
+                    regflags += 'd'        
             if reg.hasAttribute('paged'):
                 if reg.getAttribute('paged') == 'yes':
                     regflags += 'm'
@@ -226,40 +225,26 @@ def parseXMLNew(xmlIn, now):
                 print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
                 regmsk = 2**ifWidth-1
 
-            rstvec = 0    
+            rstvec = None    
             if reg.hasAttribute('reset'):
-                if reg.hasAttribute('write'):                
+                          
                     
-                    aux = reg.getAttribute('reset')
-    
-                    if(aux in genIntD):
-                        if (regmsk in genIntD):
-                            width = "g_" + regmsk
-                        else:
-                            [hi, lo] = mskWidth(regmsk)
-                            width = hi-lo+1
-                            
-                        (_, val, _) = genIntD[aux]
-                        print "Slave <%s>: Register <%s>'s Reset using supplied generic value <%s>" % (name, regname, val)
-                        
-                        rstvec = wbsVhdlStrGeneral.int2slv % (val, width)
-                    #elif(aux in genMiscD):
-                    else:    
-                        aux = str2int(aux)
-                        if(aux != None):
-                            rstvec = wbsVhdlStrGeneral.int2slv % (aux, mskWidth(regmsk))
-                            print "Slave <%s>: Register <%s>'s Reset using supplied value <%s>" % (name, regname, aux)
-                        
-                        else:
-                            print "Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val)
-                        
-                            rstvec = tmpSlave.v.others % "0"
-                else:
-                    print "\nWARNING: Cannot create reset code! Skipping...\n"\
-                          "Slave <%s>: Register <%s> is read only from WB and therefore driven from outside\n"\
-                          "the WB interface core. You must add your own reset code to the driving process\n"\
-                          "in the outer entity.\n" % (name, regname)
+                aux = reg.getAttribute('reset')
+
+                if(aux in genIntD):
+                    (_, val, _) = genIntD[aux]
+                    print "Slave <%s>: Register <%s>'s Reset using supplied generic value <%s>" % (name, regname, val)
+                    rstvec = aux
+                #elif(aux in genMiscD):
+                else:    
+                    aux = str2int(aux)
+                    if(aux != None):
+                        rstvec = aux
+                        print "Slave <%s>: Register <%s>'s Reset using supplied value <%s>" % (name, regname, aux)
                     
+                    else:
+                        print "Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val)
+                      
             tmpSlave.addReg(regname, regdesc, regmsk, regflags, regclk, rstvec, regadr)
       
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
@@ -274,6 +259,7 @@ def parseXMLNew(xmlIn, now):
                     tmpSlave.pages      = pages    
        
             ifList.append(tmpSlave)
+    print genIntD        
     return [unitname, author, version, email, ifList]
 
 
@@ -378,7 +364,7 @@ def main():
             
             for slave in slaves:
                 wo.writeMainVhd(slave)
-            #wo.writePkgVhd()
+                wo.writePkgVhd(slave)
             #writeHdrC(fileHdrC)
             #writeStubVhd(fileStubVhd)
             #writeStubPkgVhd(fileStubPkgVhd)

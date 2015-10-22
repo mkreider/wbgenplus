@@ -19,7 +19,7 @@ from textformatting import commentBox as cbox
 
 
 class wbslave(object):
-    def __init__(self, unitname, version, date, slaveIfName, startaddress, selector, pages, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, genIntD, genMiscD):    
+    def __init__(self, unitname, version, date, slaveIfName, startaddress, selector, pages, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, genIntD, genMiscD, genPrefix):    
                 
         self.unitname       = unitname
         self.version        = version        
@@ -37,14 +37,15 @@ class wbslave(object):
         self.sdbname        = sdbname        
         self.offs           = int(math.ceil(ifwidth/8))
         #Fill in string templates
-        self.genIntD = genIntD
-        self.genMiscD = genMiscD
-        self.v      = wbsVhdlStrGeneral(unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, version, date, selector)
-        self.vreg   = wbsVhdlStrRegister(slaveIfName)
-        self.c      = wbsCStr(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
-        self.addIntReg("wb_stall", "flow control", "1", "r")
-        self.addIntReg("wb_err", "signal unsuccessful wb op", "1", "r")            
-                
+        self.genIntD    = genIntD
+        self.genMiscD   = genMiscD
+        self.genPrefix  = genPrefix
+        self.v          = wbsVhdlStrGeneral(unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, version, date, selector)
+        self.vreg       = wbsVhdlStrRegister(slaveIfName)
+        self.c          = wbsCStr(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
+        
+        self.stallReg   = self.createIntReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
+        self.addIntReg(self.stallReg)  
         
                   
     def addReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None, startAdr=None):
@@ -52,8 +53,14 @@ class wbslave(object):
         self.registers.append(register(self.vreg, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags,
                                        self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr), self.offs, self.genIntD, self.genMiscD))    
         
-    def addIntReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None):
-        self.registers.append(internalregister(self.vreg, self.pages, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.genIntD, self.genMiscD))    
+    def createIntReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None):
+        return internalregister(self.vreg, self.pages, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.genIntD, self.genMiscD)    
+    
+    def addIntReg(self, intreg):    
+        self.registers.append(intreg)    
+    
+    def getGenPrefix(self):
+        return self.genPrefix
     
     def getAddress(self, startAdr=None):
         regList = self.registers
@@ -104,11 +111,31 @@ class wbslave(object):
 
     def getAssignmentList(self):
         s = []
-        s += self.v.wbs5
         for reg in self.registers:
             s += reg.getStrPortAssignment()
-        return s
+        #generate flow control code
+        s.append("\n")
+        s.append(self.v.wbsStall0)
+#        for line in self.v.wbsStall1:
+#            s.append(line % (self.stallReg.v.regname, self.stallReg.v.portsignamein))
+#        s += self.v.wbsDat
+#        for line in self.v.wbsErr:
+#            s.append(line % self.errReg.v.portsignamein)    
         
+        return adj(s, ['<=', "--"], 1)
+    
+    def getGenericList(self):
+        tmp = []
+        s = []
+        for key in self.genIntD:
+            (gtype, default, description) = self.genIntD[key] 
+            tmp.append(wbsVhdlStrGeneral.generic % (self.getGenPrefix()+key, gtype, default, description))
+        for line in tmp[:-1]:
+            s.append(line % ";") 
+        s.append(tmp[-1] % "")
+        return adj(s, [':', ':=', '--'], 1)     
+
+    
     def getPortList(self):
         s = []
         
@@ -127,10 +154,11 @@ class wbslave(object):
         return adj(s, [':', ':=', '--'], 1)
 
     def getDeclarationList(self):
-        s = []        
+        s = []
+                
         for reg in self.registers:
             s += reg.getStrSignalDeclaration()
-        return s 
+        return adj(s, [' is ', ':', ':=', '--'], 1) 
         
         
     def getReadUpdateList(self):
@@ -190,6 +218,7 @@ class wbslave(object):
         hdr0    =  iN(self.v.wbs0, 1) 
         rst     = adj(self.getResetList(), ['<='], 4)         
         hdr1    =  iN(self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1, 3)
+        stall   = iN(self.v.wbsStall1 % self.stallReg.v.portsignamein, 4)
         pulsed  = adj(self.getPulsedList(), ['<=', '--'], 4)
         update  = adj(self.getReadUpdateList(), ['<=', '--'], 4)
         psel    =  iN(self.getPageSelect(), 4)
@@ -200,12 +229,17 @@ class wbslave(object):
         mid1    =  iN(self.v.wbs3, 5)
         reads   = adj(self.getFsmReadList(), ['=>', '<=', "--"], 7)
         ftr     =  iN(self.v.wbs4, 1)
-        con     = adj(self.v.wbs5, ['<=', "--"], 1)
         
-        s += (hdr0 + rst + hdr1 + pulsed + update + psel +  hdr2 + writes + mid0 + mid1 + reads + mid0 + ftr + con)
+        
+        
+        s += (hdr0 + rst + hdr1 + stall + pulsed + update + psel +  hdr2 + writes + mid0 + mid1 + reads + mid0 + ftr)
         return s
     
    
+    def getStrSDB(self):
+        s = []
+        s += self.v.sdb       
+        return s 
         
     def getPageSelect(self):
         if(self.selector == ""):

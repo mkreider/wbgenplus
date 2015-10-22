@@ -9,7 +9,7 @@ from textformatting import mskWidth as mskWidth
 
 class register(object):
 
-    def __init__(self, wbStr, pages, datawidth, addresswidth, name, desc, bigMsk, flags, clkbase="sys", clkdomain="sys", rstvec=None, startAdr=None, offs=4, genIntD=dict(), genMiscD=dict()):
+    def __init__(self, wbStr, pages, datawidth, addresswidth, name, desc, bigMsk, flags, clkbase="sys", clkdomain="sys", rstvec=None, startAdr=None, offs=4, genIntD=dict(), genMiscD=dict(), genPrefix='g_'):
         #print "Adding REgister %s to domain %s" % (name, clkdomain)        
         self.pages      = pages         
         self.dwidth     = datawidth
@@ -25,15 +25,16 @@ class register(object):
         self.width      = bigMsk
         self.genIntD    = genIntD
         self.genMiscD   = genMiscD
+        self.genPrefix  = genPrefix
         if not self.isGenericWidth():
             self.width  = mskWidth(bigMsk)
         self.opList     = []
-        
-        self.v = registerVhdlStr(wbStr, self.name, self.desc, self.rstvec, self.width, self.getGenWidthPrefix(), int(self.isPaged()) * self.pages, # 0 if this reg has no pages
+        self.v = registerVhdlStr(wbStr, self.name, self.desc, self.rstvec, self.getGenResetPrefix(), self.width,
+                                 self.getGenWidthPrefix(), int(self.isPaged()) * self.pages, # 0 if this reg has no pages
                                  self.getGenPagePrefix(), self.clkdomain, self.clkbase)    
         
         adr = startAdr
-        
+        print "Reg %s Flags %s" % (self.name, self.flags)
         #add operations according to register flags
         if self.isAtomic():
             if self.isRead():
@@ -60,7 +61,12 @@ class register(object):
         if(self.flags.find('r') > -1):
             return True
         return False
-        
+    
+    def isDrive(self):
+        if(self.flags.find('d') > -1):
+            return True
+        return False 
+    
     def isPaged(self):
         if(self.flags.find('m') > -1):
             return True
@@ -86,6 +92,7 @@ class register(object):
             return True
         return False    
 
+     
 
     def isGeneric(self):          
         return self.isGenericPaged() or self.isGenericWidth()
@@ -101,14 +108,24 @@ class register(object):
             return True
         return False    
 
+    def isGenericReset(self):
+        if(self.genIntD.has_key(self.rstvec)):
+            return True
+        return False     
+
     def getGenWidthPrefix(self):
         if self.isGenericWidth():
-            return "g_"
+            return self.genPrefix
+        return ""
+        
+    def getGenResetPrefix(self):
+        if self.isGenericReset():
+            return self.genPrefix
         return ""    
     
     def getGenPagePrefix(self):
         if self.isGenericPaged():
-            return "g_"
+            return self.genPrefix
         return ""     
 
     def addOp(self, adr, op):
@@ -176,17 +193,21 @@ class register(object):
                 s.append(self.v.portWEOut)
                  
         if self.isRead():
-            s.append(self.v.declarationPortIn)
             if self.hasEnableFlags():
-                s.append(self.v.portRDOut) 
+                s.append(self.v.portRDOut)
+
+        if self.isDrive():
+            s.append(self.v.declarationPortIn)
+                
         return s             
+    
             
     
     def getStrPortAssignment(self):
         s = []
         if self.isWrite():
             s += self.v.portAssignOutList
-        if self.isRead():
+        if self.isDrive():
             s += self.v.portAssignInList
         return s        
 
@@ -208,7 +229,7 @@ class register(object):
     def getStrReadUpdate(self):
         s = []        
         
-        if self.isRead():
+        if self.isDrive():
             s.append(self.v.readUpdate)
         return s 
 
@@ -225,7 +246,7 @@ class register(object):
         
         return s       
     
-    def getStrAddresses(self, language="VHDL"):
+    def getStrAddress(self, language="VHDL"):
         adrC = ""         
         adrV = "constant c_%s_%s : natural := 16#%s#;\n"            
         
@@ -261,7 +282,8 @@ class register(object):
                 if(language == "C"):
                     s.append(adrC % (self.slaveIf, self.name + op + idx, adrx % adr))
                 else:    
-                    s.append(adrV % (self.slaveIf, self.name + op + idx, adrx % adr))
+
+                    s.append(self.v.constRegAdr % (op + idx, adrx % adr))
                 
                 adrIdx += 1
             opIdx += 1
@@ -320,18 +342,26 @@ class register(object):
             (op, adrList) = opLine
             if((op == "_GET") or (op == "_RW ")):                    
                 #this is sliced
+                
+                    
+                
                 adrIdx = 0            
                 for adrLine in adrList:
                     (msk, adr) = adrLine
-                   
+                    
                     sliceWidth       = msk
-                    curSliceHigh     = sliceWidth + adrIdx*self.dwidth -1
-                    curSliceLow      = adrIdx*self.dwidth
-                    curSlice         = "%u downto %u" % (curSliceHigh, curSliceLow)
-                    baseSlice        = "%u downto %u" % (sliceWidth-1, 0)                    
-                    regSlice         = ""
+                    if self.isGenericWidth():
+                        curSlice         = "%s downto %u" % (self.getGenWidthPrefix() + sliceWidth + "-1", 0)
+                        baseSlice        = "%s downto %u" % (self.getGenWidthPrefix() + sliceWidth + "-1", 0) 
+                    else:        
+                        curSliceHigh     = sliceWidth + adrIdx*self.dwidth -1
+                        curSliceLow      = adrIdx*self.dwidth
+                        curSlice         = "%u downto %u" % (curSliceHigh, curSliceLow)
+                        baseSlice        = "%u downto %u" % (sliceWidth-1, 0)
+                        
+                                        
+                    regSlice         = ""    
                     enum = ""
-                    print "name %s msk %s sw %s hi %s lo %s dw %s" % (self.name, msk, sliceWidth, curSliceHigh, curSliceLow, self.dwidth)
                     
                     if len(adrList) > 1:
                         regSlice         = "(%s)" % curSlice
@@ -357,9 +387,12 @@ class register(object):
                 for adrLine in adrList:
                     (msk, adr) = adrLine
                     sliceWidth       = msk 
-                    curSliceHigh     = sliceWidth + adrIdx*self.dwidth -1
-                    curSliceLow      = adrIdx*self.dwidth
-                    curSlice         = "%u downto %u" % (curSliceHigh, curSliceLow)
+                    if self.isGenericWidth():
+                        curSlice         = "%s downto %u" % (self.getGenWidthPrefix() + sliceWidth + "-1", 0) 
+                    else:        
+                        curSliceHigh     = sliceWidth + adrIdx*self.dwidth -1
+                        curSliceLow      = adrIdx*self.dwidth
+                        curSlice         = "%u downto %u" % (curSliceHigh, curSliceLow)
                     regSlice         = ""
                     enum = ""
                     if len(adrList) > 1:
@@ -392,24 +425,25 @@ class internalregister(register):
         self.genMiscD   = genMiscD
         if not self.isGenericWidth():
             self.width  = mskWidth(bigMsk)
-        self.v = registerVhdlStr(wbStr, self.name, self.desc, self.rstvec, self.width, self.getGenWidthPrefix(), int(self.isPaged()) * self.pages, # 0 if this reg has no pages
+        self.v = registerVhdlStr(wbStr, self.name, self.desc, self.rstvec, self.getGenResetPrefix(), self.width, self.getGenWidthPrefix(), int(self.isPaged()) * self.pages, # 0 if this reg has no pages
                                  self.getGenPagePrefix(), self.clkdomain, self.clkbase)          
     
-    def getStrPortAssignment(self):
-        return [] 
+  
     
     def getLastAdr(self):
         pass 
        
-    def getStrAddresses(self, language="VHDL"):
+    def getStrAddress(self, language="VHDL"):
         return []      
             
-    def getStrFsmRead(self, showComment=False):
+    def getStrFsmRead(self):
         return []
 
-    def getStrFsmWrite(self, showComment=False):
+    def getStrFsmWrite(self):
         return []   
 
     def getStrInterfaceDoc(self, addressNibbles):
         return []
         
+    def getStrReadUpdate(self):
+        return []
