@@ -22,14 +22,13 @@ myStart   = "15 Dec 2014"
 myUpdate  = "10 Jan 2015"
 myCreator = "M. Kreider <m.kreider@gsi.de>"
 
-def parseXMLNew(xmlIn, now):
+def parseXMLNew(xmlIn, now, unitname):
     xmldoc      = minidom.parse(xmlIn)   
 
     #defaults
     dictVendId  = {'GSI'       : 0x0000000000000651,
                    'CERN'      : 0x000000000000ce42}    
     
-    unitname    = "unknown_unit"
     author      = "unknown_author"
     email       = "unknown_mail"
     version     = "unknown_version"
@@ -181,8 +180,8 @@ def parseXMLNew(xmlIn, now):
             if reg.hasAttribute('access'):
                 if reg.getAttribute('access') == 'atomic':
                     regflags += 'a'
-            if reg.hasAttribute('weflag'):
-                if reg.getAttribute('weflag') == 'yes':            
+            if reg.hasAttribute('flags'):
+                if reg.getAttribute('flags') == 'yes':            
                     regflags += 'f'
             if reg.hasAttribute('autostall'):
                 if reg.getAttribute('autostall') == 'yes':            
@@ -245,7 +244,7 @@ def parseXMLNew(xmlIn, now):
                     else:
                         print "Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val)
                       
-            tmpSlave.addReg(regname, regdesc, regmsk, regflags, regclk, rstvec, regadr)
+            tmpSlave.addReg(tmpSlave.createReg(regname, regdesc, regmsk, regflags, regclk, rstvec, regadr))
       
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
             if(isinstance(pages, int)):
@@ -258,9 +257,9 @@ def parseXMLNew(xmlIn, now):
                     tmpSlave.selector = selector    
                     tmpSlave.pages      = pages    
        
-            ifList.append(tmpSlave)
+        ifList.append(tmpSlave)
     print genIntD        
-    return [unitname, author, version, email, ifList]
+    return [author, version, email, ifList]
 
 
 #TODO: A lot ...
@@ -349,7 +348,7 @@ def main():
                 mypath += './'
                 
             now = datetime.datetime.now()
-            
+            print "f: %s p: %s" % (myfile, mypath)
             
             unitname = os.path.splitext(myfile)[0]        
             #path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
@@ -359,12 +358,19 @@ def main():
             print "Unit:             %s" % unitname
             print "\n%s" % ('*' * 80)
                         
-            [unitname, author, version, email, slaves] = parseXMLNew(xmlIn, now)
+            [author, version, email, slaves] = parseXMLNew(xmlIn, now, unitname)
             wo = writeout(unitname, myfile, mypath, author, email, version, now)
+            
+            print slaves            
             
             for slave in slaves:
                 wo.writeMainVhd(slave)
                 wo.writePkgVhd(slave)
+                wo.writeStubVhd(slave, True)
+                wo.writePythonDict(slave)
+                #tmp = slave.getAddressListPython()
+                #for line in tmp:
+                #    print line
             #writeHdrC(fileHdrC)
             #writeStubVhd(fileStubVhd)
             #writeStubPkgVhd(fileStubPkgVhd)

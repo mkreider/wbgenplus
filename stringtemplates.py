@@ -27,7 +27,9 @@ class gCStr(object):
         self.hdrfileStart   = ["#ifndef _%s_H_\n"   % unitname.upper(),
                                "#define _%s_H_\n\n" % unitname.upper()]
         self.hdrfileEnd     =  "#endif\n"        
-       
+
+
+           
 
 
 class registerVhdlStr(object):
@@ -36,7 +38,7 @@ class registerVhdlStr(object):
                '_SET'     : 'set',
                '_CLR'     : 'clr',
                '_OWR'     : 'owr',
-               '_RW '     : 'owr'} 
+               '_RW'     : 'owr'} 
     
     #generate sync signal delcarations if neeeded
     def getSyncSignalDeclaration(self, direction):
@@ -64,13 +66,13 @@ class registerVhdlStr(object):
             if direction == "out":
                 sigin   = sigInWrapper  % self.regname
                 sigout  = sigOutWrapper % self.portnameout
-                clkin   = self.wbDomain
-                clkout  = self.clockDomain
+                clkin   = wbsVhdlStrGeneral.clkportname % (self.wbDomain, self.wbDomain)
+                clkout  = wbsVhdlStrGeneral.clkportname % (self.clockDomain, self.clockDomain)
             elif direction == "in":
                 sigin   = sigInWrapper  % self.portnamein
                 sigout  = sigOutWrapper % self.portsignamein
-                clkin   = self.wbDomain
-                clkout  = self.clockDomain        
+                clkin   = wbsVhdlStrGeneral.clkportname % (self.clockDomain, self.clockDomain)
+                clkout  = wbsVhdlStrGeneral.clkportname % (self.wbDomain, self.wbDomain)        
             else:
                 print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)
             
@@ -166,7 +168,7 @@ class registerVhdlStr(object):
                                        "  g_with_rd_empty   => true,\n",
                                        "  g_with_wr_full    => true)\n",
                                        "port map(\n",
-                                       "  rst_n_i  => rst_n_i,\n"]
+                                       "  rst_n_i  => %s,\n" % wbsVhdlStrGeneral.rstportname % (self.wbDomain)]
         self.syncInstTemplate5_dir  = ["  we_i     => %s_fifo_%%s_push,\n" % (self.signame), # in/out
                                        "  rd_i     => %s_fifo_%%s_pop,\n" % (self.signame), # in/out
                                        "  rd_empty_o  => s_%s_fifo_%%s_empty,\n" % (self.signame), # in/out
@@ -182,35 +184,37 @@ class registerVhdlStr(object):
         #if paged, make this a matrix  
         if self.pages > 0:
             self.declarationReg         = self.matrix % (self.regname)
+            self.declarationStubIn      = wbsStr.matrixStub % (self.portnamein, genPagePrefix, pages, genWidthPrefix, width, description)
+            self.declarationStubOut     = wbsStr.matrixStub % (self.portnameout, genPagePrefix, pages, genWidthPrefix, width, description)
             self.declarationPortSigIn   = self.matrix % (self.portsignamein)
             self.declarationPortIn      = self.portmatrix % (self.portnamein, "in ")
             self.declarationPortOut     = self.portmatrix % (self.portnameout, "out")
             self.reset                  = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, self.resetvector)
-            self.wbRead                 = wbsStr.wbReadMatrix % (self.name, self.regname, description) # Slice
-            self.wbWrite                = wbsStr.wbWriteMatrix % (self.name, self.regname, description) # Slice, Slice
+            self.wbRead                 = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
+            self.wbWrite                = wbsStr.wbWriteMatrix % (self.name, self.regname, "") # Slice, Slice
             self.wbPulseZero            = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.int2slv % 0))
         else:
             #default: Slv    
             self.declarationReg         = self.slv % (self.regname)
+            self.declarationStubIn      = wbsStr.slvStub % (self.portnamein, genWidthPrefix, width, description)
+            self.declarationStubOut     = wbsStr.slvStub % (self.portnameout, genWidthPrefix, width, description)
             self.declarationPortSigIn   = self.slv % (self.portsignamein)
             self.declarationPortIn      = self.portslv % (self.portnamein, "in ")
             self.declarationPortOut     = self.portslv % (self.portnameout, "out")
             self.reset                  = "%s <= %s;\n" % (self.regname, self.resetvector)
-            self.wbRead                 = wbsStr.wbRead % (self.name, self.regname, description) # Slice
-            self.wbWrite                = wbsStr.wbWrite % (self.name, self.regname, self.regname, description) # Slice, Slice
+            self.wbRead                 = wbsStr.wbRead % (self.name, self.regname, "") # Slice
+            self.wbWrite                = wbsStr.wbWrite % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero            = "%s <= %s;\n" % (self.regname,  (self.others % '0'))
         # derived from wbslave strings
        
         #address constant
-        self.constRegAdr        = wbsStr.constRegAdr % (self.name, description) #address, operation, address, mask
+        self.vhdlConstRegAdr    = wbsStr.vhdlConstRegAdr % (self.name, description) #address, operation, address, mask
+        self.cConstRegAdr       = wbsStr.cConstRegAdr % (self.name, description)
+        self.pythonConstRegAdr  = wbsStr.pythonConstRegAdr % (self.name, description)
         
         # Flags
-        self.portWEOut          = "%s_WE_o : out std_logic; -- write flag\n" % (self.name)
-        self.portRDOut          = "%s_RD_o : out std_logic; -- read flag\n" % (self.name)
-        self.wbRd               = "%s_RD_o <= '1'; -- %s Read enable\n" % (self.name, self.name)
-        self.wbRdZero           = "%s_RD_o <= '0'; -- %s pulse\n" % (self.name, self.name)            
-        self.wbWe               = "%s_WE_o <= '1'; -- %s write enable\n" % (self.name, self.name)
-        self.wbWeZero           = "%s_WE_o <= '0'; -- %s pulse\n" % (self.name, self.name)
+        self.wbRd               = "%s_RD <= \"1\"; -- %s Read enable\n" % (self.regname, self.name)          
+        self.wbWe               = "%s_WR <= \"1\"; -- %s Write enable\n" % (self.regname, self.name)
         #Flow control
         self.wbStall            = wbsStr.wbStall
         
@@ -218,6 +222,8 @@ class registerVhdlStr(object):
         self.portAssignOutList      = self.getPortAssignment("out")
         self.portAssignInList       = self.getPortAssignment("in")
         
+        self.assignStubOut          = wbsStr.assignStub % (self.portnameout, self.portnameout)
+        self.assignStubIn           = wbsStr.assignStub % (self.portnamein, self.portnamein)
         #syncronisation register/signal declaration
         self.declarationSyncInList  = self.getSyncSignalDeclaration("in")
         self.declarationSyncOutList = self.getSyncSignalDeclaration("out")
@@ -228,17 +234,24 @@ class registerVhdlStr(object):
         
     
 class wbsVhdlStrRegister(object):
-   
+    
 
     def __init__(self, slaveIfName):
         self.slaveIfName    = slaveIfName        
         #this is total crap - why can't we have more than two % signs in formatting ?
-        self.wbRead             = "when c_" + slaveIfName + "_%s%%s => r_" + slaveIfName + "_out_dat0(%%s) <= %s%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
-        self.wbReadMatrix       = "when c_" + slaveIfName + "_%s%%s => r_" + slaveIfName + "_out_dat0(%%s) <= rget(%%s, v_page)%%%s; -- %%s\n" #regname, #op, #slice, registerName, #slice, description
-        self.wbWrite            = "when c_" + slaveIfName + "_%s%%s => %s%%s <= f_wb_wr(%s%%s, v_dat_i, v_sel, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
-        self.wbWriteMatrix      = "when c_" + slaveIfName + "_%s%%s => %s%%s <= rset(%%s, v_page, f_wb_wr(rget(%%s, v_page)%%s, v_dat_i, v_sel, \"%%s\")); -- %%s\n" #registerName, registerName, (set/clr/owr), desc
-        self.constRegAdr        = "constant c_" + slaveIfName + "%s_%%s : natural := 16#%%s#; -- %%s 0x%%s, %s\n" #name, adrVal, adrVal, rw, msk, desc
-        self.wbStall            = "r_%s_stall  <= '1'; --    %%s auto stall\n" % (slaveIfName) 
+        self.wbRead             = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= %s%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
+        self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= rget(%%s, v_p)%%%s; -- %%s\n" #regname, #op, #slice, registerName, #slice, description
+        self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, v_d, v_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
+        self.wbWriteMatrix      = "when c_" + "%s%%s => %s%%s <= rset(%%s, v_page, f_wb_wr(rget(%%s, v_p)%%s, v_d, v_s, \"%%s\")); -- %%s\n" #registerName, registerName, (set/clr/owr), desc
+        self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s 0x%%s, %s\n" #name, adrVal, adrVal, rw, msk, desc
+        self.cConstRegAdr       = "#define " + slaveIfName.upper() + "_%s%%s 0x%%s //%%s 0x%%s %s\n" 
+        self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s 0x%%s, %s\n" #name, adrVal, adrVal, rw, msk, desc
+        self.slvStub            = "signal s_" + slaveIfName + "_%s : std_logic_vector(%s%s-1 downto 0); -- %s\n"
+        self.matrixStub         = "signal s_" + slaveIfName + "_%s : t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n"
+        self.assignStub         = "%s => s_" + slaveIfName + "_%s,\n"
+        
+        self.wbStall            = "r_%s_stall <= \"1\"; --    %s auto stall\n" % (slaveIfName, slaveIfName)
+ 
         
      
 class wbsVhdlStrGeneral(object):
@@ -249,7 +262,12 @@ class wbsVhdlStrGeneral(object):
 
     hex2slv = "std_logic_vector(to_unsigned(16#%x#, %s))"
     int2slv = "std_logic_vector(to_unsigned(%s, %s))"
-    generic = "%s : %s := %s%%s --%s\n" 
+    generic = "%s : %s := %s%%s --%s\n"
+    clkport = "clk_%s_i : std_logic; -- Clock input for %s domain\n"
+    clkportname = "clk_%s_i"
+    rstport = "rst_%s_n_i : std_logic; -- Reset input (active low) for %s domain\n"
+    rstportname = "rst_%s_n_i"
+    assignStub         = "%s => %s,\n"
 
     def __init__(self, unitname, slaveIfName, dataWidth, vendId, devId, sdbname, clocks, version, now, selector):
         self.unitname       = unitname
@@ -260,6 +278,7 @@ class wbsVhdlStrGeneral(object):
         #################################################################################        
         #Strings galore
         
+
 
         
         self.slaveIf    = ["\n",
@@ -272,102 +291,71 @@ class wbsVhdlStrGeneral(object):
         self.slaveSigs = ["signal s_%s_i : t_wishbone_slave_in;\n" % slaveIfName,
                           "signal s_%s_o : t_wishbone_slave_out;\n" % slaveIfName]
         
-        self.slaveInst = ["%s_i => s_%s_i,\n" % (slaveIfName, slaveIfName),
-                          "%s_o => s_%s_o" % (slaveIfName, slaveIfName)]         
+        self.slaveInst = ["%s_i => %s_i,\n" % (slaveIfName, slaveIfName),
+                          "%s_o => %s_o" % (slaveIfName, slaveIfName)]         
         
-        self.wbs0       = ["%s : process(clk_%s_i)\n" % (slaveIfName, clocks[0]),
-                           "   variable v_dat_i  : t_wishbone_data;\n",
-                           "   variable v_dat_o  : t_wishbone_data;\n",
-                           "   variable v_adr    : natural;\n",
-                           "   variable v_page   : natural;\n",
-                           "   variable v_sel    : t_wishbone_byte_select;\n",
-                           "   variable v_we     : std_logic;\n",
-                           "   variable v_en     : std_logic;\n",
+        self.wbs0       = ["%s : process(%s)\n" % (slaveIfName, (wbsVhdlStrGeneral.clkportname % clocks[0]) ),
+                           "   variable v_d : t_wishbone_data;\n",
+                           "   variable v_a  : natural;\n",
+                           "   variable v_p  : natural;\n",
+                           "   variable v_s  : t_wishbone_byte_select;\n",
+                           "   variable v_w  : std_logic;\n",
+                           "   variable v_e  : std_logic;\n",
                            "begin\n",
-                           "   if rising_edge(clk_%s_i) then\n" % clocks[0],
-                           "      if(rst_n_i = '0') then\n"]
+                           "   if rising_edge(%s) then\n" % (wbsVhdlStrGeneral.clkportname % clocks[0]),
+                           "      if(%s = '0') then\n" % (wbsVhdlStrGeneral.rstportname % clocks[0])]
        
         self.wbs1_0     = ["else\n",
                            "   -- short names\n",
-                           "   v_dat_i           := %s_i.dat;\n" % slaveIfName]
-        self.wbs1_adr   =  "   v_adr             := to_integer(unsigned(%s_i.adr(%%u downto %%u)) %%s);\n" % slaveIfName
-        self.wbs1_1     = ["   v_sel             := %s_i.sel;\n" % slaveIfName,
-                           "   v_en              := %s_i.cyc and %s_i.stb and not s_%s_out_stall;\n" % (slaveIfName, slaveIfName, slaveIfName),
-                           "   v_we              := %s_i.we;\n\n" % slaveIfName,
-#                           "   --interface outputs\n",
-#                           "   r_%s_out_ack0    <= '0';\n" % slaveIfName,
-#                           "   r_%s_out_err0    <= '0';\n" % slaveIfName,
-#                           "   r_%s_out_dat0    <= (others => '0');\n\n" % slaveIfName,
-#                           "   r_%s_out_ack1    <= r_%s_out_ack0;\n" % (slaveIfName, slaveIfName),
-#                           "   r_%s_out_err1    <= r_%s_out_err0;\n" % (slaveIfName, slaveIfName),
-#                           "   r_%s_out_dat1    <= r_%s_out_dat0;\n\n" % (slaveIfName, slaveIfName)
-                           ] 
+                           "   v_d := %s_i.dat;\n" % slaveIfName]
+        self.wbs1_adr   =  "   v_a := to_integer(unsigned(%s_i.adr(%%u downto %%u)) %%s);\n" % slaveIfName
+        self.wbs1_1     = ["   v_s := %s_i.sel;\n" % slaveIfName,
+                           "   v_e := %s_i.cyc and %s_i.stb and (not r_%s_stall(0));\n" % (slaveIfName, slaveIfName, slaveIfName),
+                           "   v_w := %s_i.we;\n\n" % slaveIfName] 
       
-        self.wbs2       = ["if(v_en = '1') then\n",
+        self.wbs2       = ["if(v_e = '1') then\n",
                            "   %s_o.ack  <= '1';\n" % slaveIfName,
-                           "   if(v_we = '1') then\n",
+                           "   if(v_w = '1') then\n",
                            "      -- WISHBONE WRITE ACTIONS\n",
-                           "      case v_adr is\n"]
+                           "      case v_a is\n"]
     
         self.wbs3       = ["   end case;\n",
                            "else\n",
                            "   -- WISHBONE READ ACTIONS\n",
-                           "   case v_adr is\n"]  
+                           "   case v_a is\n"]  
 
         self.wbs4       = ["               end case;\n",
-                           "            end if; -- v_we\n",
-                           "         end if; -- v_en\n",
+                           "            end if; -- v_w\n",
+                           "         end if; -- v_e\n",
                            "      end if; -- rst\n",
                            "   end if; -- clk edge\n",
                            "end process;\n\n"]
         
                            
-        self.wbsPageSelect      = "v_page := to_integer(unsigned(r_%s));\n\n"  % selector #pageSelect Register
+        self.wbsPageSelect      = "v_p := to_integer(unsigned(r_%s));\n\n"  % selector #pageSelect Register
                           
                            
-        self.wbsStall0   = "%s_o.stall <= r_%s_stall;\n" % (slaveIfName, slaveIfName)
+        self.wbsStall0   = "%s_o.stall <= r_%s_stall(0);\n" % (slaveIfName, slaveIfName)
         
-        self.wbsStall1   = "r_%s_stall <= r_%s_stall and %%s;\n" % (slaveIfName, slaveIfName)
-#        
-#        self.wbsDat     = ["%s_o.dat <= r_%s_out_dat1;\n" % (slaveIfName, slaveIfName)]
-#        
-#        
-#        self.wbsErr     = ["%s_o.ack <= r_%s_out_ack1 and not %%s;\n" % (slaveIfName, slaveIfName),
-#                           "%s_o.err <= r_%s_out_err1 or      %%s;\n" % (slaveIfName, slaveIfName)]                
-#                           
+        self.wbsStall1   = "r_%s_stall <= r_%s_stall and %%s; -- extend stall if requested by outer entity\n" % (slaveIfName, slaveIfName) 
+         
      
         self.wbOthers           = ["when others => %s_o.ack <= '0'; %s_o.err <= '1';\n" % (slaveIfName, slaveIfName)]
-#        self.wbs_ackerr         = ["signal r_%s_out_stall : std_logic;\n" % slaveIfName,
-#                                   "signal r_%s_out_ack0,\n" % slaveIfName,
-#                                   "       r_%s_out_ack1,\n" % slaveIfName,
-#                                   "       r_%s_out_err0,\n" % slaveIfName,
-#                                   "       r_%s_out_err1 : std_logic;\n" % slaveIfName,
-#                                   "signal r_%s_out_dat0,\n" % slaveIfName,
-#                                   "       r_%s_out_dat1 : std_logic_vector(31 downto 0);\n"  % slaveIfName]
-                                
-                                  
+                             
         self.wbs_reg_o          = "signal r_%s : t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
         self.wbs_reg_i          = "signal s_%s : t_%s_regs_i;\n" % (slaveIfName, slaveIfName)
         
-#        self.resetOutput        = ["r_%s_out_stall   <= '0';\n" % slaveIfName,
-#                                   "r_%s_out_ack0    <= '0';\n" % slaveIfName,
-#                                   "r_%s_out_err0    <= '0';\n" % slaveIfName,
-#                                   "r_%s_out_dat0    <= (others => '0');\n" % slaveIfName,
-#                                   "r_%s_out_ack1    <= '0';\n" % slaveIfName,
-#                                   "r_%s_out_err1    <= '0';\n" % slaveIfName,
-#                                   "r_%s_out_dat1    <= (others => '0');\n" % slaveIfName]
-                                   
-                                   
-        self.sdb                = ['constant c_%s_%s_sdb : t_sdb_device := (\n' % (unitname, slaveIfName),
+                               
+        self.sdb0               = ['constant c_%s_%s_sdb : t_sdb_device := (\n' % (unitname, slaveIfName),
                                    'abi_class     => x"%s", -- %s\n' % ("0000", "undocumented device"),
                                    'abi_ver_major => x"%s",\n' % "01",
                                    'abi_ver_minor => x"%s",\n' % "00",
                                    'wbd_endian    => c_sdb_endian_%s,\n' % "big",
                                    'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n' % self.wbWidth[dataWidth],
-                                   'sdb_component => (\n',
-                                   'addr_first    => x"%s",\n',
-                                   'addr_last     => x"%s",\n',
-                                   'product => (\n',
+                                   'sdb_component => (\n']
+        self.sdbAddrFirst        = 'addr_first    => x"%s",\n'
+        self.sdbAddrLast         = 'addr_last     => x"%s",\n'
+        self.sdb1                = ['product => (\n',
                                    'vendor_id     => x"%016x",\n' % vendId,
                                    'device_id     => x"%08x",\n' % devId,
                                    'version       => x"%s",\n' % '{message:{fill}{align}{width}}'.format(message=version.replace('.', ''), fill='0', align='>', width=8),

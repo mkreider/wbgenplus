@@ -47,14 +47,23 @@ class wbslave(object):
         self.stallReg   = self.createIntReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
         self.addIntReg(self.stallReg)  
         
+
                   
-    def addReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None, startAdr=None):
-                                        #wbStr, pages, datawidth, addresswidth, name, desc, bigMsk, flags, clkbase="sys", clkdomain="sys", rstvec=None, startAdr=None, offs=4, genIntD=dict(), genMiscD=dict()):
-        self.registers.append(register(self.vreg, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags,
-                                       self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr), self.offs, self.genIntD, self.genMiscD))    
+    def createReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None, startAdr=None):
+        return register(self.vreg, self.pages, self.dataWidth, self.addressWidth, name, desc, bigMsk, flags,
+                                       self.clocks[0], clkdomain, rstvec, self.getAddress(startAdr, name), self.offs, self.genIntD, self.genMiscD)    
         
     def createIntReg(self, name, desc, bigMsk, flags, clkdomain="sys", rstvec=None):
         return internalregister(self.vreg, self.pages, name, desc, bigMsk, flags, self.clocks[0], clkdomain, rstvec, self.genIntD, self.genMiscD)    
+    
+    def addReg(self, reg):
+        self.registers.append(reg)
+        #check for flags
+        if reg.hasEnableFlags():
+            if reg.isWrite():
+                self.addIntReg(self.createIntReg(reg.name + "_WR", "Write enable flag", "1", "wp", reg.clkdomain, 0))        
+            if reg.isRead():
+                self.addIntReg(self.createIntReg(reg.name + "_RD", "Read enable flag", "1", "wp", reg.clkdomain, 0))  
     
     def addIntReg(self, intreg):    
         self.registers.append(intreg)    
@@ -62,32 +71,26 @@ class wbslave(object):
     def getGenPrefix(self):
         return self.genPrefix
     
-    def getAddress(self, startAdr=None):
-        regList = self.registers
-        lastadr = 0
-      
-        if len(regList) > 0:        
-            for reg in regList[::-1]:            
-                if(reg.getLastAdr() != None):
-                    lastadr = reg.getLastAdr()
-                    break        
-            if(startAdr):
+    def getAddress(self, startAdr=None, regname=""):
+        lastadr = self.getLastAddress()
+        if(lastadr is not None):
+            if startAdr is not None:
                 if(startAdr >= lastadr + self.offs):
                     return startAdr
                 else:
-                    print "ERROR: Wrong address specified for Register %s_%s: %08x must be greater %08x!" % (self.name, reg.name, int(startAdr), int(lastadr) + int(reg.offs))
+                    print "ERROR: Wrong address specified for Register %s_%s: %08x must be greater %08x!" % (regname, int(startAdr), int(lastadr) + int(self.offs))
                     exit(2)
             else:
                 #find the last valid address (skip internal registers)
                 return lastadr + self.offs
         else:
-            if(startAdr):
+            if(startAdr is not None):
                 return startAdr
             return self.startaddress    
     
     def getLastAddress(self):
         regList = self.registers
-        lastadr = self.startaddress
+        lastadr = None
       
         if len(regList) > 0:
             for reg in regList[::-1]:            
@@ -97,17 +100,46 @@ class wbslave(object):
         
         return lastadr    
     
+    def getStubSignalList(self):
+        s = []
+        for reg in self.registers:
+            s += reg.getStrStubDeclaration()
+        #generate flow control code
+        s.append("\n")
+        return adj(s, [':', ':=', '--'], 1)
+        
+    def getStubInstanceList(self): 
+        s = []
+
+        for clock in self.clocks:
+            tmpClk = wbsVhdlStrGeneral.clkportname % (clock)
+            tmpRst = wbsVhdlStrGeneral.rstportname % (clock)
+            s.append(wbsVhdlStrGeneral.assignStub % (tmpClk, tmpClk))
+            s.append(wbsVhdlStrGeneral.assignStub % (tmpRst, tmpRst))
+            
+        for reg in self.registers:
+            s += reg.getStrStubInstance()
+        s += self.v.slaveInst
+        return adj(s, ['=>'], 1)  
+    
+    
+    def getAddressListPython(self):
+        s = []        
+        for reg in self.registers:
+            s += reg.getStrAddress("python")
+        return adj(s, [':'], 0)      
+    
     def getAddressListC(self):
         s = []        
         for reg in self.registers:
             s += reg.getStrAddress("C")
-        return s    
+        return adj(s, ['0x', '//'], 1)    
         
     def getAddressListVHDL(self):
         s = []        
         for reg in self.registers:
-            s += reg.getStrAddress("VHDL")
-        return s       
+            s += reg.getStrAddress("VHDL", self.getLastAddress())
+        return adj(s, [':', ':=', '--'], 1)       
 
     def getAssignmentList(self):
         s = []
@@ -116,11 +148,6 @@ class wbslave(object):
         #generate flow control code
         s.append("\n")
         s.append(self.v.wbsStall0)
-#        for line in self.v.wbsStall1:
-#            s.append(line % (self.stallReg.v.regname, self.stallReg.v.portsignamein))
-#        s += self.v.wbsDat
-#        for line in self.v.wbsErr:
-#            s.append(line % self.errReg.v.portsignamein)    
         
         return adj(s, ['<=', "--"], 1)
     
@@ -138,7 +165,9 @@ class wbslave(object):
     
     def getPortList(self):
         s = []
-        
+        for clock in self.clocks:
+            s.append(wbsVhdlStrGeneral.clkport % (clock, clock))
+            s.append(wbsVhdlStrGeneral.rstport % (clock, clock))
         t = []
         
         sortedregs = sorted(self.registers, key=lambda x: (x.clkdomain, x.isWrite(), x.name), reverse=False)
@@ -223,7 +252,7 @@ class wbslave(object):
         update  = adj(self.getReadUpdateList(), ['<=', '--'], 4)
         psel    =  iN(self.getPageSelect(), 4)
         hdr2    =  iN(self.v.wbs2, 4)  
-        writes  = adj(self.getFsmWriteList(), ['=>', '<=', 'v_dat_i', "--"], 7)    
+        writes  = adj(self.getFsmWriteList(), ['=>', '<=', 'v_d', "--"], 7)    
  
         mid0    =  iN(self.v.wbOthers, 7)
         mid1    =  iN(self.v.wbs3, 5)
@@ -238,7 +267,12 @@ class wbslave(object):
    
     def getStrSDB(self):
         s = []
-        s += self.v.sdb       
+        adrx = ("%016x")
+        align = 1<<(self.getLastAddress()-1).bit_length()
+        s += self.v.sdb0
+        s.append(self.v.sdbAddrFirst % (adrx % int(self.startaddress)))
+        s.append(self.v.sdbAddrLast  % (adrx % ( int(align-1) )))
+        s += self.v.sdb1 
         return s 
         
     def getPageSelect(self):

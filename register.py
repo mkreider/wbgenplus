@@ -46,7 +46,7 @@ class register(object):
                 self.addOp(adr, '_SET')
         else:
             if self.isRead() and self.isWrite():
-                self.addOp(adr, '_RW ')
+                self.addOp(adr, '_RW')
             elif self.isRead():    
                 self.addOp(adr, '_GET')
             elif self.isWrite():
@@ -92,8 +92,6 @@ class register(object):
             return True
         return False    
 
-     
-
     def isGeneric(self):          
         return self.isGenericPaged() or self.isGenericWidth()
     
@@ -126,7 +124,8 @@ class register(object):
     def getGenPagePrefix(self):
         if self.isGenericPaged():
             return self.genPrefix
-        return ""     
+        return ""
+        
 
     def addOp(self, adr, op):
         adrList = []
@@ -150,7 +149,6 @@ class register(object):
         self.opList.append([op, adrList])    
 
         
-        
     def getLastAdr(self):
         if len(self.opList) >  0:
             (_, adrList) = self.opList[-1]
@@ -158,6 +156,7 @@ class register(object):
             return adr
         else:            
             return self.startAdr
+            
             
     def sliceMsk(self):
         mskList = []
@@ -178,30 +177,42 @@ class register(object):
         if self.isWrite():
             s += self.v.declarationSyncOutList #will only be generated if sync 
                  
-        if self.isRead():
+        if self.isDrive():
             s.append(self.v.declarationPortSigIn)
             s += self.v.declarationSyncInList #will only be generated if sync    
         
         s.append
         return s
+        
     
     def getStrPortDeclaration(self):
         s = []
         if self.isWrite():
             s.append(self.v.declarationPortOut)
-            if self.hasEnableFlags():
-                s.append(self.v.portWEOut)
-                 
-        if self.isRead():
-            if self.hasEnableFlags():
-                s.append(self.v.portRDOut)
 
         if self.isDrive():
             s.append(self.v.declarationPortIn)
-                
         return s             
     
-            
+    
+    def getStrStubDeclaration(self):
+        s = []
+        if self.isWrite():
+            s.append(self.v.declarationStubOut)
+
+        if self.isDrive():
+            s.append(self.v.declarationStubIn)
+        return s 
+        
+    
+    def getStrStubInstance(self):
+        s = []
+        if self.isWrite():
+            s.append(self.v.assignStubOut)
+
+        if self.isDrive():
+            s.append(self.v.assignStubIn)
+        return s         
     
     def getStrPortAssignment(self):
         s = []
@@ -214,15 +225,7 @@ class register(object):
             
     def getStrReset(self):
         s = []
-                
-        if self.hasEnableFlags():
-            if self.isRead():
-                s.append(self.v.wbRdZero) 
-            if self.isWrite():
-                s.append(self.v.wbWeZero)
-                
         s.append(self.v.reset)
-        
         return s
 
 
@@ -231,30 +234,26 @@ class register(object):
         
         if self.isDrive():
             s.append(self.v.readUpdate)
-        return s 
+        return s
+        
 
     def getStrPulsed(self):
         s = []        
         
         if self.isWrite():
             if self.isPulsed():
-                s.append(self.v.wbPulseZero)
-            if self.hasEnableFlags():
-                s.append(self.v.wbWeZero)
-        if self.isRead() and self.hasEnableFlags():
-            s.append(self.v.wbRdZero)        
+                s.append(self.v.wbPulseZero)    
+        return s
         
-        return s       
     
-    def getStrAddress(self, language="VHDL"):
-        adrC = ""         
-        adrV = "constant c_%s_%s : natural := 16#%s#;\n"            
-        
+    def getStrAddress(self, language="VHDL", lastAdr=0):
         s = []
-        adrHi = self.getLastAdr()
+        adrHi = lastAdr
         idxHi = mskWidth(adrHi) -1
         adrx = ("%0" + str((idxHi+1+3)/4) + "x")
-        mskx = ("0x%0" + str(self.dwidth/4) + "x")
+        mskx = ("%0" + str(self.dwidth/4) + "x")
+        
+        lang = str(language)        
         
         opIdx = 0            
         for opLine in self.opList:
@@ -279,11 +278,15 @@ class register(object):
                     bitmask = "g_%s" % msk
                 else:
                     bitmask = mskx % int(2**msk-1)
-                if(language == "C"):
-                    s.append(adrC % (self.slaveIf, self.name + op + idx, adrx % adr))
-                else:    
-
-                    s.append(self.v.constRegAdr % (op + idx, adrx % adr))
+                
+                if(lang.lower() == "c"):
+                    s.append(self.v.cConstRegAdr        % (op + idx, adrx % adr, rw, bitmask))
+                elif(lang.lower() == "vhdl"):
+                    s.append(self.v.vhdlConstRegAdr     % (op + idx, adrx % adr, rw, bitmask))                    
+                elif(lang.lower() == "python"):
+                    s.append(self.v.pythonConstRegAdr    % (op + idx, adrx % adr, rw, bitmask))      
+                else:
+                    print "<%s> is not a valid output language!" % language
                 
                 adrIdx += 1
             opIdx += 1
@@ -334,17 +337,11 @@ class register(object):
 
         
     def getStrFsmRead(self):
-       
-             
         s = []    
-        
         for opLine in self.opList:
             (op, adrList) = opLine
             if((op == "_GET") or (op == "_RW ")):                    
                 #this is sliced
-                
-                    
-                
                 adrIdx = 0            
                 for adrLine in adrList:
                     (msk, adr) = adrLine
@@ -359,10 +356,8 @@ class register(object):
                         curSlice         = "%u downto %u" % (curSliceHigh, curSliceLow)
                         baseSlice        = "%u downto %u" % (sliceWidth-1, 0)
                         
-                                        
                     regSlice         = ""    
                     enum = ""
-                    
                     if len(adrList) > 1:
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
@@ -370,7 +365,9 @@ class register(object):
                     s.append(self.v.wbRead % (op + enum, baseSlice, regSlice))
                     
                 if self.isStalling():             
-                    s.append(self.v.wbStall % self.name)    
+                    s.append(self.v.wbStall)
+                if self.hasEnableFlags():             
+                    s.append(self.v.wbRd)     
         return s
 
     def getStrFsmWrite(self):
@@ -402,7 +399,7 @@ class register(object):
                    
                     s.append(self.v.wbWrite % (op + enum, regSlice, regSlice, registerVhdlStr.wrModes[op]))
                 
-                if self.hasEnableFlags() and self.isWrite:
+                if self.hasEnableFlags():
                     s.append(self.v.wbWe)
                 if self.isStalling():             
                     s.append(self.v.wbStall)     
@@ -415,10 +412,10 @@ class internalregister(register):
         self.pages      = pages         
         self.name       = name
         self.desc       = desc
-        self.clkbase  = clkbase
+        self.clkbase    = clkbase
         self.clkdomain  = clkdomain
         self.rstvec     = rstvec        
-        self.flags     = flags
+        self.flags      = flags
         self.width      = mskWidth(bigMsk)
         self.opList     = []
         self.genIntD    = genIntD
@@ -431,9 +428,9 @@ class internalregister(register):
   
     
     def getLastAdr(self):
-        pass 
+        return None 
        
-    def getStrAddress(self, language="VHDL"):
+    def getStrAddress(self, language="VHDL", lastAdr=0):
         return []      
             
     def getStrFsmRead(self):

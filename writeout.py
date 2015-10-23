@@ -156,10 +156,10 @@ class writeout(object):
         
         
 
-    def writeStubVhd(self):
-        fileStubVhd     = self.unitname                  + ".vhd"
+    def writeStubVhd(self, slave, force=False):
+        filename        = self.unitname                  + ".vhd"       
         
-        if os.path.isfile(mypath + filename):
+        if os.path.isfile(self.mypath + filename):
             print "!!! Outer entity %s already exists !!!\n" % filename
             if not force:
                 print "I don't want to accidentally trash your work. To force overwrite, use '-f' or '--force' option"
@@ -168,8 +168,8 @@ class writeout(object):
                 print "Overwrite forced"
                 
         print "Generating stub entity           %s" % filename        
-        fo = open(mypath + filename, "w")
-        v = gVhdlStr(unitname, filename, author, email, version, date)
+        fo = open(self.mypath + filename, "w")
+        v = gVhdlStr(self.unitname, self.filename, self.author, self.email, self.version, self.date)
     
         header = adj(v.header + ['\n'], [':'], 0)
         
@@ -185,22 +185,32 @@ class writeout(object):
         libraries = v.libraries + [v.pkg % '_auto']
         for line in libraries:
             fo.write(line)
-            
+        
         fo.write(v.entityStart)
-        if(len(genIntD) + len(genMiscD) > 0):
+        if len(slave.getGenericList()):
             fo.write(v.genStart)
-            for line in genList:   
+            for line in slave.getGenericList():   
                 fo.write(line)
             fo.write(v.genEnd)
         
         fo.write(v.entityMid)
-        for line in stubPortList:
+        
+        for line in slave.getPortList():
             fo.write(line)
             
         fo.write(v.entityEnd)
         
         fo.write(v.archDecl)
-        for line in stubSigList:
+        
+    
+   
+        
+        fo.write(v.archStart)
+            
+        fo.write(v.archEnd)
+                
+        fo.write(v.archDecl)
+        for line in slave.getStubSignalList():
             fo.write(line)
         
         fo.write(v.archStart)
@@ -214,7 +224,7 @@ class writeout(object):
         #   a += instGenList
         #   a.append(v.instGenEnd)    
         a.append(v.instPortStart)
-        a += stubInstList
+        a += slave.getStubInstanceList()
         a.append(v.instPortEnd)
         a = iN(a, 1) 
         for line in a:
@@ -286,7 +296,30 @@ class writeout(object):
         
         fo.close
         
+    def writePythonDict(self, slave):
+    
+        #filenames for various output files
+        filename     = self.autoUnitName              + ".py"
+    
+        print "Generating Pyhton WB address dictionary for use in testbenches  %s" % filename 
         
+        fo = open(self.mypath + filename, "w")
+        
+        s = []
+        tmp = []        
+        
+        s.append("class %s (object):\n" % self.unitname)
+        tmp.append("%s = {\n" % slave.name)
+        tmp += slave.getAddressListPython()
+        tmp.append("}\n")
+        tmp = iN(tmp, 1)
+        s += tmp
+        
+        
+        for line in s:
+            fo.write(line)
+        
+        fo.close        
 
     def writePkgVhd(self, slave):
     
@@ -320,7 +353,7 @@ class writeout(object):
             fo.write(line)    
         
         decl = []
-       
+        decl.append("\n")
         decl += (iN(commentLine("--", "Component", self.autoUnitName), 1)) 
         
         for line in decl:
@@ -329,19 +362,20 @@ class writeout(object):
         decl = []
         decl.append(v.componentStart)
         if len(slave.getGenericList()):
-            fo.write(v.genStart)
+            decl.append(v.genStart)
             for line in slave.getGenericList():   
-                fo.write(line)
-            fo.write(v.genEnd)
+                decl.append(line)
+            decl.append(v.genEnd)
         decl.append(v.entityMid)
         for line in slave.getPortList():
-            fo.write(line)
+            decl.append(line)
         decl += v.componentEnd
         
         for line in slave.getStrSDB():
             decl.append(line)
        
         decl = iN(decl, 1)
+        decl.append("\n")
         for line in decl:
             fo.write(line)
         
