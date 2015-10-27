@@ -35,78 +35,11 @@ class gCStr(object):
 class registerVhdlStr(object):
     others             = "(others => '%s')"
     wrModes = {'_GET'  : 'owr',
-               '_SET'     : 'set',
-               '_CLR'     : 'clr',
-               '_OWR'     : 'owr',
-               '_RW'     : 'owr'} 
+               '_SET'  : 'set',
+               '_CLR'  : 'clr',
+               '_OWR'  : 'owr',
+               '_RW'   : 'owr'} 
     
-    #generate sync signal delcarations if neeeded
-    def getSyncSignalDeclaration(self, direction):
-        s = []
-        if self.wbDomain != self.clockDomain:
-            if direction == "out" or direction == "in":
-                for line in self.syncSigsTemplate:
-                    s.append(line % direction)
-        return s
-    
-    #generate simple or synced (FIFO) port assignment
-    def getPortAssignment(self, direction):
-        s = []
-        
-        if self.wbDomain != self.clockDomain:
-            matrixPageStr   = ""
-            sigInWrapper    = "%s"
-            sigOutWrapper   = "%s"
-            if self.pages > 0:
-                matrixPageStr   = "%s%s * " % self.genPagePrefix, self.pages
-                sigInWrapper    = "mflat(%s)"
-                sigOutWrapper   = "minfl(%s)"
-            syncwidth = "%s%s%s" % (matrixPageStr, self.genWidthPrefix, self.width)
-            
-            if direction == "out":
-                sigin   = sigInWrapper  % self.regname
-                sigout  = sigOutWrapper % self.portnameout
-                clkin   = wbsVhdlStrGeneral.clkportname % (self.wbDomain, self.wbDomain)
-                clkout  = wbsVhdlStrGeneral.clkportname % (self.clockDomain, self.clockDomain)
-            elif direction == "in":
-                sigin   = sigInWrapper  % self.portnamein
-                sigout  = sigOutWrapper % self.portsignamein
-                clkin   = wbsVhdlStrGeneral.clkportname % (self.clockDomain, self.clockDomain)
-                clkout  = wbsVhdlStrGeneral.clkportname % (self.wbDomain, self.wbDomain)        
-            else:
-                print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)
-            
-                        
-            #construct sync assignments            
-            for line in self.syncInstTemplate0_dir2:
-                s.append(line % (direction, direction))
-            s.append(self.syncInstTemplate1_dir % (direction))
-            s.append(self.syncInstTemplate2)
-            s.append(self.syncInstTemplate3_sw % syncwidth)
-            s += self.syncInstTemplate4
-            for line in self.syncInstTemplate5_dir:
-                s.append(line % direction)
-            s.append(self.syncInstTemplate6_ci % clkin)
-            s.append(self.syncInstTemplate7_co % clkout)
-            s.append(self.syncInstTemplate8_si % sigin)
-            s.append(self.syncInstTemplate9_so % sigout)
-                                       
-            return s                           
-        else:
-            if direction == "out":
-                s.append(self.portAssignTemplate % (self.portnameout, self.regname))
-            elif direction == "in":
-                s.append(self.portAssignTemplate % (self.portsignamein, self.portnamein))
-            else:
-                print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)    
-        return s        
-        
-        
-        
-      
-         
-        
-   
     def __init__(self, wbsStr, name, description, reset, genResetPrefix, width, genWidthPrefix, pages, genPagePrefix, clockDomain, wbDomain):
         self.int2slv    = "std_logic_vector(to_unsigned(%%s, %s))" % (width)
         self.hex2slv    = "std_logic_vector(to_unsigned(16#%%x#, %s))" % (width)    
@@ -118,8 +51,6 @@ class registerVhdlStr(object):
            if(str(reset).find('0x') > -1):
                self.resetvector = self.hex2slv % reset
           
-               
-                    
         self.pages          = pages
         self.genPagePrefix  = genPagePrefix
         self.width          = width
@@ -131,6 +62,7 @@ class registerVhdlStr(object):
         self.name = name
         self.regname        = "r_" + name
         self.signame        = "s_" + name
+        
         
         #don't bother mentioning the clk domain in the portname if it is not foreign        
         clkdomainSuffix = ""
@@ -193,6 +125,7 @@ class registerVhdlStr(object):
             self.wbRead                 = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
             self.wbWrite                = wbsStr.wbWriteMatrix % (self.name, self.regname, "") # Slice, Slice
             self.wbPulseZero            = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.int2slv % 0))
+            self.setHigh                = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.others % '1'))
         else:
             #default: Slv    
             self.declarationReg         = self.slv % (self.regname)
@@ -205,6 +138,7 @@ class registerVhdlStr(object):
             self.wbRead                 = wbsStr.wbRead % (self.name, self.regname, "") # Slice
             self.wbWrite                = wbsStr.wbWrite % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero            = "%s <= %s;\n" % (self.regname,  (self.others % '0'))
+            self.setHigh                = "%s <= %s;\n" % (self.regname,  (self.others % '1'))
         # derived from wbslave strings
        
         #address constant
@@ -219,14 +153,9 @@ class registerVhdlStr(object):
         self.wbStall            = wbsStr.wbStall
         
         #port assignment, basic or with synchronisation
-        self.portAssignOutList      = self.getPortAssignment("out")
-        self.portAssignInList       = self.getPortAssignment("in")
         
         self.assignStubOut          = wbsStr.assignStub % (self.portnameout, self.portnameout)
         self.assignStubIn           = wbsStr.assignStub % (self.portnamein, self.portnamein)
-        #syncronisation register/signal declaration
-        self.declarationSyncInList  = self.getSyncSignalDeclaration("in")
-        self.declarationSyncOutList = self.getSyncSignalDeclaration("out")
         
         #assigns the register input port to the register inside the FSM process. Write Arbitration with Wishbone write data, WB wins
         self.readUpdate             = self.portAssignTemplate % (self.regname, self.portsignamein)
@@ -250,7 +179,7 @@ class wbsVhdlStrRegister(object):
         self.matrixStub         = "signal s_" + slaveIfName + "_%s : t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n"
         self.assignStub         = "%s => s_" + slaveIfName + "_%s,\n"
         
-        self.wbStall            = "r_%s_stall <= \"1\"; --    %s auto stall\n" % (slaveIfName, slaveIfName)
+        self.wbStall            = "r_%s_%%s <= \"1\"; --    %s auto stall\n" % (slaveIfName, slaveIfName)
  
         
      
@@ -310,9 +239,9 @@ class wbsVhdlStrGeneral(object):
                            "   v_d := %s_i.dat;\n" % slaveIfName]
         self.wbs1_adr   =  "   v_a := to_integer(unsigned(%s_i.adr(%%u downto %%u)) %%s);\n" % slaveIfName
         self.wbs1_1     = ["   v_s := %s_i.sel;\n" % slaveIfName,
-                           "   v_e := %s_i.cyc and %s_i.stb and (not r_%s_stall(0));\n" % (slaveIfName, slaveIfName, slaveIfName),
-                           "   v_w := %s_i.we;\n\n" % slaveIfName] 
+                           "   v_w := %s_i.we;\n" % slaveIfName] 
       
+        self.enable     =  "   v_e := %s_i.cyc and %s_i.stb and (not %%s(0));\n\n" % (slaveIfName, slaveIfName)
         self.wbs2       = ["if(v_e = '1') then\n",
                            "   %s_o.ack  <= '1';\n" % slaveIfName,
                            "   if(v_w = '1') then\n",
@@ -335,9 +264,9 @@ class wbsVhdlStrGeneral(object):
         self.wbsPageSelect      = "v_p := to_integer(unsigned(r_%s));\n\n"  % selector #pageSelect Register
                           
                            
-        self.wbsStall0   = "%s_o.stall <= r_%s_stall(0);\n" % (slaveIfName, slaveIfName)
+        self.wbsStall0   = "%s_o.stall <= %%s(0);\n" % (slaveIfName)
         
-        self.wbsStall1   = "r_%s_stall <= r_%s_stall and %%s; -- extend stall if requested by outer entity\n" % (slaveIfName, slaveIfName) 
+        self.wbsStall1   = "%s <= %s and %s; -- extend stall if requested by outer entity\n"
          
      
         self.wbOthers           = ["when others => %s_o.ack <= '0'; %s_o.err <= '1';\n" % (slaveIfName, slaveIfName)]

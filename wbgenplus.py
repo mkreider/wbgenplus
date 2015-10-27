@@ -244,7 +244,8 @@ def parseXMLNew(xmlIn, now, unitname):
                     else:
                         print "Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val)
                       
-            tmpSlave.addReg(tmpSlave.createReg(regname, regdesc, regmsk, regflags, regclk, rstvec, regadr))
+                      
+            tmpSlave.addWbReg(regname, regdesc, regmsk, regflags, regclk, rstvec, regadr)
       
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
             if(isinstance(pages, int)):
