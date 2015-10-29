@@ -7,9 +7,9 @@ Created on Mon Oct 19 16:51:23 2015
 import math
 from register import Register
 from register import WbRegister
-from stringtemplates import wbsVhdlStrGeneral
-from stringtemplates import wbsVhdlStrRegister
-from stringtemplates import wbsCStr
+from stringtemplates import wbsVhdlStrGeneral as wbsVG
+from stringtemplates import wbsVhdlStrRegister as wbsVR
+from stringtemplates import wbsCStr as wbsC
 
 
 from textformatting import beautify as adj
@@ -42,13 +42,14 @@ class wbslave(object):
         self.genIntD    = genIntD
         self.genMiscD   = genMiscD
         self.genPrefix  = genPrefix
-        self.v          = wbsVhdlStrGeneral(unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, version, date, selector)
-        self.vreg       = wbsVhdlStrRegister(slaveIfName)
-        self.c          = wbsCStr(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
+        self.v          = wbsVG(unitname, slaveIfName, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, version, date)
+        self.vreg       = wbsVR(slaveIfName)
+        self.c          = wbsC(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
 
         #create flow control 
         tmpReg = self._createWbReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
-        tmpStrD = {'set'    : [self.v.wbsStall1 % (tmpReg.v.regname, tmpReg.v.regname, tmpReg.v.portsignamein)],
+        #override default set and assign        
+        tmpStrD = {'setdef' : [self.v.wbsStall1 % (tmpReg.v.regname, tmpReg.v.regname, tmpReg.v.portsignamein)],
                    'assign' : [self.v.wbsStall0 % tmpReg.v.regname],
                    }
         tmpReg.setCustomStrDict(tmpStrD)
@@ -69,33 +70,63 @@ class wbslave(object):
 
     def addWbReg(self, name, desc, bits, flags, clkdomain="sys", rstvec=None, startAdr=None):
         
-        #dummy so the int regs don't mess with
-        tmpIntStrD = {'assign'  : [""]}
-        customStrD = {'read'    : [],
-                      'write'   : []}
+  
+        customStrD = dict()
+     
+        #create the register
                       
-        
         reg = self._createWbReg(name, desc, bits, flags, clkdomain, rstvec, startAdr)
         
-        #check for flags
-        print "reg %s has %s" % (name, flags)
+        #modify behavior depending on corner cases
         if reg.hasEnableFlags():
             if reg.isWrite():
-                
+
                 tmpReg = self._createIntReg(reg.name + "_WR", "Write enable flag", "1", "wp", reg.clkdomain, 0)
-                tmpReg.setCustomStrDict(tmpIntStrD) # prevent it from doing its own port assignment
                 self._addReg(tmpReg)
+                customStrD.setdefault('write', [])
                 customStrD['write'] += [tmpReg.v.setHigh]
                 
             if reg.isRead():
                 tmpReg = self._createIntReg(reg.name + "_RD", "Read enable flag", "1", "wp", reg.clkdomain, 0)
-                tmpReg.setCustomStrDict(tmpIntStrD) # prevent it from doing its own port assignment
                 self._addReg(tmpReg)
+                customStrD.setdefault('read', [])
                 customStrD['read'] += [tmpReg.v.setHigh]
         if reg.isStalling():
+            customStrD.setdefault('read', [])  
             customStrD['read']  += [self.stallReg.v.setHigh]
+            customStrD.setdefault('write', [])
             customStrD['write'] += [self.stallReg.v.setHigh]            
-        
+        #syncing is a lot of work, too many corner cases for a generic solution.
+        #so - let's get custom. big time.    
+        elif reg.isSync():
+                                      
+            if reg.isDrive():
+                customStrD.setdefault('assigndef', [])
+                customStrD.setdefault('port', [])
+                customStrD.setdefault('signal', [])
+                customStrD['assigndef']    += adj(reg.syncvin.syncInstTemplate0, ['<='], 0)
+                customStrD['assigndef']    += adj(reg.syncvin.syncInstTemplate1, ['=>'], 0)
+                customStrD['port']      += reg.syncvin.syncPortDeclaration
+                customStrD['signal']    += reg.syncvin.syncSigsDeclaration 
+            if reg.isWrite():
+                customStrD.setdefault('write', [])
+                customStrD.setdefault('set', [])
+                customStrD.setdefault('reset', [])
+                #flow control from sync fifo out. stall if 'almost full'
+                customStrD['write'] += [wbsVG.assignTemplate % (self.stallReg.v.regname + "(0)",
+                                        self.stallReg.v.regname + "(0) or " + reg.syncvout.amfull)]
+                #fifo push. we don't heed 'full' because stall takes 'almost full' into account.
+                #If fifo is full, we're stalling already anyway                                
+                customStrD['write']     += [wbsVG.assignTemplate % (reg.syncvout.push, "'1'")] 
+                customStrD['set']       += [wbsVG.assignTemplate % (reg.syncvout.push, "'0'")]
+                customStrD['reset']     += [wbsVG.assignTemplate % (reg.syncvout.push, "'0'")] 
+                customStrD.setdefault('assigndef', [])
+                customStrD.setdefault('port', [])
+                customStrD.setdefault('signal', [])
+                customStrD['assigndef']    += adj(reg.syncvout.syncInstTemplate0, ['<='], 0)
+                customStrD['assigndef']    += adj(reg.syncvout.syncInstTemplate1, ['=>'], 0)
+                customStrD['port']      += reg.syncvout.syncPortDeclaration
+                customStrD['signal']    += reg.syncvout.syncSigsDeclaration 
         
         reg.setCustomStrDict(customStrD)
         self._addReg(reg)
@@ -153,10 +184,10 @@ class wbslave(object):
         s = []
 
         for clock in self.clocks:
-            tmpClk = wbsVhdlStrGeneral.clkportname % (clock)
-            tmpRst = wbsVhdlStrGeneral.rstportname % (clock)
-            s.append(wbsVhdlStrGeneral.assignStub % (tmpClk, tmpClk))
-            s.append(wbsVhdlStrGeneral.assignStub % (tmpRst, tmpRst))
+            tmpClk = wbsVG.clkportname % (clock)
+            tmpRst = wbsVG.rstportname % (clock)
+            s.append(wbsVG.assignStub % (tmpClk, tmpClk))
+            s.append(wbsVG.assignStub % (tmpRst, tmpRst))
 
         for reg in self.registers:
             s += reg.getStrStubInstance()
@@ -185,7 +216,7 @@ class wbslave(object):
     def getAssignmentList(self):
         s = []
         for reg in self.registers:
-            s += reg.getStrPortAssignment()
+            s += reg.getStrAssignment()
         #generate flow control code
         
 
@@ -196,7 +227,7 @@ class wbslave(object):
         s = []
         for key in self.genIntD:
             (gtype, default, description) = self.genIntD[key]
-            tmp.append(wbsVhdlStrGeneral.generic % (self._getGenPrefix()+key, gtype, default, description))
+            tmp.append(wbsVG.generic % (self._getGenPrefix()+key, gtype, default, description))
         if len(tmp):
             for line in tmp[:-1]:
                 s.append(line % ";")
@@ -207,8 +238,8 @@ class wbslave(object):
     def getPortList(self):
         s = []
         for clock in self.clocks:
-            s.append(wbsVhdlStrGeneral.clkport % (clock, clock))
-            s.append(wbsVhdlStrGeneral.rstport % (clock, clock))
+            s.append(wbsVG.clkport % (clock, clock))
+            s.append(wbsVG.rstport % (clock, clock))
         t = []
 
         sortedregs = sorted(self.registers, key=lambda x: (x.clkdomain, x.isWrite(), x.name), reverse=False)
@@ -291,7 +322,9 @@ class wbslave(object):
         s +=  iN(self.v.wbOthers, 7)
         s +=  iN(self.v.wbs3, 5)
         s += adj(self._getFsmReadList(), ['=>', '<=', "--"], 7)
+        s +=  iN(self.v.wbOthers, 7)        
         s +=  iN(self.v.wbs4, 1)
+        
 
         return s
 
@@ -312,28 +345,4 @@ class wbslave(object):
         else:
             return [self.v.wbsPageSelect % self.selector]
 
-    def getDocList(self, language):
-        if language == "VHDL":
-            mark = "--"
-        elif language == "C":
-            mark = "//"
-        else:
-            mark = ""
-
-        adrHi = "%x" % self._getLastAddress()
-        nibbles = len(adrHi)
-        sHex = "0x"
-        sAdr = "Adr"
-
-        s = []
-        s += cbox(mark,"Register map", self.sdbname)
-        s.append(mark + " " + sAdr + ' ' * ((len(sHex)+nibbles)+1 - len(sAdr)) + "D  Name : Width -> Comment\n")
-        s.append(mark + '-' * 92 + '\n')
-
-        for reg in self.registers:
-            docList = reg.getInterfaceDocStrings(nibbles)
-            for line in docList:
-                s.append("-- " + line)
-        s.append('\n')
-        return s
 

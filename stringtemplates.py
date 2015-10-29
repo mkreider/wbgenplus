@@ -29,6 +29,98 @@ class gCStr(object):
         self.hdrfileEnd     =  "#endif\n"        
 
 
+        
+
+
+
+
+
+class syncVhdlStr(object):
+    def __init__(self, name, depth, width, genWidthPrefix, pages, genPagePrefix, clkdomain, clkbase, direction):
+        
+        self.direction = direction        
+        
+        fifo   = "%s_fifo_%s_" % (name, direction)       
+        decl   = "signal %s : std_logic;\n"
+        port   = "%s : %s std_logic;\n"
+        portI  = "%%s_%s_i" % clkdomain
+        portSI = "s_%s_i"
+        portO  = "%%s_%s_o" % clkdomain
+        sig    = "s_%s"        
+        reg    = "r_%s"        
+        
+        push   = fifo + "push"
+        pop    = fifo + "pop"
+        full   = fifo + "full"
+        amfull = fifo + "almost_full"
+        empty  = fifo + "empty"            
+        
+        self.push   = sig % push
+        self.pop    = sig % pop
+        self.full   = sig % full
+        self.amfull = sig % amfull
+        self.empty  = sig % empty
+        
+        matrixPageStr   = ""
+        sigInWrapper    = "%s"
+        sigOutWrapper   = "%s"
+        if pages > 0:
+            matrixPageStr   = "%s%s * " % (genPagePrefix, pages)
+            sigInWrapper    = "mflat(%s)"
+            sigOutWrapper   = "%s"
+        syncwidth = "%s%s%s" % (matrixPageStr, genWidthPrefix, width)
+        
+        if direction == "out":
+            sigin   = sigInWrapper  % (reg % name)
+            sigout  = sigOutWrapper % (portO % name)
+            clkin   = wbsVhdlStrGeneral.clkportname % (clkbase)
+            clkout  = wbsVhdlStrGeneral.clkportname % (clkdomain)
+            self.syncPortDeclaration    = [port % ((portI % pop), "in"), 
+                                           port % ((portO % empty), direction) ]
+            self.syncInstTemplate0      = ["\n",
+                                           "%s <= %s;\n" % ((portO % empty), self.empty),
+                                           "%s <= %s;\n\n" % (self.pop, (portI % pop)),
+                                           ] 
+        elif direction == "in":
+            sigin   = sigInWrapper  % (portI % name)
+            sigout  = sigOutWrapper % (portSI % name)
+            clkin   = wbsVhdlStrGeneral.clkportname % (clkdomain)
+            clkout  = wbsVhdlStrGeneral.clkportname % (clkbase)
+            self.syncPortDeclaration = [port % ((portI % push), direction) , 
+                                        port % ((portO % full), "out") ]
+            self.syncInstTemplate0   = ["\n",
+                                       "%s <= not %s;\n"  % (self.pop, self.empty),
+                                       "%s <= %s;\n"      % ((portO % full), self.full),
+                                       "%s <= %s;\n\n"      % (self.push, (portI % push))]
+        else:
+            print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)
+                
+ 
+        self.syncSigsDeclaration  = [decl % (self.push), 
+                                     decl % (self.pop), 
+                                     decl % (self.full), 
+                                     decl % (self.amfull),
+                                     decl % (self.empty)] 
+         
+        self.syncInstTemplate1      = ["%s_FIFO_%s : generic_async_fifo\n" % (name, direction),
+                                       "generic map(\n",
+                                       "  g_data_width          => %s,\n" % (syncwidth),
+                                       "  g_size                => %s,\n" % (depth),
+                                       "  g_show_ahead          => true,\n",
+                                       "  g_with_rd_empty       => true,\n",
+                                       "  g_with_wr_almost_full => true,\n",                                        
+                                       "  g_with_wr_full        => true)\n",
+                                       "port map(\n",
+                                       "  rst_n_i  => %s,\n" % wbsVhdlStrGeneral.rstportname % (clkbase),
+                                       "  we_i     => %s,\n" % (self.push), 
+                                       "  rd_i     => %s,\n" % (self.pop), 
+                                       "  rd_empty_o  => %s,\n" % (self.empty), 
+                                       "  wr_full_o   => %s,\n" % (self.full), 
+                                       "  clk_wr_i => %s,\n" % (clkin),                        
+                                       "  clk_rd_i => %s,\n" % (clkout),
+                                       "  d_i      => %s,\n" % (sigin),
+                                       "  q_o      => %s);\n\n" % (sigout)]
+
            
 
 
@@ -59,106 +151,65 @@ class registerVhdlStr(object):
         self.clockDomain    = clockDomain
         self.wbDomain       = wbDomain
        
-        self.name = name
+        self.name           = name
         self.regname        = "r_" + name
         self.signame        = "s_" + name
-        
         
         #don't bother mentioning the clk domain in the portname if it is not foreign        
         clkdomainSuffix = ""
         if clockDomain != wbDomain:
             clkdomainSuffix = "_" + clockDomain
-            
-        self.portnamein     = name + clkdomainSuffix + "_i"
-        self.portsignamein  = "s_" + name + "_i"
-        self.portnameout    = name + clkdomainSuffix + "_o"
         
-        # a lot of templates
-        self.matrix       = "signal %%s : t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n" % (genPagePrefix, pages, genWidthPrefix, width, description)
-        self.slv          = "signal %%s : std_logic_vector(%s%s-1 downto 0); -- %s\n" % (genWidthPrefix, width, description)
-        self.sl           = "signal %%s : std_logic; -- %s\n" % (description)
-                
-        self.portmatrix   = "%%s : %%s t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n" % (genPagePrefix, pages, genWidthPrefix, width, description) 
-        self.portslv      = "%%s : %%s std_logic_vector(%s%s-1 downto 0); -- %s\n" % (genWidthPrefix, width, description)          
-        self.portsl       = "%%s : %%s std_logic; -- %s\n" % (description)
-        
-        self.portAssignTemplate = "%s <= %s;\n"
-        
-        self.syncSigsTemplate  = ["signal s_%s_fifo_%%s_push  : std_logic; -- Sync signals\n" % (self.signame), # in/out
-                              "signal s_%s_fifo_%%s_pop   : std_logic;\n"  % (self.signame), # in/out
-                              "signal s_%s_fifo_%%s_full  : std_logic;\n"  % (self.signame), # in/out
-                              "signal s_%s_fifo_%%s_empty : std_logic;\n"  % (self.signame)] # in/out
-         
-        #sync instance template. has to be chopped up like this to make fill in easier 
-        self.syncInstTemplate0_dir2 = ["  %s_fifo_%%s_pop    <= not %s_fifo_%%s_empty;\n" % (self.signame, self.signame), # in/out
-                                       "  %s_fifo_%%s_push   <= not %s_fifo_%%s_full;\n\n" % (self.signame, self.signame)]  # in/out                       
-        self.syncInstTemplate1_dir  =  "%s_FIFO_%%s : generic_async_fifo\n" % (self.name) # in/out
-        self.syncInstTemplate2      = "generic map(\n"
-        self.syncInstTemplate3_sw   = "  g_data_width   => %s,\n"
-        self.syncInstTemplate4      = ["  g_size         => %s,\n" % (8),
-                                       "  g_show_ahead   => true,\n",
-                                       "  g_with_rd_empty   => true,\n",
-                                       "  g_with_wr_full    => true)\n",
-                                       "port map(\n",
-                                       "  rst_n_i  => %s,\n" % wbsVhdlStrGeneral.rstportname % (self.wbDomain)]
-        self.syncInstTemplate5_dir  = ["  we_i     => %s_fifo_%%s_push,\n" % (self.signame), # in/out
-                                       "  rd_i     => %s_fifo_%%s_pop,\n" % (self.signame), # in/out
-                                       "  rd_empty_o  => s_%s_fifo_%%s_empty,\n" % (self.signame), # in/out
-                                       "  wr_full_o   => s_%s_fifo_%%s_full,\n" % (self.signame)] # in/out
-        self.syncInstTemplate6_ci   = "  clk_wr_i => clk_%s_i,\n" # clkin,                        
-        self.syncInstTemplate7_co   = "  clk_rd_i => clk_%s_i,\n" # clkout
-        self.syncInstTemplate8_si   = "  d_i      => %s,\n" #sigin
-        self.syncInstTemplate9_so   = "  q_o      => %s);\n\n" #sigout
-        
-       
-        # Create all Register Declarations, the reset command, FSM read & write command and pulse generation command  
-             
-        #if paged, make this a matrix  
-        if self.pages > 0:
-            self.declarationReg         = self.matrix % (self.regname)
-            self.declarationStubIn      = wbsStr.matrixStub % (self.portnamein, genPagePrefix, pages, genWidthPrefix, width, description)
-            self.declarationStubOut     = wbsStr.matrixStub % (self.portnameout, genPagePrefix, pages, genWidthPrefix, width, description)
-            self.declarationPortSigIn   = self.matrix % (self.portsignamein)
-            self.declarationPortIn      = self.portmatrix % (self.portnamein, "in ")
-            self.declarationPortOut     = self.portmatrix % (self.portnameout, "out")
-            self.reset                  = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, self.resetvector)
-            self.wbRead                 = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
-            self.wbWrite                = wbsStr.wbWriteMatrix % (self.name, self.regname, "") # Slice, Slice
-            self.wbPulseZero            = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.int2slv % 0))
-            self.setHigh                = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.others % '1'))
+        if pages > 0:        
+            self.dtype          = "matrix(%s%s-1 downto 0, %s%s-1 downto 0)" % (genPagePrefix, pages, genWidthPrefix, width)
+            self.reset          = "%s <= mrst(%s);\n" % (self.regname, self.regname)
+            self.wbRead         = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
+            self.wbWrite        = wbsStr.wbWriteMatrix % (self.name, self.regname, self.regname, self.regname, "") # Slice, Slice
+            self.wbPulseZero    = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.int2slv % 0))
+            self.setHigh        = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.others % '1'))
         else:
-            #default: Slv    
-            self.declarationReg         = self.slv % (self.regname)
-            self.declarationStubIn      = wbsStr.slvStub % (self.portnamein, genWidthPrefix, width, description)
-            self.declarationStubOut     = wbsStr.slvStub % (self.portnameout, genWidthPrefix, width, description)
-            self.declarationPortSigIn   = self.slv % (self.portsignamein)
-            self.declarationPortIn      = self.portslv % (self.portnamein, "in ")
-            self.declarationPortOut     = self.portslv % (self.portnameout, "out")
+            self.dtype = "std_logic_vector(%s%s-1 downto 0)" % (genWidthPrefix, width)
             self.reset                  = "%s <= %s;\n" % (self.regname, self.resetvector)
             self.wbRead                 = wbsStr.wbRead % (self.name, self.regname, "") # Slice
             self.wbWrite                = wbsStr.wbWrite % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero            = "%s <= %s;\n" % (self.regname,  (self.others % '0'))
             self.setHigh                = "%s <= %s;\n" % (self.regname,  (self.others % '1'))
-        # derived from wbslave strings
-       
+        
+        
+        self.portnamein     = name + clkdomainSuffix + "_i"
+        self.portsignamein  = 's_' + name + "_i"
+        self.portnameout    = name + clkdomainSuffix + "_o"
+        self.declaration    = "signal %%s : %s; -- %s\n" % (self.dtype, description)
+        self.port           = "%%s : %%s %s; -- %s\n" % (self.dtype, description)
+        
+        
+        self.sl           = "signal %%s : std_logic; -- %s\n" % (description)        
+        # Create all Register Declarations, the reset command, FSM read & write command and pulse generation command  
+        self.declarationReg         = self.declaration % (self.regname)
+        self.declarationPortSigIn    = self.declaration % (self.portsignamein)
+        self.declarationStubIn      = wbsStr.stub % (self.portnamein, self.dtype, description)
+        self.declarationStubOut     = wbsStr.stub % (self.portnameout, self.dtype, description) 
+        self.declarationPortIn      = self.port % (self.portnamein,  "in ")
+        self.declarationPortOut     = self.port % (self.portnameout, "out")        
+        
+        
+        
+
         #address constant
         self.vhdlConstRegAdr    = wbsStr.vhdlConstRegAdr % (self.name, description) #address, operation, address, mask
         self.cConstRegAdr       = wbsStr.cConstRegAdr % (self.name, description)
         self.pythonConstRegAdr  = wbsStr.pythonConstRegAdr % (self.name, description)
         
-        # Flags
-        self.wbRd               = "%s_RD <= \"1\"; -- %s Read enable\n" % (self.regname, self.name)          
-        self.wbWe               = "%s_WR <= \"1\"; -- %s Write enable\n" % (self.regname, self.name)
         #Flow control
         self.wbStall            = wbsStr.wbStall
         
         #port assignment, basic or with synchronisation
         
-        self.assignStubOut          = wbsStr.assignStub % (self.portnameout, self.portnameout)
-        self.assignStubIn           = wbsStr.assignStub % (self.portnamein, self.portnamein)
+        self.assignStubOut      = wbsStr.assignStub % (self.portnameout, self.portnameout)
+        self.assignStubIn       = wbsStr.assignStub % (self.portnamein, self.portnamein)
         
         #assigns the register input port to the register inside the FSM process. Write Arbitration with Wishbone write data, WB wins
-        self.readUpdate             = self.portAssignTemplate % (self.regname, self.portsignamein)
+        self.readUpdate         = wbsVhdlStrGeneral.assignTemplate % (self.regname, self.portsignamein)
         
         
     
@@ -169,14 +220,15 @@ class wbsVhdlStrRegister(object):
         self.slaveIfName    = slaveIfName        
         #this is total crap - why can't we have more than two % signs in formatting ?
         self.wbRead             = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= %s%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
-        self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= rget(%%s, v_p)%%%s; -- %%s\n" #regname, #op, #slice, registerName, #slice, description
         self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, v_d, v_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
-        self.wbWriteMatrix      = "when c_" + "%s%%s => %s%%s <= rset(%%s, v_page, f_wb_wr(rget(%%s, v_p)%%s, v_d, v_s, \"%%s\")); -- %%s\n" #registerName, registerName, (set/clr/owr), desc
+        
+        self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= mget(%s, v_p)%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
+        self.wbWriteMatrix      = "when c_" + "%s%%s => %s%%s <= mset(%s, f_wb_wr(mget(%s, v_p)%%s, v_d, v_s, \"%%s\"), v_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
+        
         self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s 0x%%s, %s\n" #name, adrVal, adrVal, rw, msk, desc
         self.cConstRegAdr       = "#define " + slaveIfName.upper() + "_%s%%s 0x%%s //%%s 0x%%s %s\n" 
         self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s 0x%%s, %s\n" #name, adrVal, adrVal, rw, msk, desc
-        self.slvStub            = "signal s_" + slaveIfName + "_%s : std_logic_vector(%s%s-1 downto 0); -- %s\n"
-        self.matrixStub         = "signal s_" + slaveIfName + "_%s : t_matrix(%s%s-1 downto 0, %s%s-1 downto 0); -- %s\n"
+        self.stub               = "signal s_" + slaveIfName + "_%s : %s; -- %s\n"
         self.assignStub         = "%s => s_" + slaveIfName + "_%s,\n"
         
         self.wbStall            = "r_%s_%%s <= \"1\"; --    %s auto stall\n" % (slaveIfName, slaveIfName)
@@ -194,11 +246,12 @@ class wbsVhdlStrGeneral(object):
     generic = "%s : %s := %s%%s --%s\n"
     clkport = "clk_%s_i : std_logic; -- Clock input for %s domain\n"
     clkportname = "clk_%s_i"
-    rstport = "rst_%s_n_i : std_logic; -- Reset input (active low) for %s domain\n"
+    rstport     = "rst_%s_n_i : std_logic; -- Reset input (active low) for %s domain\n"
     rstportname = "rst_%s_n_i"
-    assignStub         = "%s => %s,\n"
+    assignStub  = "%s => %s,\n"
+    assignTemplate = "%s <= %s;\n"    
 
-    def __init__(self, unitname, slaveIfName, dataWidth, vendId, devId, sdbname, clocks, version, now, selector):
+    def __init__(self, unitname, slaveIfName, dataWidth, vendId, devId, sdbname, clocks, version, now):
         self.unitname       = unitname
         self.slaveIfName    = slaveIfName        
         self.dataWidth      = dataWidth
@@ -261,7 +314,7 @@ class wbsVhdlStrGeneral(object):
                            "end process;\n\n"]
         
                            
-        self.wbsPageSelect      = "v_p := to_integer(unsigned(r_%s));\n\n"  % selector #pageSelect Register
+        self.wbsPageSelect      = "v_p := to_integer(unsigned(r_%s));\n\n"  #pageSelect Register
                           
                            
         self.wbsStall0   = "%s_o.stall <= %%s(0);\n" % (slaveIfName)
@@ -353,7 +406,9 @@ class gVhdlStr(object):
         self.libraries  = ["library ieee;\n",
                            "use ieee.std_logic_1164.all;\n",
                            "use ieee.numeric_std.all;\n",
-                           "use work.wishbone_pkg.all;\n"]
+                           "use work.wishbone_pkg.all;\n",
+                           "use work.matrix_pkg.all;\n",
+                           "use work.genram_pkg.all;\n"]
         self.pkg        =  "use work.%s%%s_pkg.all;\n\n" % unitname                   
            
         self.packageStart       = "package %s_pkg is\n\n" % unitname

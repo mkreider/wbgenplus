@@ -5,12 +5,15 @@ Created on Mon Oct 19 16:36:49 2015
 @author: mkreider
 """
 from stringtemplates import registerVhdlStr
-from stringtemplates import wbsVhdlStrGeneral
+from stringtemplates import syncVhdlStr
+from stringtemplates import wbsVhdlStrGeneral as wbsVG
 from textformatting import mskWidth as mskWidth
 
 
 class Register(object):
 
+    depth = 8
+    genPrefix = 'g_'
 
     def __init__(self, wbStr, genIntD, name, desc, flags, bits, rstvec, pages, clkBase, clkDom):
     
@@ -37,13 +40,25 @@ class Register(object):
         self.v = registerVhdlStr(wbStr, self.name, self.desc, self.rstvec, self.getGenResetPrefix(), self.width,
                                  self.getGenWidthPrefix(), int(self.isPaged()) * self.pages, # 0 if this reg has no pages
                                  self.getGenPagePrefix(), self.clkdomain, self.clkbase)
-
-        
-        print "Reg %s Flags %s" % (self.name, self.flags)
+        #create the                         
+        if self.isSync():
+            if self.isDrive():
+                self.syncvin    = syncVhdlStr(self.name, Register.depth, self.width, self.getGenWidthPrefix(), 
+                                              int(self.isPaged()) * self.pages, self.getGenPagePrefix(),
+                                              self.clkdomain, self.clkbase, "in")
+            if self.isWrite():
+                self.syncvout   = syncVhdlStr(self.name, Register.depth, self.width, self.getGenWidthPrefix(), 
+                                              int(self.isPaged()) * self.pages, self.getGenPagePrefix(),
+                                              self.clkdomain, self.clkbase, "out")                              
         
 
     def setCustomStrDict(self, customD):
         self.customStrD = customD
+
+    def isSync(self):
+        if self.clkbase != self.clkdomain:
+            return True
+        return False
 
     def isWrite(self):
         if(self.flags.find('w') > -1):
@@ -59,6 +74,8 @@ class Register(object):
         if(self.flags.find('d') > -1):
             return True
         return False
+
+  
 
     def isPaged(self):
         if(self.flags.find('m') > -1):
@@ -106,29 +123,28 @@ class Register(object):
 
     def getGenWidthPrefix(self):
         if self.isGenericWidth():
-            return self.genPrefix
+            return Register.genPrefix
         return ""
 
     def getGenResetPrefix(self):
         if self.isGenericReset():
-            return self.genPrefix
+            return Register.genPrefix
         return ""
 
     def getGenPagePrefix(self):
         if self.isGenericPaged():
-            return self.genPrefix
+            return Register.genPrefix
         return ""
 
     def getStrSignalDeclaration(self):
         s = []
+               
         s.append(self.v.declarationReg)
-        if self.isWrite():
-            #s.append(self.v.declarationPortSigOut)
-            s += self.getSyncSignalDeclaration("out") #will only be generated if sync
-
         if self.isDrive():
             s.append(self.v.declarationPortSigIn)
-            s += self.getSyncSignalDeclaration("in")  #will only be generated if sync
+        
+        if self.customStrD.has_key('signal'):
+            s += self.customStrD['signal'] 
 
         s.append
         return s
@@ -141,81 +157,25 @@ class Register(object):
 
         if self.isDrive():
             s.append(self.v.declarationPortIn)
+            
+        if self.customStrD.has_key('port'):
+            s += self.customStrD['port']    
         return s
 
-    #generate sync signal delcarations if neeeded
-    def getSyncSignalDeclaration(self, direction):
+    def getStrAssignment(self):
         s = []
-        if self.clkbase != self.clkdomain:
-            if direction == "out" or direction == "in":
-                for line in self.syncSigsTemplate:
-                    s.append(line % direction)
-        return s
-    
-    def getStrPortAssignment(self):
-        s = []
-        if self.customStrD.has_key('assign'):
-            s += self.customStrD['assign']
+        if self.customStrD.has_key('assigndef'):
+            s += self.customStrD['assigndef']
         else:
             if self.isDrive():
-                s += self._getPortAssignment("in")
+                s.append(wbsVG.assignTemplate % (self.v.portsignamein, self.v.portnamein))
+            
             if self.isWrite():
-                s += self._getPortAssignment("out")
+                s.append(wbsVG.assignTemplate % (self.v.portnameout, self.v.regname))
+        if self.customStrD.has_key('assign'):
+            s += self.customStrD['assign']
         return s    
     
-    #generate simple or synced (FIFO) port assignment
-    def _getPortAssignment(self, direction):
-        s = []
-        
-        if self.clkbase != self.clkdomain:
-            matrixPageStr   = ""
-            sigInWrapper    = "%s%s%s"
-            sigOutWrapper   = "%s%s%s"
-            if self.pages > 0:
-                matrixPageStr   = "%s%s * " % self.genPagePrefix, self.pages
-                sigInWrapper    = "mflat(%s)"
-                sigOutWrapper   = "minfl(%s)"
-            syncwidth = "%s%s%s" % (matrixPageStr, self.genWidthPrefix, self.width)
-            
-            if direction == "out":
-                sigin   = sigInWrapper  % self.v.regname
-                sigout  = sigOutWrapper % self.v.portnameout
-                clkin   = wbsVhdlStrGeneral.clkportname % (self.clkbase, self.clkbase)
-                clkout  = wbsVhdlStrGeneral.clkportname % (self.clkdomain, self.clkdomain)
-            elif direction == "in":
-                sigin   = sigInWrapper  % self.v.portnamein
-                sigout  = sigOutWrapper % self.v.portsignamein
-                clkin   = wbsVhdlStrGeneral.clkportname % (self.clkdomain, self.clkdomain)
-                clkout  = wbsVhdlStrGeneral.clkportname % (self.clkbase, self.clkbase)        
-            else:
-                print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)
-            
-                        
-            #construct sync assignments            
-            for line in self.v.syncInstTemplate0_dir2:
-                s.append(line % (direction, direction))
-            s.append(self.v.syncInstTemplate1_dir % (direction))
-            s.append(self.v.syncInstTemplate2)
-            s.append(self.v.syncInstTemplate3_sw % syncwidth)
-            s += self.v.syncInstTemplate4
-            for line in self.v.syncInstTemplate5_dir:
-                s.append(line % direction)
-            s.append(self.v.syncInstTemplate6_ci % clkin)
-            s.append(self.v.syncInstTemplate7_co % clkout)
-            s.append(self.v.syncInstTemplate8_si % sigin)
-            s.append(self.v.syncInstTemplate9_so % sigout)
-                                       
-            return s                           
-        else:
-            if direction == "out":
-                s.append(self.v.portAssignTemplate % (self.v.portnameout, self.v.regname))
-            elif direction == "in":
-                s.append(self.v.portAssignTemplate % (self.v.portsignamein, self.v.portnamein))
-            else:
-                print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)    
-        return s        
-        
-
     def getStrStubDeclaration(self):
         s = []
         if self.isWrite():
@@ -239,21 +199,27 @@ class Register(object):
 
     def getStrReset(self):
         s = []
-        s.append(self.v.reset)
+        if self.customStrD.has_key('resetdef'):
+            s += self.customStrD['resetdef']    
+        else:
+            s.append(self.v.reset)
+        if self.customStrD.has_key('reset'):
+            s += self.customStrD['reset'] 
         return s
-
 
 
     def getStrSet(self):
         s = []        
-        if self.customStrD.has_key('set'):
-            s += self.customStrD['set']
+        if self.customStrD.has_key('setdef'):
+            s += self.customStrD['setdef']    
         else:
             if self.isDrive():
                 s.append(self.v.readUpdate)
                 
             if self.isWrite() and self.isPulsed():
-                s.append(self.v.wbPulseZero)   
+                s.append(self.v.wbPulseZero)
+        if self.customStrD.has_key('set'):
+            s += self.customStrD['set']        
         return s
 
     #implement in derived class
@@ -269,58 +235,14 @@ class Register(object):
     def getStrFsmWrite(self):
         return []
         
-    def addToGroup(self, reg):
-        pass
-        
-        
-
-    def getStrInterfaceDoc(self, adressNibbles):
-        doc = "0x%s %s %s_%s : %s -> %s\n" #adr, rw, name_operation_(idx), bitwidth, description
-
-        s = []
-        adrx = ("%0" + str(adressNibbles) + "x")
-
-        opIdx = 0
-        for opLine in self.opList:
-            (op, adrList) = opLine
-            if(op.find('_GET') > -1):
-                rw = 'ro'
-            elif (op.find('_SET') > -1) or (op.find('_CLR') > -1) or (op.find('_OWR') > -1):
-                rw = 'wo'
-            elif(op.find('_RW') > -1):
-                rw = 'rw'
-
-            adrIdx = 0
-            for adrLine in adrList:
-                #if this reg has multiple words, add the index to the name
-                if(len(adrList) > 1):
-                    idx = '_%u' % adrIdx
-                else:
-                    idx = ''
-                (msk, adr) = adrLine
-                #Show comment only the first occurrance of a WbRegister name
-                if((opIdx == 0) and (adrIdx == 0)):
-                    comment = self.desc
-                else:
-                    comment = '\"\"'
-
-                if(self.genIntD.has_key(msk)):
-                    bitmask = "g_%s" % msk
-                else:
-                    bitmask = msk
-                s.append(doc % (adrx % adr, rw, self.slaveIf, self.name + op + idx, bitmask, comment))
-
-                adrIdx += 1
-            opIdx += 1
-
-        return s
-
+    
 
 
     
 
 class WbRegister(Register):
     def __init__(self, dataBits=32, adrBits=32, sAdr=0x0, offs=4, *args):
+        print (args)
         super(WbRegister, self).__init__(*args)
         self.dwidth     = dataBits
         self.awidth     = adrBits
@@ -345,9 +267,6 @@ class WbRegister(Register):
             elif self.isWrite():
                 self._addOp(adr, '_OWR')                         
 
-
-    def addToGroup(self, reg):
-        self.groupList.append(reg)
 
     def _sliceMsk(self):
         mskList = []
@@ -444,7 +363,7 @@ class WbRegister(Register):
         s = []
         for opLine in self.opList:
             (op, adrList) = opLine
-            if((op == "_GET") or (op == "_RW ")):
+            if((op == "_GET") or (op == "_RW")):
                 #this is sliced
                 adrIdx = 0
                 for adrLine in adrList:
@@ -466,11 +385,12 @@ class WbRegister(Register):
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
                     adrIdx += 1
+                    print self.v.wbRead
                     s.append(self.v.wbRead % (op + enum, baseSlice, regSlice))
 
                     
-                if self.customStrD.has_key('read'):
-                    s += self.customStrD['read']
+                    if self.customStrD.has_key('read'):
+                        s += self.customStrD['read']
                     
         return s
 
@@ -499,12 +419,17 @@ class WbRegister(Register):
                     if len(adrList) > 1:
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
+                    firstSlice = regSlice    
+                    if self.isPaged():
+                       firstSlice = "" 
                     adrIdx += 1
+                    #matrix assignment works differently
+                  
+                    
+                    s.append(self.v.wbWrite % (op + enum, firstSlice, regSlice, registerVhdlStr.wrModes[op]))
 
-                    s.append(self.v.wbWrite % (op + enum, regSlice, regSlice, registerVhdlStr.wrModes[op]))
-
-                if self.customStrD.has_key('write'):
-                    s += self.customStrD['write']    
+                    if self.customStrD.has_key('write'):
+                        s += self.customStrD['write']    
                 opIdx += 1
         return s
 
