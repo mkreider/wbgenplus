@@ -17,9 +17,9 @@ from stringtemplates import wbsVhdlStrGeneral
 from writeout import writeout
 from wbslave import wbslave as wbs
 
-myVersion = "1.1"
-myStart   = "15 Dec 2014"
-myUpdate  = "10 Jan 2015"
+myVersion = "0.7"
+myStart   = "10 Sep 2015"
+myUpdate  = "25 Oct 2015"
 myCreator = "M. Kreider <m.kreider@gsi.de>"
 
 def parseXMLNew(xmlIn, now, unitname):
