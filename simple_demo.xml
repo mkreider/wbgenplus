@@ -1,15 +1,16 @@
 <wbdevice author="M. Kreider" version="0.0.1">
    
-   <clockdomain name="sys"></clockdomain>
-   <clockdomain name="ref"></clockdomain> 
+  <clockdomain name="sys"></clockdomain>
+
+  <generic name="statusbits" type="natural" default="16" comment="Number of bits in status register"></generic>
+ 
    <slaveinterface name="slave" data="32" type="pipelined">          
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="A simple slave"></sdb>
       <registers>
-           <reg   name="STATUS"     read="yes"              mask="0xff"                                   comment="Shows if the device is rdy/busy"></reg>
-           <reg   name="CMD"        read="yes"  write="yes" mask="50"       access="atomic"               comment="b0: Enable, b4-b1: Mode"></reg>
-           <reg   name="CLEAR_FIFO"             write="yes" mask="1"    clock="ref"        autostall='yes' pulse='yes'   comment="Clears Fifo"></reg>
-           <reg   name="FIFO_IN"                write="yes" mask="0xffffffff" flags="yes"                  comment="Recording fifo"></reg>
-           <reg   name="SPACE_LEFT" read="yes"              mask="0xffff"                                   comment="Shows free memory space"></reg>
+           <reg   name="status" read="yes"              drive="yes" bits="statusbits"                     comment="Shows if the devices are rdy/busy"></reg>
+           <reg   name="mode"   read="yes"  write="yes"             bits="8" reset="0xff" access="atomic" comment="Mode"></reg>
+           <reg   name="scpad"  read="yes"  write="yes" drive="yes" mask="64"                             comment="Scratchpad. Can be modified from Bus or outer entity"></reg>
+           <reg   name="count"  read="yes"              drive="yes" mask="0xffff"                         comment="Shows Data Input Counter"></reg>
       </registers>
    </slaveinterface>
 

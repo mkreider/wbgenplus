@@ -2,29 +2,23 @@
    
    <clockdomain name="sys"></clockdomain>
    <clockdomain name="ref"></clockdomain>
-   <clockdomain name="aux"></clockdomain>
+
+   <generic name="channels" type="natural" default="16" comment="Input channels"></generic> 
     
-   <slaveinterface name="data" data="32" type="pipelined" pages="4">          
+   <slaveinterface name="data" data="32" type="pipelined" pages="channels">          
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="Complex slave Data"></sdb>
       <registers>
-           <reg   name="SEMA"       read="yes"  write="yes"                   reset="0xDEAD"                                          comment="Semaphore word register"></reg>
-           <reg   name="CH_SEL"     read="yes"  write="yes" mask="2"          selector="yes" weflag="yes" address="0x20"                  comment="Channel select register"></reg>
-           <reg   clock="ref" name="CLEAR_FIFO"             write="yes" mask="1"          paged="yes"    autostall='yes' pulse='yes' address="0x100"  comment="Clears Fifo"></reg>
-           <reg   clock="ref" name="POP_FIFO"               write="yes" mask="1"          paged="yes"    pulse='yes'                                  comment="Pop Fifo"></reg>
-           <reg   clock="ref" name="FIFO_OUT"   read="yes"              mask="0xffffffff" paged="yes"                                                 comment="Timestamp fifo"></reg>
-           <reg   clock="ref" name="SPACE_LEFT" read="yes"              mask="0xffff"     paged="yes"                                                 comment="Shows free memory space"></reg>
+           <reg   name="status"     read="yes"  drive="yes" bits="channels" clock="ref"                                                   comment="tlu 'timestamps pending' bit per channel"></reg>
+           <reg   name="cmd"                    write="yes" bits="16"       clock="ref"                                                   comment="Cmd for tlu controller"></reg>
+
+           <reg   name="ch_qty"     read="yes"              mask="0b11111"    reset="channels"                                            comment="Individually controllable flag bits"></reg>
+           <reg   name="ch_sel"     read="yes"  write="yes" bits="8"          selector="yes" address="0x20"                               comment="Channel select register"></reg>
+           <reg   name="clear_fifo"             write="yes" bits="1"          paged="yes"    address="0x100" autostall='yes' pulse='yes'  comment="Clears Fifo"></reg>
+           <reg   name="ts_out"     read="yes"  drive="yes" bits="64"         paged="yes"    flags="yes"                                  comment="Timestamp fifos in. Use RD flag to pop"></reg>
+           <reg   name="cnt"        read="yes"  drive="yes" mask="0xffff"     paged="yes"                                                 comment="Shows channel timestamp count"></reg>
+           <reg   name="ts_flags"   read="yes"  write="yes" bits="flags"      paged="yes"                                                 comment="timestamp channel flagbits"></reg>
       </registers>
    </slaveinterface>
-   
-   <slaveinterface name="ctrl" data="32" type="pipelined">          
-      <sdb vendorID="GSI" productID="0x44415281" version="1" date="auto" name="Complex slave Ctrl"></sdb>
-      <registers>
-           <reg   name="STATUS"     read="yes"              mask="36"                           comment="b35-b0: status bits"></reg>
-           <reg   name="CMD"                    write="yes" mask="0xffff"                       comment="Command word"></reg>
-           <reg   name="FLAGS"      read="yes"  write="yes" mask="0b11111"   access="atomic"    comment="Individually controllable flag bits"></reg>
-           <reg   clock="ref" name="MSG_CNT_R"  read="yes"  mask="0xfff" comment="Message counter from tx path"></reg>
-           <reg   clock="aux" name="MSG_CNT_A"  read="yes"  mask="0xfff" comment="Message counter from monitor core"></reg>
-      </registers>
-   </slaveinterface>
+
 
 </wbdevice>
