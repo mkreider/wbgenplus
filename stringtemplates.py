@@ -23,10 +23,19 @@ class gCStr(object):
         self.email      = email
         self.version    = version
         self.date       = date
-        self.header         = [] 
+        self.dateStr    = "%02u/%02u/%04u" % (date.day, date.month, date.year)
+        self.header     = ["/** @file        %s\n" % filename,                 
+                           "  * DesignUnit   %s\n" % unitname,                           
+                           "  * @author      %s <%s>\n" % (author, email),
+                           "  * @date        %s\n" % self.dateStr,
+                           "  * @version     %s\n" % version,                     
+                           "  * @copyright   %04u GSI Helmholtz Centre for Heavy Ion Research GmbH\n" % (date.year),
+                           "  *\n"
+                           "  * @brief       Register map for Wishbone interface of VHDL entity <%s>\n" % (self.unitname + "_auto"),                     
+                           "  */\n\n"]
         self.hdrfileStart   = ["#ifndef _%s_H_\n"   % unitname.upper(),
                                "#define _%s_H_\n\n" % unitname.upper()]
-        self.hdrfileEnd     =  "#endif\n"        
+        self.hdrfileEnd     =  "\n#endif\n"        
 
 
         
@@ -76,13 +85,14 @@ class syncVhdlStr(object):
         if direction == "out":
             self.syncSigsDeclaration  += [decl % (portSO % name)]
             sigin   = sigInWrapper  % (reg % name)
-            sigout  = (portSO % name)
+            sigout  = (portO % name)
+            #sigout  = (portSO % name)
             clkin   = wbsVhdlStrGeneral.clkportname % (clkbase)
             clkout  = wbsVhdlStrGeneral.clkportname % (clkdomain)
             self.syncPortDeclaration    = [port % ((portI % pop), "in"), 
                                            port % ((portO % empty), direction) ]
             self.syncInstTemplate0      = ["\n",
-                                           "%s <= %s;\n" % ((portO % name), (portSO % name)),
+                                           #"%s <= %s;\n" % ((portO % name), (portSO % name)),
                                            "%s <= %s;\n" % ((portO % empty), self.empty),
                                            "%s <= %s;\n\n" % (self.pop, (portI % pop)),
                                            ] 
@@ -170,7 +180,7 @@ class registerVhdlStr(object):
             self.reset          = "%s <= mrst(%s);\n" % (self.regname, self.regname)
             self.wbRead         = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
             self.wbWrite        = wbsStr.wbWriteMatrix % (self.name, self.regname, self.regname, self.regname, "") # Slice, Slice
-            self.wbPulseZero    = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.int2slv % 0))
+            self.wbPulseZero    = "%s <= mrst(%s);\n" % (self.regname, self.regname)
             self.setHigh        = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.others % '1'))
         else:
             self.dtype = "std_logic_vector(%s%s-1 downto 0)" % (genWidthPrefix, width)
@@ -203,8 +213,8 @@ class registerVhdlStr(object):
 
         #address constant
         self.vhdlConstRegAdr    = wbsStr.vhdlConstRegAdr % (self.name, description) #address, operation, address, mask
-        self.cConstRegAdr       = wbsStr.cConstRegAdr % (self.name, description)
-        self.pythonConstRegAdr  = wbsStr.pythonConstRegAdr % (self.name, description)
+        self.cConstRegAdr       = wbsStr.cConstRegAdr % (self.name.upper(), description)
+        self.pythonConstRegAdr  = wbsStr.pythonConstRegAdr % (self.name.lower(), description)
         
         #Flow control
         self.wbStall            = wbsStr.wbStall
@@ -231,9 +241,9 @@ class wbsVhdlStrRegister(object):
         self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= mget(%s, v_p)%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
         self.wbWriteMatrix      = "when c_" + "%s%%s => %s%%s <= mset(%s, f_wb_wr(mget(%s, v_p)%%s, v_d, v_s, \"%%s\"), v_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
         
-        self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s 0x%%s, %s\n" #name, adrVal, adrVal, rw, msk, desc
-        self.cConstRegAdr       = "#define " + slaveIfName.upper() + "_%s%%s 0x%%s //%%s 0x%%s %s\n" 
-        self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s 0x%%s, %s\n" #name, adrVal, adrVal, rw, msk, desc
+        self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
+        self.cConstRegAdr       = "#define " + slaveIfName.upper() + "_%s%%s 0x%%s //%%s, %%s b, %s\n" 
+        self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
         self.stub               = "signal s_" + slaveIfName + "_%s : %s; -- %s\n"
         self.assignStub         = "%s => s_" + slaveIfName + "_%s,\n"
         

@@ -247,16 +247,15 @@ def parseXMLNew(xmlIn, now, unitname):
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
             if(isinstance(pages, int)):
                 if((selector != '') and (pages > 0)):    
-                    print "Slave <%s>: Interface has <%u> memory pages. Selector register is <%s>" % (name, pages, selector)    
+                    print "Slave <%s>: Register <%s> has <%s> memory pages. Selector register is <%s>" % (name, regname, pages, selector)    
                     tmpSlave.selector = selector    
                     tmpSlave.pages      = pages
             elif(selector != ''):
-                    print "Slave <%s>: Interface has <%s> memory pages. Selector register is <%s>" % (name, pages, selector)                 
+                    print "Slave <%s>: Register <%s> has <%s> memory pages. Selector register is <%s>" % (name, regname, pages, selector)                   
                     tmpSlave.selector = selector    
                     tmpSlave.pages      = pages    
        
         ifList.append(tmpSlave)
-    print genIntD        
     return [author, version, email, ifList]
 
 
@@ -359,19 +358,15 @@ def main():
             [author, version, email, slaves] = parseXMLNew(xmlIn, now, unitname)
             wo = writeout(unitname, myfile, mypath, author, email, version, now)
             
-            print slaves            
+                 
             
             for slave in slaves:
                 wo.writeMainVhd(slave)
                 wo.writePkgVhd(slave)
-                wo.writeStubVhd(slave, True)
+                wo.writeStubVhd(slave, force)
                 wo.writePythonDict(slave)
-                #tmp = slave.getAddressListPython()
-                #for line in tmp:
-                #    print line
-            #writeHdrC(fileHdrC)
-            #writeStubVhd(fileStubVhd)
-            #writeStubPkgVhd(fileStubPkgVhd)
+                wo.writeHdrC(slave)
+            
             #writeTbVhd(fileTbVhd)
             print "\n%s" % ('*' * 80) 
             print "\nDone!"

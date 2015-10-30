@@ -27,7 +27,7 @@ class Register(object):
         self.customStrD = dict()
         self.pages      = pages
         self.rstvec     = rstvec    
-        print "name <%s> pages <%s> pre <%s> gp <%s> p <%s>" % (name, pages, self.getGenPagePrefix(), self.isGenericPaged(), self.isPaged())
+        
         self.clkbase    = clkBase
         self.clkdomain  = clkDom
         self.v = registerVhdlStr(wbStr, self.name, self.desc, self.rstvec, self.getGenResetPrefix(), self.width,
@@ -224,7 +224,7 @@ class Register(object):
     def getLastAdr(self):
         return None
 
-    def getStrAddress(self, language="VHDL", lastAdr=0):
+    def getStrAddress(self, language="VHDL", lastAdr=0, maxWidth=0):
         return []
     
     def getStrFsmRead(self):
@@ -309,12 +309,12 @@ class WbRegister(Register):
             return self.startAdr
             
             
-    def getStrAddress(self, language="VHDL", lastAdr=0):
+    def getStrAddress(self, language="VHDL", lastAdr=0, maxWidth=0):
         s = []
         adrHi = lastAdr
         idxHi = mskWidth(adrHi) -1
         adrx = ("%0" + str((idxHi+1+3)/4) + "x")
-        mskx = ("%0" + str(self.dwidth/4) + "x")
+        bitS = ("%" + str(maxWidth) + "s")
 
         lang = str(language)
 
@@ -335,19 +335,15 @@ class WbRegister(Register):
                     idx = '_%u' % adrIdx
                 else:
                     idx = ''
-                (msk, adr) = adrLine
-
-                if(self.genIntD.has_key(msk)):
-                    bitmask = "g_%s" % msk
-                else:
-                    bitmask = mskx % int(2**msk-1)
-
+                (myslice, adr) = adrLine
+                bitwidth = bitS % (self.getGenWidthPrefix() + str(myslice))
+                
                 if(lang.lower() == "c"):
-                    s.append(self.v.cConstRegAdr        % (op + idx, adrx % adr, rw, bitmask))
+                    s.append(self.v.cConstRegAdr        % (str(op + idx).upper(), adrx % adr, rw, bitwidth))
                 elif(lang.lower() == "vhdl"):
-                    s.append(self.v.vhdlConstRegAdr     % (op + idx, adrx % adr, rw, bitmask))
+                    s.append(self.v.vhdlConstRegAdr     % (op + idx, adrx % adr, rw, bitwidth))
                 elif(lang.lower() == "python"):
-                    s.append(self.v.pythonConstRegAdr    % (op + idx, adrx % adr, rw, bitmask))
+                    s.append(self.v.pythonConstRegAdr    % (str(op + idx).lower(), adrx % adr, rw, bitwidth))
                 else:
                     print "<%s> is not a valid output language!" % language
 

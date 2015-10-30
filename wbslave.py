@@ -121,7 +121,7 @@ class wbslave(object):
                 customStrD.setdefault('signal', [])
                 customStrD['assigndef']    += adj(reg.syncvout.syncInstTemplate0, ['<='], 0)
                 customStrD['assigndef']    += adj(reg.syncvout.syncInstTemplate1, ['=>'], 0)
-                customStrD['set']       += [wbsVG.assignTemplate % (reg.v.regname, ("minfl(%s)" % reg.v.portsignamein))] 
+                #customStrD['set']       += [wbsVG.assignTemplate % (reg.v.regname, ("minfl(%s)" % reg.v.portsignamein))] 
                 customStrD['port']      += reg.syncvout.syncPortDeclaration
                 customStrD['signal']    += reg.syncvout.syncSigsDeclaration 
         
@@ -193,22 +193,32 @@ class wbslave(object):
         return adj(s, ['=>'], 1)
 
 
+    def getMaxBitWidth(self):
+        #cosmetic only
+        maxWidth = 0
+        for reg in self.registers:
+            word = str(reg.getGenWidthPrefix() + str(reg.width))
+            cWidth = len(word) - word.count(' ')
+            if cWidth > maxWidth:
+                maxWidth = cWidth
+        return maxWidth        
+                
     def getAddressListPython(self):
         s = []
         for reg in self.registers:
-            s += reg.getStrAddress("python")
+            s += reg.getStrAddress("python", self._getLastAddress(), self.getMaxBitWidth())
         return adj(s, [':'], 0)
 
     def getAddressListC(self):
         s = []
         for reg in self.registers:
-            s += reg.getStrAddress("C")
+            s += reg.getStrAddress("C", self._getLastAddress(), self.getMaxBitWidth())
         return adj(s, ['0x', '//'], 1)
 
     def getAddressListVHDL(self):
         s = []
         for reg in self.registers:
-            s += reg.getStrAddress("VHDL", self._getLastAddress())
+            s += reg.getStrAddress("VHDL", self._getLastAddress(), self.getMaxBitWidth())
         return adj(s, [':', ':=', '--'], 1)
 
     def getAssignmentList(self):
