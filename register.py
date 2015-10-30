@@ -25,30 +25,23 @@ class Register(object):
         self.flags      = flags
         self.width      = bits
         self.customStrD = dict()
-        if not self.isGenericWidth():
-            self.width  = mskWidth(bits)
         self.pages      = pages
-        if not self.isGenericPaged():
-            self.pages  = mskWidth(pages)
         self.rstvec     = rstvec    
-        if rstvec is not None:
-            if not self.isGenericReset():
-                self.rstvec = mskWidth(rstvec)     
-        
+        print "name <%s> pages <%s> pre <%s> gp <%s> p <%s>" % (name, pages, self.getGenPagePrefix(), self.isGenericPaged(), self.isPaged())
         self.clkbase    = clkBase
         self.clkdomain  = clkDom
         self.v = registerVhdlStr(wbStr, self.name, self.desc, self.rstvec, self.getGenResetPrefix(), self.width,
-                                 self.getGenWidthPrefix(), int(self.isPaged()) * self.pages, # 0 if this reg has no pages
+                                 self.getGenWidthPrefix(), self.getPages(), # 0 if this reg has no pages
                                  self.getGenPagePrefix(), self.clkdomain, self.clkbase)
         #create the                         
         if self.isSync():
             if self.isDrive():
                 self.syncvin    = syncVhdlStr(self.name, Register.depth, self.width, self.getGenWidthPrefix(), 
-                                              int(self.isPaged()) * self.pages, self.getGenPagePrefix(),
+                                              self.getPages(), self.getGenPagePrefix(),
                                               self.clkdomain, self.clkbase, "in")
             if self.isWrite():
                 self.syncvout   = syncVhdlStr(self.name, Register.depth, self.width, self.getGenWidthPrefix(), 
-                                              int(self.isPaged()) * self.pages, self.getGenPagePrefix(),
+                                              self.getPages(), self.getGenPagePrefix(),
                                               self.clkdomain, self.clkbase, "out")                              
         
 
@@ -104,6 +97,11 @@ class Register(object):
 
     def isGeneric(self):
         return self.isGenericPaged() or self.isGenericWidth()
+
+    def getPages(self):
+        if self.isPaged():
+            return self.pages
+        return 0
 
     def isGenericPaged(self):
         if self.isPaged():
@@ -242,7 +240,6 @@ class Register(object):
 
 class WbRegister(Register):
     def __init__(self, dataBits=32, adrBits=32, sAdr=0x0, offs=4, *args):
-        print (args)
         super(WbRegister, self).__init__(*args)
         self.dwidth     = dataBits
         self.awidth     = adrBits
@@ -268,17 +265,17 @@ class WbRegister(Register):
                 self._addOp(adr, '_OWR')                         
 
 
-    def _sliceMsk(self):
-        mskList = []
+    def _getSlices(self):
+        sliceList = []
         regWidth    = self.width
         if not self.isGenericWidth():
             words       = int(regWidth / self.dwidth)
             for i in range(0, words):
-                mskList.append(self.dwidth)
+                sliceList.append(self.dwidth)
                 regWidth %= self.dwidth
         if(regWidth):
-            mskList.append(regWidth)
-        return (mskList)
+            sliceList.append(regWidth)
+        return (sliceList)
 
 
     def _addOp(self, adr, op):
@@ -294,10 +291,10 @@ class WbRegister(Register):
         else:
             adr = (self.startAdr // self.offs) * self.offs
 
-        mskList = self._sliceMsk()
-        #print "msk: %s %u" % (mskList, len(mskList))
-        for msk in mskList:
-            adrList.append([msk, adr])
+        sliceList = self._getSlices()
+        #print "msk: %s %u" % (sliceList, len(sliceList))
+        for mySlice in sliceList:
+            adrList.append([mySlice, adr])
             #print "Reg: %s msk: %s adr: %s offs: %s" % (self.name, msk, adr, self.offs)
             adr += self.offs
         self.opList.append([op, adrList])
@@ -385,10 +382,7 @@ class WbRegister(Register):
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
                     adrIdx += 1
-                    print self.v.wbRead
                     s.append(self.v.wbRead % (op + enum, baseSlice, regSlice))
-
-                    
                     if self.customStrD.has_key('read'):
                         s += self.customStrD['read']
                     
@@ -424,8 +418,6 @@ class WbRegister(Register):
                        firstSlice = "" 
                     adrIdx += 1
                     #matrix assignment works differently
-                  
-                    
                     s.append(self.v.wbWrite % (op + enum, firstSlice, regSlice, registerVhdlStr.wrModes[op]))
 
                     if self.customStrD.has_key('write'):

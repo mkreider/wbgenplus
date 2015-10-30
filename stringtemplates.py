@@ -45,6 +45,7 @@ class syncVhdlStr(object):
         port   = "%s : %s std_logic;\n"
         portI  = "%%s_%s_i" % clkdomain
         portSI = "s_%s_i"
+        portSO = "s_%s_o"
         portO  = "%%s_%s_o" % clkdomain
         sig    = "s_%s"        
         reg    = "r_%s"        
@@ -67,23 +68,27 @@ class syncVhdlStr(object):
         if pages > 0:
             matrixPageStr   = "%s%s * " % (genPagePrefix, pages)
             sigInWrapper    = "mflat(%s)"
-            sigOutWrapper   = "%s"
+            sigOutWrapper   = "minfl(%s)"
         syncwidth = "%s%s%s" % (matrixPageStr, genWidthPrefix, width)
         
+        self.syncSigsDeclaration = []        
+        
         if direction == "out":
+            self.syncSigsDeclaration  += [decl % (portSO % name)]
             sigin   = sigInWrapper  % (reg % name)
-            sigout  = sigOutWrapper % (portO % name)
+            sigout  = (portSO % name)
             clkin   = wbsVhdlStrGeneral.clkportname % (clkbase)
             clkout  = wbsVhdlStrGeneral.clkportname % (clkdomain)
             self.syncPortDeclaration    = [port % ((portI % pop), "in"), 
                                            port % ((portO % empty), direction) ]
             self.syncInstTemplate0      = ["\n",
+                                           "%s <= %s;\n" % ((portO % name), (portSO % name)),
                                            "%s <= %s;\n" % ((portO % empty), self.empty),
                                            "%s <= %s;\n\n" % (self.pop, (portI % pop)),
                                            ] 
         elif direction == "in":
             sigin   = sigInWrapper  % (portI % name)
-            sigout  = sigOutWrapper % (portSI % name)
+            sigout  = (portSI % name)
             clkin   = wbsVhdlStrGeneral.clkportname % (clkdomain)
             clkout  = wbsVhdlStrGeneral.clkportname % (clkbase)
             self.syncPortDeclaration = [port % ((portI % push), direction) , 
@@ -96,11 +101,12 @@ class syncVhdlStr(object):
             print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)
                 
  
-        self.syncSigsDeclaration  = [decl % (self.push), 
+        self.syncSigsDeclaration  += [decl % (self.push), 
                                      decl % (self.pop), 
                                      decl % (self.full), 
                                      decl % (self.amfull),
-                                     decl % (self.empty)] 
+                                     decl % (self.empty)
+                                     ] 
          
         self.syncInstTemplate1      = ["%s_FIFO_%s : generic_async_fifo\n" % (name, direction),
                                        "generic map(\n",
@@ -135,7 +141,6 @@ class registerVhdlStr(object):
     def __init__(self, wbsStr, name, description, reset, genResetPrefix, width, genWidthPrefix, pages, genPagePrefix, clockDomain, wbDomain):
         self.int2slv    = "std_logic_vector(to_unsigned(%%s, %s))" % (width)
         self.hex2slv    = "std_logic_vector(to_unsigned(16#%%x#, %s))" % (width)    
-        print "Resetvec: %s" % reset        
         if reset is None:
             self.resetvector = registerVhdlStr.others % 0
         else: 
@@ -159,8 +164,8 @@ class registerVhdlStr(object):
         clkdomainSuffix = ""
         if clockDomain != wbDomain:
             clkdomainSuffix = "_" + clockDomain
-        
-        if pages > 0:        
+        #print "name <%s> Pre <%s> NotPre <%s> Pages>0 <%s> All <%s>" % (name, (genPagePrefix != ""), (genPagePrefix == ""), (pages > 0), (genPagePrefix != "") or ((genPagePrefix == "") and (pages > 0)))
+        if (pages != 0):        
             self.dtype          = "matrix(%s%s-1 downto 0, %s%s-1 downto 0)" % (genPagePrefix, pages, genWidthPrefix, width)
             self.reset          = "%s <= mrst(%s);\n" % (self.regname, self.regname)
             self.wbRead         = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
@@ -178,6 +183,7 @@ class registerVhdlStr(object):
         
         self.portnamein     = name + clkdomainSuffix + "_i"
         self.portsignamein  = 's_' + name + "_i"
+        self.portsignameout  = 's_' + name + "_i"
         self.portnameout    = name + clkdomainSuffix + "_o"
         self.declaration    = "signal %%s : %s; -- %s\n" % (self.dtype, description)
         self.port           = "%%s : %%s %s; -- %s\n" % (self.dtype, description)
@@ -186,7 +192,7 @@ class registerVhdlStr(object):
         self.sl           = "signal %%s : std_logic; -- %s\n" % (description)        
         # Create all Register Declarations, the reset command, FSM read & write command and pulse generation command  
         self.declarationReg         = self.declaration % (self.regname)
-        self.declarationPortSigIn    = self.declaration % (self.portsignamein)
+        self.declarationPortSigIn   = self.declaration % (self.portsignamein)
         self.declarationStubIn      = wbsStr.stub % (self.portnamein, self.dtype, description)
         self.declarationStubOut     = wbsStr.stub % (self.portnameout, self.dtype, description) 
         self.declarationPortIn      = self.port % (self.portnamein,  "in ")
@@ -288,6 +294,10 @@ class wbsVhdlStrGeneral(object):
                            "      if(%s = '0') then\n" % (wbsVhdlStrGeneral.rstportname % clocks[0])]
        
         self.wbs1_0     = ["else\n",
+                           "   %s_o.ack  <= '0';\n" % slaveIfName,
+                           "   %s_o.err  <= '0';\n" % slaveIfName,
+                           "   %s_o.dat  <= (others => '0');\n" % slaveIfName,
+                           "\n",
                            "   -- short names\n",
                            "   v_d := %s_i.dat;\n" % slaveIfName]
         self.wbs1_adr   =  "   v_a := to_integer(unsigned(%s_i.adr(%%u downto %%u)) %%s);\n" % slaveIfName

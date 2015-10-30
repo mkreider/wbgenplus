@@ -69,12 +69,8 @@ class wbslave(object):
 
 
     def addWbReg(self, name, desc, bits, flags, clkdomain="sys", rstvec=None, startAdr=None):
-        
-  
         customStrD = dict()
-     
         #create the register
-                      
         reg = self._createWbReg(name, desc, bits, flags, clkdomain, rstvec, startAdr)
         
         #modify behavior depending on corner cases
@@ -125,12 +121,14 @@ class wbslave(object):
                 customStrD.setdefault('signal', [])
                 customStrD['assigndef']    += adj(reg.syncvout.syncInstTemplate0, ['<='], 0)
                 customStrD['assigndef']    += adj(reg.syncvout.syncInstTemplate1, ['=>'], 0)
+                customStrD['set']       += [wbsVG.assignTemplate % (reg.v.regname, ("minfl(%s)" % reg.v.portsignamein))] 
                 customStrD['port']      += reg.syncvout.syncPortDeclaration
                 customStrD['signal']    += reg.syncvout.syncSigsDeclaration 
         
         reg.setCustomStrDict(customStrD)
         self._addReg(reg)
         return reg
+        
         
     def addIntReg(self, name, desc, bits, flags, clkdomain="sys", rstvec=None):
          intreg = self._createIntReg(name, desc, bits, flags, clkdomain, rstvec)

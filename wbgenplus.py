@@ -87,16 +87,12 @@ def parseXMLNew(xmlIn, now, unitname):
     print "Found %u slave interfaces\n" % len(slaveIfList)    
     for slaveIf in slaveIfList:
         
-        genericPages = False 
         name    = slaveIf.getAttribute('name')
         ifWidth = str2int(slaveIf.getAttribute('data'))
         print "Slave <%s>: %u Bit wordsize" % (name, ifWidth)
         pages  = slaveIf.getAttribute('pages')
         #check integer generic list
-        for genName in genIntD.iterkeys():
-            if(pages.find(genName) > -1):
-                genericPages = True                
-        
+        genericPages = (pages in genIntD)
         if(not genericPages):        
             aux = str2int(pages)
             if(aux == None):            
@@ -104,8 +100,9 @@ def parseXMLNew(xmlIn, now, unitname):
                 pages = 0
             else:        
                 pages = aux
-    
-        
+        else:
+            print "Slave <%s>: Using supplied generic <%s> for memory pages " % (name, pages)
+            
         #sdb record
         sdb = slaveIf.getElementsByTagName('sdb')
         vendId      = sdb[0].getAttribute('vendorID')
@@ -197,32 +194,32 @@ def parseXMLNew(xmlIn, now, unitname):
             if reg.hasAttribute('clock'):
                 regclk = reg.getAttribute('clock')
                 print "Slave <%s>: Register <%s> is in clockdomain %s and will be synced" % (name, regname, regclk)
-                
-            if reg.hasAttribute('mask'):      
-                regmsk    = reg.getAttribute('mask')
-                genericMsk = False
-                #check integer generic list
-                
-                genericMsk = (regmsk in genIntD)
-
-                #check conversion function list
-                if(not genericMsk):
-                    aux = str2int(regmsk)
-                    if(aux == None):
-                        aux = 2^ int(ifWidth) -1
-                        print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, aux)
-                    elif( (regmsk.find('0x') == 0) or (regmsk.find('0b') == 0) ):
-                        #it's a mask. treat as such
-                        regmsk = aux
+            
+            if reg.hasAttribute('bits'):      
+                regbits    = reg.getAttribute('bits')
+                genericBits = (regbits in genIntD)
+                if(not genericBits):
+                    aux = str2int(regbits)
+                    if aux is None:
+                        print "Slave <%s>: Register <%s>'s supplied bitwidth <%s> is invalid, defaulting to %x" % (name, regname, regbits, ifWidth)
+                        regbits = ifWidth
                     else:
-                        #it's decimal and therefore the bitwidth. make a bitmask                        
-                        regmsk = 2**aux-1
+                        regbits = aux
                 else:
-                     #careful, using generics in register width probably causes more trouble than it's worth
-                     print "Slave <%s>: Register <%s>'s using supplied generic width <%s>" % (name, regname, regmsk)
+                     print "Slave <%s>: Register <%s>'s using supplied generic width <%s>" % (name, regname, regbits)
+         
+            elif reg.hasAttribute('mask'):      
+                regmsk  = reg.getAttribute('mask')
+                aux     = str2int(regmsk)
+                if(aux is None):
+                    regbits = ifWidth
+                    print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, regbits)
+                else:
+                    #convert bitmask to bitwidth
+                    regbits = mskWidth(aux)
             else:        
-                print "Slave <%s>: No mask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, 2**ifWidth-1)
-                regmsk = 2**ifWidth-1
+                print "Slave <%s>: No bitwidth or bitmask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, ifWidth)
+                regbits = ifWidth
 
             rstvec = None    
             if reg.hasAttribute('reset'):
@@ -245,7 +242,7 @@ def parseXMLNew(xmlIn, now, unitname):
                         print "Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val)
                       
                       
-            tmpSlave.addWbReg(regname, regdesc, regmsk, regflags, regclk, rstvec, regadr)
+            tmpSlave.addWbReg(regname, regdesc, regbits, regflags, regclk, rstvec, regadr)
       
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
             if(isinstance(pages, int)):
