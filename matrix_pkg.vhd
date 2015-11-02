@@ -12,7 +12,11 @@ package matrix_pkg is
 
     -- assign row
 
-    function mset(slm : matrix; slv : std_logic_vector; rowindex : natural) return matrix;
+    ---function mset(slm : matrix; slv : std_logic_vector; rowindex : natural) return matrix;
+
+    procedure mset(signal slm : out matrix; slv : std_logic_vector; rowindex : natural);
+
+    procedure mset_no_rng(signal slm : out matrix; slv : std_logic_vector; rowindex : natural);
 
     -- get std logic vector from matrix row
 
@@ -33,6 +37,8 @@ package matrix_pkg is
 
   package body matrix_pkg is  
 
+
+
     function mrst(slm : matrix) return matrix is
       variable res : matrix(slm'length(1)-1 downto 0, slm'length(2)-1 downto 0);
       variable row, col : natural := 0;      
@@ -47,18 +53,38 @@ package matrix_pkg is
       return res;		
     end function;
 
+  
+    procedure mset(signal slm : out matrix; slv : std_logic_vector; rowindex : natural) is
+      variable i : natural := 0;
+    begin
+      for i in slv'range loop
+        slm(rowindex, i) <= slv(i);
+      end loop;	
+    end procedure;
+
+    procedure mset_no_rng(signal slm : out matrix; slv : std_logic_vector; rowindex : natural) is
+      variable i : natural := 0;
+      variable j : natural := 0;
+    begin
+      j := 0;
+      for i in slv'range loop
+        slm(rowindex, j) <= slv(i);
+        j := j+1;
+      end loop;	
+    end procedure;
+    
 
     -- set matrix row
-    function mset(slm : matrix; slv : std_logic_vector; rowindex : natural) return matrix is
-      variable i : natural := 0;
-      variable res : matrix(slm'length(1)-1 downto 0, slm'length(2)-1 downto 0);
-    begin
-      res := slm;
-      for i in slv'range loop
-        res(rowindex, i) := slv(i);
-      end loop;
-      return res;		
-    end function;
+--     function mset(slm : matrix; slv : std_logic_vector; rowindex : natural) return matrix is
+ --      variable i : natural := 0;
+ --      variable res : matrix(slm'length(1)-1 downto 0, slm'length(2)-1 downto 0);
+--     begin
+ --      res := slm;
+ --      for i in slv'range loop
+ --        res(rowindex, i) := slv(i);
+ --      end loop;
+ --      return res;		
+--     end function;
 
     
     -- get matrix row

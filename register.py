@@ -411,10 +411,11 @@ class WbRegister(Register):
                         enum = "_%s" % adrIdx
                     firstSlice = regSlice    
                     if self.isPaged():
-                       firstSlice = "" 
+                       s.append(self.v.wbWrite % (op + enum, regSlice, registerVhdlStr.wrModes[op]))
+                    else:
+                       s.append(self.v.wbWrite % (op + enum, firstSlice, regSlice, registerVhdlStr.wrModes[op]))             
                     adrIdx += 1
                     #matrix assignment works differently
-                    s.append(self.v.wbWrite % (op + enum, firstSlice, regSlice, registerVhdlStr.wrModes[op]))
 
                     if self.customStrD.has_key('write'):
                         s += self.customStrD['write']    

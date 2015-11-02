@@ -179,7 +179,7 @@ class registerVhdlStr(object):
             self.dtype          = "matrix(%s%s-1 downto 0, %s%s-1 downto 0)" % (genPagePrefix, pages, genWidthPrefix, width)
             self.reset          = "%s <= mrst(%s);\n" % (self.regname, self.regname)
             self.wbRead         = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
-            self.wbWrite        = wbsStr.wbWriteMatrix % (self.name, self.regname, self.regname, self.regname, "") # Slice, Slice
+            self.wbWrite        = wbsStr.wbWriteMatrix % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero    = "%s <= mrst(%s);\n" % (self.regname, self.regname)
             self.setHigh        = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.others % '1'))
         else:
@@ -239,7 +239,7 @@ class wbsVhdlStrRegister(object):
         self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, v_d, v_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
         
         self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= mget(%s, v_p)%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
-        self.wbWriteMatrix      = "when c_" + "%s%%s => %s%%s <= mset(%s, f_wb_wr(mget(%s, v_p)%%s, v_d, v_s, \"%%s\"), v_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
+        self.wbWriteMatrix      = "when c_" + "%s%%s => mset(%s, f_wb_wr(mget(%s, v_p)%%s, v_d, v_s, \"%%s\"), v_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
         
         self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
         self.cConstRegAdr       = "#define " + slaveIfName.upper() + "_%s%%s 0x%%s //%%s, %%s b, %s\n" 
