@@ -344,6 +344,8 @@ class WbRegister(Register):
                     s.append(self.v.vhdlConstRegAdr     % (op + idx, adrx % adr, rw, bitwidth))
                 elif(lang.lower() == "python"):
                     s.append(self.v.pythonConstRegAdr    % (str(op + idx).lower(), adrx % adr, rw, bitwidth))
+                elif(lang.lower() == "pythonreverse"):
+                    s.append(self.v.pythonConstAdrReg    % (adrx % adr, str(op + idx).lower(), rw, bitwidth))    
                 else:
                     print "<%s> is not a valid output language!" % language
 

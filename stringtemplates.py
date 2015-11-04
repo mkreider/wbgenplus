@@ -215,7 +215,7 @@ class registerVhdlStr(object):
         self.vhdlConstRegAdr    = wbsStr.vhdlConstRegAdr % (self.name, description) #address, operation, address, mask
         self.cConstRegAdr       = wbsStr.cConstRegAdr % (self.name.upper(), description)
         self.pythonConstRegAdr  = wbsStr.pythonConstRegAdr % (self.name.lower(), description)
-        
+        self.pythonConstAdrReg  = wbsStr.pythonConstAdrReg % (self.name.lower(), description)
         #Flow control
         self.wbStall            = wbsStr.wbStall
         
@@ -244,6 +244,7 @@ class wbsVhdlStrRegister(object):
         self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
         self.cConstRegAdr       = "#define " + slaveIfName.upper() + "_%s%%s 0x%%s //%%s, %%s b, %s\n" 
         self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
+        self.pythonConstAdrReg  = "0x%%s : '%s%%s', # %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc    
         self.stub               = "signal s_" + slaveIfName + "_%s : %s; -- %s\n"
         self.assignStub         = "%s => s_" + slaveIfName + "_%s,\n"
         

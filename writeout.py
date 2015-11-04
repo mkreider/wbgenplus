@@ -190,8 +190,13 @@ class writeout(object):
         tmp.append("%s = {\n" % slave.name)
         tmp += slave.getAddressListPython()
         tmp.append("}\n")
+        tmp.append("%s_reverse = {\n" % slave.name)
+        tmp += slave.getAddressListPythonReverse()
+        tmp.append("}\n")            
+        
         tmp = iN(tmp, 1)
         s += tmp
+        
         
         
         for line in s:

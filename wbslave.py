@@ -208,6 +208,12 @@ class wbslave(object):
         for reg in self.registers:
             s += reg.getStrAddress("python", self._getLastAddress(), self.getMaxBitWidth())
         return adj(s, [':'], 0)
+        
+    def getAddressListPythonReverse(self):
+        s = []
+        for reg in self.registers:
+            s += reg.getStrAddress("pythonreverse", self._getLastAddress(), self.getMaxBitWidth())
+        return adj(s, [':'], 0)    
 
     def getAddressListC(self):
         s = []
