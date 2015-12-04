@@ -47,7 +47,7 @@ class wbslave(object):
         self.c          = wbsC(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
 
         #create flow control 
-        tmpReg = self._createWbReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
+        tmpReg = self._createIntReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
         #override default set and assign        
         tmpStrD = {'setdef' : [self.v.wbsStall1 % (tmpReg.v.regname, tmpReg.v.regname, tmpReg.v.portsignamein)],
                    'assign' : [self.v.wbsStall0 % tmpReg.v.regname],
@@ -69,6 +69,8 @@ class wbslave(object):
 
 
     def addWbReg(self, name, desc, bits, flags, clkdomain="sys", rstvec=None, startAdr=None):
+       
+        
         customStrD = dict()
         #create the register
         reg = self._createWbReg(name, desc, bits, flags, clkdomain, rstvec, startAdr)
@@ -345,12 +347,13 @@ class wbslave(object):
 
     def getStrSDB(self):
         s = []
-        adrx = ("%016x")
-        align = 1<<(self._getLastAddress()-1).bit_length()
-        s += self.v.sdb0
-        s.append(self.v.sdbAddrFirst % (adrx % int(self.startaddress)))
-        s.append(self.v.sdbAddrLast  % (adrx % ( int(align-1) )))
-        s += self.v.sdb1
+        if self.sdbname is not None:    
+            adrx = ("%016x")
+            align = 1<<(self._getLastAddress()-1).bit_length()
+            s += self.v.sdb0
+            s.append(self.v.sdbAddrFirst % (adrx % int(self.startaddress)))
+            s.append(self.v.sdbAddrLast  % (adrx % ( int(align-1) )))
+            s += self.v.sdb1
         return s
 
     def _getPageSelect(self):
