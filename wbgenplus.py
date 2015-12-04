@@ -104,34 +104,40 @@ def parseXMLNew(xmlIn, now, unitname):
             print "Slave <%s>: Using supplied generic <%s> for memory pages " % (name, pages)
             
         #sdb record
-        sdb = slaveIf.getElementsByTagName('sdb')
-        vendId      = sdb[0].getAttribute('vendorID')
-        prodId      = sdb[0].getAttribute('productID')
-        #check vendors
-        if dictVendId.has_key(vendId):
-            print "Slave <%s>: Known Vendor ID <%s> found" % (name, vendId)            
-            vendId = dictVendId[vendId]
-             
-        else:
-            aux = str2int(vendId)
-            if(aux == None):            
-                print "Slave <%s>: Invalid Vendor ID <%s>!" % (name, vendId)
-                sys.exit(2)
-            else:
-                vendId = aux                
-                print "Slave <%s>: Unknown Vendor ID <%016x>" % (name, vendId)                
-                
+        vendId = None
+        prodId = None
+        sdbname = None       
         
-        aux = str2int(prodId)
-        if(aux == None):            
-                print "Slave <%s>: Invalid Product ID <%s>!" % (name, prodId)
-        else:
-            prodId = aux     
-                
-        sdbname     = sdb[0].getAttribute('name')
-        if(len(sdbname) > 19):
-            print "Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname))
-            sys.exit(2)
+        sdb = slaveIf.getElementsByTagName('sdb')
+        if len(sdb) == 1:
+            print "Slave <%s>: Generating SDB record" % (name)              
+            vendId      = sdb[0].getAttribute('vendorID')
+            prodId      = sdb[0].getAttribute('productID')
+            #check vendors
+            if dictVendId.has_key(vendId):
+                print "Slave <%s>: Known Vendor ID <%s> found" % (name, vendId)            
+                vendId = dictVendId[vendId]
+                 
+            else:
+                aux = str2int(vendId)
+                if(aux == None):            
+                    print "Slave <%s>: Invalid Vendor ID <%s>!" % (name, vendId)
+                    sys.exit(2)
+                else:
+                    vendId = aux                
+                    print "Slave <%s>: Unknown Vendor ID <%016x>" % (name, vendId)                
+                    
+            
+            aux = str2int(prodId)
+            if(aux == None):            
+                    print "Slave <%s>: Invalid Product ID <%s>!" % (name, prodId)
+            else:
+                prodId = aux     
+                    
+            sdbname     = sdb[0].getAttribute('name')
+            if(len(sdbname) > 19):
+                print "Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname))
+                sys.exit(2)
         
         tmpSlave    = wbs(unitname, version, now, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList, genIntD, genMiscD, 'g_') 
         
@@ -233,9 +239,12 @@ def parseXMLNew(xmlIn, now, unitname):
                     rstvec = aux
                 #elif(aux in genMiscD):
                 else:    
-                    aux = str2int(aux)
-                    if(aux != None):
-                        rstvec = aux
+                    tmp = str2int(aux)
+                    if(tmp != None):
+                        if aux.find("0x") > -1 or aux.find("0b") > -1:
+                            rstvec = aux
+                        else:
+                            rstvec = tmp
                         print "Slave <%s>: Register <%s>'s Reset using supplied value <%s>" % (name, regname, aux)
                     
                     else:

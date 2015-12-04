@@ -282,15 +282,24 @@ class writeout(object):
         
         fo = open(self.mypath + filename, "w")
         
-        gc     = gCStr(filename, self.unitname, self.author, self.email, self.version, self.date)
+        gc     = gCStr(filename, self.unitname, self.author, self.email, self.version, self.date, slave.sdbVendorID, slave.sdbDeviceID)
         for line in gc.header:
             fo.write(line)        
         
         for line in gc.hdrfileStart:
             fo.write(line)
+
+        tmp = []
+        tmp.append(str(gc.sdbVendorId))
+        tmp.append(str(gc.sdbDeviceId))            
+        tmp = iN(tmp, 1)
+        
+        for line in tmp:
+            fo.write(line)
+        
        
         for line in slave.getAddressListC():
-            fo.write(line)    
+            fo.write(line % self.unitname.upper())    
         fo.write(gc.hdrfileEnd)
         
         fo.close

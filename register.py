@@ -284,7 +284,9 @@ class WbRegister(Register):
             if len(self.opList) ==  0:
                 adr = self.startAdr
             else:
+                   
                 if len(self.opList) >  0:
+                    
                     adr = self.getLastAdr() + self.offs
                 else:
                     adr = adr + self.offs
@@ -301,7 +303,7 @@ class WbRegister(Register):
 
 
     def getLastAdr(self):
-        if len(self.opList) >  0:
+        if len(self.opList) > 0:
             (_, adrList) = self.opList[-1]
             (_, adr)     = adrList[-1]
             return adr

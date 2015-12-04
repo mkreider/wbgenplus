@@ -14,10 +14,11 @@ class wbsCStr(object):
         self.unitname     = unitname
         self.slaveIfName  = slaveIfName        
         self.pages        = pages
+        
 
 
 class gCStr(object):
-    def __init__(self, filename, unitname, author, email, version, date):
+    def __init__(self, filename, unitname, author, email, version, date, sdbVendorID, sdbDeviceID):
         self.unitname   = unitname     
         self.author     = author
         self.email      = email
@@ -35,6 +36,11 @@ class gCStr(object):
                            "  */\n\n"]
         self.hdrfileStart   = ["#ifndef _%s_H_\n"   % unitname.upper(),
                                "#define _%s_H_\n\n" % unitname.upper()]
+        self.sdbVendorId    =  ""
+        self.sdbDeviceId    =  ""    
+        if (sdbVendorID is not None) and (sdbDeviceID is not None):                           
+            self.sdbVendorId    =  "#define %s_SDB_VENDOR_ID 0x%08x\n" % (unitname.upper(), sdbVendorID)
+            self.sdbDeviceId    =  "#define %s_SDB_DEVICE_ID 0x%08x\n\n" % (unitname.upper(), sdbDeviceID)
         self.hdrfileEnd     =  "\n#endif\n"        
 
 
@@ -150,13 +156,27 @@ class registerVhdlStr(object):
     
     def __init__(self, wbsStr, name, description, reset, genResetPrefix, width, genWidthPrefix, pages, genPagePrefix, clockDomain, wbDomain):
         self.int2slv    = "std_logic_vector(to_unsigned(%%s, %s))" % (width)
-        self.hex2slv    = "std_logic_vector(to_unsigned(16#%%x#, %s))" % (width)    
+        self.ghex2slv   = "std_logic_vector(to_unsigned(16#%%s#, %s))" % (width)
+        self.hex2slv    = 'x"%s"'    
+        self.bin2slv    = '"%s'
         if reset is None:
             self.resetvector = registerVhdlStr.others % 0
         else: 
            self.resetvector = self.int2slv % (str(genResetPrefix) + str(reset)) 
            if(str(reset).find('0x') > -1):
-               self.resetvector = self.hex2slv % reset
+               tmpRst = (reset.replace('0x', '')).lower()
+               if width == len(tmpRst)*4:
+                   self.resetvector = self.hex2slv % tmpRst                    
+               else:
+                   if len(tmpRst)*4 > 32:
+                       print "Register <%s>'s Resetvector <%s> length <%s> is not a multiple of four AND is longer than 32 bit. Sorry, can't convert that" % (name, reset, width)
+                       exit(2)
+                   else:    
+                       print "Register <%s>'s Resetvector <%s> has the wrong bitlength (is %s, should be %s). Converting" % (name, reset, len(tmpRst)*4, width)                    
+                       self.resetvector = self.ghex2slv % tmpRst 
+                   
+           elif(str(reset).find('0b') > -1):
+             self.resetvector = self.bin2slv % reset.replace('0b', '')    
           
         self.pages          = pages
         self.genPagePrefix  = genPagePrefix
@@ -213,9 +233,11 @@ class registerVhdlStr(object):
 
         #address constant
         self.vhdlConstRegAdr    = wbsStr.vhdlConstRegAdr % (self.name, description) #address, operation, address, mask
-        self.cConstRegAdr       = wbsStr.cConstRegAdr % (self.name.upper(), description)
-        self.pythonConstRegAdr  = wbsStr.pythonConstRegAdr % (self.name.lower(), description)
-        self.pythonConstAdrReg  = wbsStr.pythonConstAdrReg % (self.name.lower(), description)
+        self.cConstRegAdr       = "#define %%s_" + self.name.upper() + "%s 0x%s //%s, %s b, " + description + "\n" 
+        self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s, %%s b, %s\n" % (self.name.lower(), description) #name, adrVal, adrVal, rw, msk, desc
+        self.pythonConstAdrReg  = "0x%%s : '%s%%s', # %%s, %%s b, %s\n" % (self.name.lower(), description) #name, adrVal, adrVal, rw, msk, desc              
+        
+  
         #Flow control
         self.wbStall            = wbsStr.wbStall
         
@@ -242,9 +264,6 @@ class wbsVhdlStrRegister(object):
         self.wbWriteMatrix      = "when c_" + "%s%%s => mset(%s, f_wb_wr(mget(%s, v_p)%%s, v_d, v_s, \"%%s\"), v_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
         
         self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
-        self.cConstRegAdr       = "#define " + slaveIfName.upper() + "_%s%%s 0x%%s //%%s, %%s b, %s\n" 
-        self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
-        self.pythonConstAdrReg  = "0x%%s : '%s%%s', # %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc    
         self.stub               = "signal s_" + slaveIfName + "_%s : %s; -- %s\n"
         self.assignStub         = "%s => s_" + slaveIfName + "_%s,\n"
         
@@ -348,23 +367,23 @@ class wbsVhdlStrGeneral(object):
         self.wbs_reg_o          = "signal r_%s : t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
         self.wbs_reg_i          = "signal s_%s : t_%s_regs_i;\n" % (slaveIfName, slaveIfName)
         
-                               
-        self.sdb0               = ['constant c_%s_%s_sdb : t_sdb_device := (\n' % (unitname, slaveIfName),
-                                   'abi_class     => x"%s", -- %s\n' % ("0000", "undocumented device"),
-                                   'abi_ver_major => x"%s",\n' % "01",
-                                   'abi_ver_minor => x"%s",\n' % "00",
-                                   'wbd_endian    => c_sdb_endian_%s,\n' % "big",
-                                   'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n' % self.wbWidth[dataWidth],
-                                   'sdb_component => (\n']
-        self.sdbAddrFirst        = 'addr_first    => x"%s",\n'
-        self.sdbAddrLast         = 'addr_last     => x"%s",\n'
-        self.sdb1                = ['product => (\n',
-                                   'vendor_id     => x"%016x",\n' % vendId,
-                                   'device_id     => x"%08x",\n' % devId,
-                                   'version       => x"%s",\n' % '{message:{fill}{align}{width}}'.format(message=version.replace('.', ''), fill='0', align='>', width=8),
-                                   'date          => x"%04u%02u%02u",\n' % (now.year, now.month, now.day),
-                                   'name          => "%s")));\n' % sdbname.ljust(19)]
-        self.sdbReference       = "constant c_%s_%s_sdb : t_sdb_device := work.%s_pkg.c_%s_%s_sdb;\n" % (unitname, slaveIfName, (unitname + '_auto'), unitname, slaveIfName)                            
+        if sdbname is not None:                       
+            self.sdb0               = ['constant c_%s_%s_sdb : t_sdb_device := (\n' % (unitname, slaveIfName),
+                                       'abi_class     => x"%s", -- %s\n' % ("0000", "undocumented device"),
+                                       'abi_ver_major => x"%s",\n' % "01",
+                                       'abi_ver_minor => x"%s",\n' % "00",
+                                       'wbd_endian    => c_sdb_endian_%s,\n' % "big",
+                                       'wbd_width     => x"%s", -- 8/16/32-bit port granularity\n' % self.wbWidth[dataWidth],
+                                       'sdb_component => (\n']
+            self.sdbAddrFirst        = 'addr_first    => x"%s",\n'
+            self.sdbAddrLast         = 'addr_last     => x"%s",\n'
+            self.sdb1                = ['product => (\n',
+                                       'vendor_id     => x"%016x",\n' % vendId,
+                                       'device_id     => x"%08x",\n' % devId,
+                                       'version       => x"%s",\n' % '{message:{fill}{align}{width}}'.format(message=version.replace('.', ''), fill='0', align='>', width=8),
+                                       'date          => x"%04u%02u%02u",\n' % (now.year, now.month, now.day),
+                                       'name          => "%s")));\n' % sdbname.ljust(19)]
+            self.sdbReference       = "constant c_%s_%s_sdb : t_sdb_device := work.%s_pkg.c_%s_%s_sdb;\n" % (unitname, slaveIfName, (unitname + '_auto'), unitname, slaveIfName)                            
     
                                  
                                   
