@@ -46,14 +46,23 @@ class wbslave(object):
         self.vreg       = wbsVR(slaveIfName)
         self.c          = wbsC(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
 
-        #create flow control 
+        #create flow control
+        self.addIntReg("a", "address", self.addressWidth,  "", self.clocks[0], 0)
+        self.addIntReg("p", "page", "32",                  "", self.clocks[0], 0)
+        self.addIntReg("w", "read/write", "1",             "", self.clocks[0], 0)
+        self.addIntReg("d", "datain", self.dataWidth,      "", self.clocks[0], 0)
+        self.addIntReg("e", "enable", "1",                 "", self.clocks[0], 0)
+        self.addIntReg("s", "select", self.dataWidth/8,    "", self.clocks[0], 0)
+       
+        
         tmpReg = self._createIntReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
-        #override default set and assign        
-        tmpStrD = {'setdef' : [self.v.wbsStall1 % (tmpReg.v.regname, tmpReg.v.regname, tmpReg.v.portsignamein)],
-                   'assign' : [self.v.wbsStall0 % tmpReg.v.regname],
-                   }
-        tmpReg.setCustomStrDict(tmpStrD)
         self.stallReg = self._addReg(tmpReg)
+        # add custom assignments etc
+        #tmpStrD = {'setdef' : [self.v.wbsStall1 % (tmpReg.v.regname, tmpReg.v.regname, tmpReg.v.portsignamein)],
+        #           'assign' : [self.v.wbsStall0 % tmpReg.v.regname],
+        #           }
+        #tmpReg.setCustomStrDict(tmpStrD)  
+        
        
 
 
@@ -93,7 +102,11 @@ class wbslave(object):
             customStrD.setdefault('read', [])  
             customStrD['read']  += [self.stallReg.v.setHigh]
             customStrD.setdefault('write', [])
-            customStrD['write'] += [self.stallReg.v.setHigh]            
+            customStrD['write'] += [self.stallReg.v.setHigh]
+
+        if reg.isDrive():
+                tmpReg = self._createIntReg(reg.name + "_V", "Valid flag", "1", "dp", reg.clkdomain, 0)
+                self._addReg(tmpReg)
         #syncing is a lot of work, too many corner cases for a generic solution.
         #so - let's get custom. big time.    
         elif reg.isSync():
@@ -235,8 +248,33 @@ class wbslave(object):
             s += reg.getStrAssignment()
         #generate flow control code
         
-
         return adj(s, ['<=', "--"], 1)
+    
+    def getFlowControl(self):
+        s = []
+        s += self.v.flowctrl
+        return adj(s, ['<=', "r_e", "r_valid", "r_error"], 1)
+    
+    def getOutputMux(self):
+        s = []
+        
+        s += self.v.outmux0
+        for reg in self.registers:
+            s += reg.getStrMuxRead()
+        s += self.v.outmux1
+        
+        return adj(s, ['when', "--"], 1)
+        
+
+    def getValidMux(self):
+        s = []
+        s += self.v.validmux0    
+        for reg in self.registers:
+            s += reg.getStrMuxValid()
+        s += self.v.validmux1 
+        
+        return adj(s, ['when', "--"], 1)
+            
 
     def getGenericList(self):
         tmp = []
@@ -330,7 +368,7 @@ class wbslave(object):
         s += adj(self.getResetList(), ['<='], 4)
         tmpV = self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1 + [self.v.enable % self.stallReg.v.regname]
         s += iN(tmpV, 3)
-        s += adj(self.getSetList(), ['<=', '--'], 4)
+        s += adj(self.getSetList(), ['<=', 'then', '--'], 4)
         s +=  iN(self._getPageSelect(), 4)
         s +=  iN(self.v.wbs2, 4)
         s += adj(self._getFsmWriteList(), ['=>', '<=', 'v_d', "--"], 7)

@@ -8,8 +8,8 @@
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="A simple slave"></sdb>
       <registers>
            <reg   name="status" read="yes"              drive="yes" bits="statusbits"                     comment="Shows if the devices are rdy/busy"></reg>
-           <reg   name="mode"   read="yes"  write="yes"             bits="8" reset="0xff" access="atomic" comment="Mode"></reg>
-           <reg   name="scpad"  read="yes"  write="yes" drive="yes" mask="64"                             comment="Scratchpad. Can be modified from Bus or outer entity"></reg>
+           <reg   name="mode"   read="yes"  write="yes"             bits="8" reset="0xff" access="atomic" flags="yes" comment="Mode"></reg>
+           <reg   name="scpad"  read="yes"  write="yes" drive="yes" bits="64" flags="yes"                 comment="Scratchpad. Can be modified from Bus or outer entity"></reg>
            <reg   name="count"  read="yes"              drive="yes" mask="0xffff"                         comment="Shows Data Input Counter"></reg>
       </registers>
    </slaveinterface>

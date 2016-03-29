@@ -210,12 +210,6 @@ class Register(object):
         s = []        
         if self.customStrD.has_key('setdef'):
             s += self.customStrD['setdef']    
-        else:
-            if self.isDrive():
-                s.append(self.v.readUpdate)
-                
-            if self.isWrite() and self.isPulsed():
-                s.append(self.v.wbPulseZero)
         if self.customStrD.has_key('set'):
             s += self.customStrD['set']        
         return s
@@ -225,6 +219,12 @@ class Register(object):
         return None
 
     def getStrAddress(self, language="VHDL", lastAdr=0, maxWidth=0):
+        return []
+    
+    def getStrMuxValid(self):
+        return []    
+    
+    def getStrMuxRead(self):
         return []
     
     def getStrFsmRead(self):
@@ -355,8 +355,22 @@ class WbRegister(Register):
             opIdx += 1
 
         return s
-        
-    def getStrFsmRead(self):
+    
+    def getStrSet(self):
+        s = []        
+        if self.customStrD.has_key('setdef'):
+            s += self.customStrD['setdef']    
+        else:
+            if self.isDrive():
+                s.append(self.v.wbDrive)
+                
+            if self.isWrite() and self.isPulsed():
+                s.append(self.v.wbPulseZero)
+        if self.customStrD.has_key('set'):
+            s += self.customStrD['set']        
+        return s
+    
+    def getStrMuxRead(self):
         s = []
         for opLine in self.opList:
             (op, adrList) = opLine
@@ -369,24 +383,35 @@ class WbRegister(Register):
                     sliceWidth       = msk
                     if self.isGenericWidth():
                         curSlice         = "%s downto %u" % (self.getGenWidthPrefix() + sliceWidth + "-1", 0)
-                        baseSlice        = "%s downto %u" % (self.getGenWidthPrefix() + sliceWidth + "-1", 0)
                     else:
                         curSliceHigh     = sliceWidth + adrIdx*self.dwidth -1
                         curSliceLow      = adrIdx*self.dwidth
                         curSlice         = "%u downto %u" % (curSliceHigh, curSliceLow)
-                        baseSlice        = "%u downto %u" % (sliceWidth-1, 0)
-
+                    
                     regSlice         = ""
                     enum = ""
                     if len(adrList) > 1:
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
                     adrIdx += 1
-                    s.append(self.v.wbRead % (op + enum, baseSlice, regSlice))
-                    if self.customStrD.has_key('read'):
-                        s += self.customStrD['read']
-                    
+                    s.append(self.v.wbReadMux % (regSlice, op + enum))
+                   
         return s
+        
+    def getStrMuxValid(self):
+        s = []
+        for opLine in self.opList:
+            (op, adrList) = opLine
+            #this is sliced
+            adrIdx = 0
+            for adrLine in adrList:
+                (msk, adr) = adrLine
+                enum = ""
+                if len(adrList) > 1:
+                    enum = "_%s" % adrIdx
+                adrIdx += 1
+                s.append(self.v.wbValid % (op + enum))
+        return s   
 
     def getStrFsmWrite(self):
         s = []
@@ -426,4 +451,24 @@ class WbRegister(Register):
                 opIdx += 1
         return s
 
-
+    def getStrFsmRead(self):
+        s = []
+        for opLine in self.opList:
+            (op, adrList) = opLine
+            if((op == "_GET") or (op == "_RW")):
+                #this is sliced
+                adrIdx = 0
+                for adrLine in adrList:
+                   
+                    enum = ""
+                    if len(adrList) > 1:
+        
+                        enum = "_%s" % adrIdx
+                    adrIdx += 1
+                    s.append(self.v.wbRead % (op + enum))
+                    if self.customStrD.has_key('read'):
+                        s += self.customStrD['read']
+                    else:
+                        s +=  ["null;\n"]
+                    
+        return s          

@@ -164,6 +164,15 @@ class writeout(object):
         
         fo.write(v.archStart)
     
+        for line in slave.getValidMux():
+            fo.write(line)
+            
+        for line in slave.getOutputMux():
+            fo.write(line)
+        
+        for line in slave.getFlowControl():
+            fo.write(line)            
+        
         for line in slave.getAssignmentList():
             fo.write(line)    
         
