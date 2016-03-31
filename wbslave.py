@@ -47,14 +47,8 @@ class wbslave(object):
         self.c          = wbsC(pages, unitname, slaveIfName, sdbVendorID, sdbDeviceID)
 
         #create flow control
-        self.addIntReg("a", "address", self.addressWidth,  "", self.clocks[0], 0)
-        self.addIntReg("p", "page", "32",                  "", self.clocks[0], 0)
-        self.addIntReg("w", "read/write", "1",             "", self.clocks[0], 0)
-        self.addIntReg("d", "datain", self.dataWidth,      "", self.clocks[0], 0)
-        self.addIntReg("e", "enable", "1",                 "", self.clocks[0], 0)
-        self.addIntReg("s", "select", self.dataWidth/8,    "", self.clocks[0], 0)
-       
-        
+  
+        self.addIntReg("error", "Error control", "1",      "p", self.clocks[0], 0)
         tmpReg = self._createIntReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
         self.stallReg = self._addReg(tmpReg)
         # add custom assignments etc
@@ -88,13 +82,13 @@ class wbslave(object):
         if reg.hasEnableFlags():
             if reg.isWrite():
 
-                tmpReg = self._createIntReg(reg.name + "_WR", "Write enable flag", "1", "wp", reg.clkdomain, 0)
+                tmpReg = self._createIntReg(reg.name + "_WR", "Write enable flag - %s" % reg.name, "1", "wp", reg.clkdomain, 0)
                 self._addReg(tmpReg)
                 customStrD.setdefault('write', [])
                 customStrD['write'] += [tmpReg.v.setHigh]
                 
             if reg.isRead():
-                tmpReg = self._createIntReg(reg.name + "_RD", "Read enable flag", "1", "wp", reg.clkdomain, 0)
+                tmpReg = self._createIntReg(reg.name + "_RD", "Read enable flag - %s" % reg.name, "1", "wp", reg.clkdomain, 0)
                 self._addReg(tmpReg)
                 customStrD.setdefault('read', [])
                 customStrD['read'] += [tmpReg.v.setHigh]
@@ -105,7 +99,7 @@ class wbslave(object):
             customStrD['write'] += [self.stallReg.v.setHigh]
 
         if reg.isDrive():
-                tmpReg = self._createIntReg(reg.name + "_V", "Valid flag", "1", "dp", reg.clkdomain, 0)
+                tmpReg = self._createIntReg(reg.name + "_V", "Valid flag - %s" % reg.name, "1", "d", reg.clkdomain)
                 self._addReg(tmpReg)
         #syncing is a lot of work, too many corner cases for a generic solution.
         #so - let's get custom. big time.    
@@ -247,7 +241,7 @@ class wbslave(object):
         for reg in self.registers:
             s += reg.getStrAssignment()
         #generate flow control code
-        
+        s += ["\n"]
         return adj(s, ['<=', "--"], 1)
     
     def getFlowControl(self):
@@ -255,15 +249,13 @@ class wbslave(object):
         s += self.v.flowctrl
         return adj(s, ['<=', "r_e", "r_valid", "r_error"], 1)
     
-    def getOutputMux(self):
+    def _getWbOutputList(self):
         s = []
         
-        s += self.v.outmux0
         for reg in self.registers:
-            s += reg.getStrMuxRead()
-        s += self.v.outmux1
-        
-        return adj(s, ['when', "--"], 1)
+            s += reg.getStrWbOut()
+        s.append(self.v.outOthers)    
+        return s
         
 
     def getValidMux(self):
@@ -310,9 +302,10 @@ class wbslave(object):
 
     def getDeclarationList(self):
         s = []
-
+        s += self.v.IntSigs    
         for reg in self.registers:
             s += reg.getStrSignalDeclaration()
+          
         return adj(s, [' is ', ':', ':=', '--'], 1)
 
 
@@ -320,7 +313,8 @@ class wbslave(object):
         s = []
         for reg in self.registers:
             s += reg.getStrSet()
-        return s
+            
+        return sorted(s)
 
 
     def getResetList(self):
@@ -335,6 +329,7 @@ class wbslave(object):
         s = []
         for reg in self.registers:
             s += reg.getStrFsmRead()
+        s.append(self.v.fsmOthers)    
         return s
 
 
@@ -342,6 +337,7 @@ class wbslave(object):
         s = []
         for reg in self.registers:
             s += reg.getStrFsmWrite()
+        s.append(self.v.fsmOthers)    
         return s
 
 
@@ -366,19 +362,22 @@ class wbslave(object):
 
         s +=  iN(self.v.wbs0, 1)
         s += adj(self.getResetList(), ['<='], 4)
-        tmpV = self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1 + [self.v.enable % self.stallReg.v.regname]
+        tmpV = self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1 + self.v.enable
         s += iN(tmpV, 3)
-        s += adj(self.getSetList(), ['<=', 'then', '--'], 4)
+        s += adj(self.getSetList(), ['= "', '<=', '--'], 4)
         s +=  iN(self._getPageSelect(), 4)
         s +=  iN(self.v.wbs2, 4)
         s += adj(self._getFsmWriteList(), ['=>', '<=', 'v_d', "--"], 7)
 
-        s +=  iN(self.v.wbOthers, 7)
+
         s +=  iN(self.v.wbs3, 5)
-        s += adj(self._getFsmReadList(), ['=>', '<=', "--"], 7)
-        s +=  iN(self.v.wbOthers, 7)        
-        s +=  iN(self.v.wbs4, 1)
+        s += adj(self._getFsmReadList(), ['=>'], 7)
         
+        s +=  iN(self.v.wbs4, 4)
+        s +=  iN(self.v.out0, 4)
+        s += adj(self._getWbOutputList(), ['=>', '<=', "--"], 5)
+        s +=  iN(self.v.out1, 4)
+        s +=  iN(self.v.wbs5, 1)
 
         return s
 

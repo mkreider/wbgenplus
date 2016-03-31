@@ -167,8 +167,7 @@ class writeout(object):
         for line in slave.getValidMux():
             fo.write(line)
             
-        for line in slave.getOutputMux():
-            fo.write(line)
+  
         
         for line in slave.getFlowControl():
             fo.write(line)            

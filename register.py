@@ -48,6 +48,11 @@ class Register(object):
     def setCustomStrDict(self, customD):
         self.customStrD = customD
 
+    def hasReset(self):
+        if self.rstvec is not None:
+            return True
+        return False
+
     def isSync(self):
         if self.clkbase != self.clkdomain:
             return True
@@ -200,7 +205,8 @@ class Register(object):
         if self.customStrD.has_key('resetdef'):
             s += self.customStrD['resetdef']    
         else:
-            s.append(self.v.reset)
+            if self.hasReset():
+                s.append(self.v.reset)
         if self.customStrD.has_key('reset'):
             s += self.customStrD['reset'] 
         return s
@@ -210,6 +216,9 @@ class Register(object):
         s = []        
         if self.customStrD.has_key('setdef'):
             s += self.customStrD['setdef']    
+        else:
+            if self.isPulsed():
+                s.append(self.v.wbPulseZero)
         if self.customStrD.has_key('set'):
             s += self.customStrD['set']        
         return s
@@ -224,7 +233,7 @@ class Register(object):
     def getStrMuxValid(self):
         return []    
     
-    def getStrMuxRead(self):
+    def getStrWbOut(self):
         return []
     
     def getStrFsmRead(self):
@@ -309,7 +318,20 @@ class WbRegister(Register):
             return adr
         else:
             return self.startAdr
-            
+    
+    def getStrSet(self):
+        s = []        
+        if self.customStrD.has_key('setdef'):
+            s += self.customStrD['setdef']    
+        else:
+            if self.isDrive():
+                s.append(self.v.wbDrive)
+                
+            if self.isWrite() and self.isPulsed():
+                s.append(self.v.wbPulseZero)
+        if self.customStrD.has_key('set'):
+            s += self.customStrD['set']        
+        return s        
             
     def getStrAddress(self, language="VHDL", lastAdr=0, maxWidth=0):
         s = []
@@ -356,21 +378,9 @@ class WbRegister(Register):
 
         return s
     
-    def getStrSet(self):
-        s = []        
-        if self.customStrD.has_key('setdef'):
-            s += self.customStrD['setdef']    
-        else:
-            if self.isDrive():
-                s.append(self.v.wbDrive)
-                
-            if self.isWrite() and self.isPulsed():
-                s.append(self.v.wbPulseZero)
-        if self.customStrD.has_key('set'):
-            s += self.customStrD['set']        
-        return s
     
-    def getStrMuxRead(self):
+    
+    def getStrWbOut(self):
         s = []
         for opLine in self.opList:
             (op, adrList) = opLine
@@ -394,23 +404,25 @@ class WbRegister(Register):
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
                     adrIdx += 1
-                    s.append(self.v.wbReadMux % (regSlice, op + enum))
+                    s.append(self.v.wbOut % (op + enum,regSlice ))
                    
         return s
         
     def getStrMuxValid(self):
         s = []
-        for opLine in self.opList:
-            (op, adrList) = opLine
-            #this is sliced
-            adrIdx = 0
-            for adrLine in adrList:
-                (msk, adr) = adrLine
-                enum = ""
-                if len(adrList) > 1:
-                    enum = "_%s" % adrIdx
-                adrIdx += 1
-                s.append(self.v.wbValid % (op + enum))
+        if self.isDrive():
+            for opLine in self.opList:
+                (op, adrList) = opLine
+                if((op == "_GET") or (op == "_RW")):
+                    #this is sliced
+                    adrIdx = 0
+                    for adrLine in adrList:
+                        (msk, adr) = adrLine
+                        enum = ""
+                        if len(adrList) > 1:
+                            enum = "_%s" % adrIdx
+                        adrIdx += 1
+                        s.append(self.v.wbValid % (op + enum))
         return s   
 
     def getStrFsmWrite(self):
@@ -468,7 +480,6 @@ class WbRegister(Register):
                     s.append(self.v.wbRead % (op + enum))
                     if self.customStrD.has_key('read'):
                         s += self.customStrD['read']
-                    else:
-                        s +=  ["null;\n"]
+                 
                     
         return s          

@@ -198,7 +198,7 @@ class registerVhdlStr(object):
         if (pages != 0):        
             self.dtype          = "matrix(%s%s-1 downto 0, %s%s-1 downto 0)" % (genPagePrefix, pages, genWidthPrefix, width)
             self.reset          = "%s <= mrst(%s);\n" % (self.regname, self.regname)
-            self.wbReadMux      = wbsStr.wbReadMux % (self.regname, self.name, "") # Slice
+            self.wbOut      = wbsStr.wbOut % (self.regname, self.name, "") # Slice
             self.wbRead         = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
             self.wbWrite        = wbsStr.wbWriteMatrix % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero    = "%s <= mrst(%s);\n" % (self.regname, self.regname)
@@ -206,7 +206,7 @@ class registerVhdlStr(object):
         else:
             self.dtype = "std_logic_vector(%s%s-1 downto 0)" % (genWidthPrefix, width)
             self.reset                  = "%s <= %s;\n" % (self.regname, self.resetvector)
-            self.wbReadMux              = wbsStr.wbReadMux % (self.regname, self.name, "") # Slice
+            self.wbOut              = wbsStr.wbOut % (self.name, self.regname, "")  # Slice
             self.wbRead                 = wbsStr.wbRead % (self.name) 
             self.wbWrite                = wbsStr.wbWrite % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero            = "%s <= %s;\n" % (self.regname,  (self.others % '0'))
@@ -262,17 +262,17 @@ class wbsVhdlStrRegister(object):
 
     def __init__(self, slaveIfName):
         self.slaveIfName    = slaveIfName        
-        self.wbRead             = "when c_" + "%s%%s => " #regname, #op
-        self.wbValid            = "%s when c_" + "%s%%s, -- %s\n" #regname + op, #slice, registerName, #slice        
+        self.wbRead             = "when c_" + "%s%%s => null;\n" #regname, #op
+        self.wbValid            = "%s(0) when c_" + "%s%%s, -- %s\n" #regname + op, #slice, registerName, #slice        
         self.wbDrive            = "if %s = \"1\" then %s <= %s; end if; -- %s\n" #validsignal, register, input
-        self.wbReadMux          = "resize(%s%%s, " + slaveIfName + "_o.dat'length) when c_" + "%s%%s, -- %s\n" #regname + op, #slice, registerName, #slice        
-        self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, v_d, v_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
+        self.wbOut          = "when c_" + "%s%%s => " + slaveIfName + "_o.dat <= std_logic_vector(resize(unsigned(%s%%s), " + slaveIfName + "_o.dat'length));  -- %s\n" #regname + op, #slice, registerName, #slice        
+        self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, r_d, r_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
         
         self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= mget(%s, v_p)%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
-        self.wbWriteMatrix      = "when c_" + "%s%%s => mset(%s, f_wb_wr(mget(%s, v_p)%%s, v_d, v_s, \"%%s\"), v_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
+        self.wbWriteMatrix      = "when c_" + "%s%%s => mset(%s, f_wb_wr(mget(%s, r_p)%%s, r_d, r_s, \"%%s\"), r_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
         
         self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
-        self.stub               = "signal s_" + slaveIfName + "_%s : %s; -- %s\n"
+        self.stub               = "signal s_" + slaveIfName + "_%s : %s := (others => '0'); -- %s\n"
         self.assignStub         = "%s => s_" + slaveIfName + "_%s,\n"
         
         self.wbStall            = "r_%s_%%s <= \"1\"; --    %s auto stall\n" % (slaveIfName, slaveIfName)
@@ -304,19 +304,18 @@ class wbsVhdlStrGeneral(object):
         #################################################################################        
         #Strings galore
         
-        self.outmux0  = ["outmux: with r_a select\n",
-                         "%s_o.dat <= \n" % slaveIfName]
-        self.outmux1  = ["(others => 'X') when others;\n",
-                         "\n"]
+    
         
-        self.validmux0  = ["validmux: with r_a select\n",
+        self.validmux0  = ["validmux: with r_a0 select\n",
                            "s_valid <= \n"]
-        self.validmux1  = ["\"1\" when others;\n",
+        self.validmux1  = ["'1' when others;\n",
                            "\n"]
         
-        self.flowctrl = ["%s_o.ack   <= r_e and      r_valid and not r_error;\n" % slaveIfName,
-                         "%s_o.err   <= r_e and      r_valid and     r_error;\n" % slaveIfName,
-                         "%s_o.stall <= r_e and not  r_valid;\n" % slaveIfName]     
+        self.flowctrl = ["s_stall <= (s_e and not  s_valid) or r_%s_stall(0);\n" % slaveIfName,
+                         "s_e <= r_e or r_e_wait;\n",   
+                     
+                         "%s_o.stall    <= s_stall;\n" % slaveIfName,
+                         "\n"]     
 
         
         self.slaveIf    = ["\n",
@@ -328,6 +327,19 @@ class wbsVhdlStrGeneral(object):
                           
         self.slaveSigs = ["signal s_%s_i : t_wishbone_slave_in;\n" % slaveIfName,
                           "signal s_%s_o : t_wishbone_slave_out;\n" % slaveIfName]
+                          
+        self.IntSigs =    ["signal s_e, r_e : std_logic;\n",
+                           "signal r_e_wait : std_logic;\n",                            
+                           "signal r_w : std_logic;\n",
+                           "signal r_a0, r_a1, r_p : natural;\n",
+                           "signal r_d : std_logic_vector(%s-1 downto 0);\n" % self.dataWidth,
+                           "signal r_s : std_logic_vector(%u-1 downto 0);\n" % ((int(self.dataWidth))/8),
+                           "signal s_stall : std_logic;\n",               
+                           "signal s_valid : std_logic;\n",
+                           "signal r_ack : std_logic;\n", 
+                           "signal r_err : std_logic;\n",
+                           "\n"     
+                          ]
         
         self.slaveInst = ["%s_i => %s_i,\n" % (slaveIfName, slaveIfName),
                           "%s_o => %s_o" % (slaveIfName, slaveIfName)]         
@@ -336,41 +348,64 @@ class wbsVhdlStrGeneral(object):
 
                            "begin\n",
                            "   if rising_edge(%s) then\n" % (wbsVhdlStrGeneral.clkportname % clocks[0]),
-                           "      if(%s = '0') then\n" % (wbsVhdlStrGeneral.rstportname % clocks[0])]
+                           "      if(%s = '0') then\n" % (wbsVhdlStrGeneral.rstportname % clocks[0]),
+                           "         r_e      <= '0';\n", 
+                           "         r_e_wait <= '0';\n",
+                           "         r_a0     <=  0;\n"] 
        
         self.wbs1_0     = ["else\n",
-                           #"   %s_o.ack  <= '0';\n" % slaveIfName,
-                           #"   %s_o.err  <= '0';\n" % slaveIfName,
-                           "   %s_o.dat  <= (others => '0');\n" % slaveIfName,
+
                            "\n",
                            "   -- short names\n",
                            "   r_d <= %s_i.dat;\n" % slaveIfName]
-        self.wbs1_adr   =  "   r_a <= to_integer(unsigned(%s_i.adr(%%u downto %%u)) %%s);\n" % slaveIfName
-        self.wbs1_1     = ["   r_s <= %s_i.sel;\n" % slaveIfName,
+        self.wbs1_adr   = "   r_a0 <= to_integer(unsigned(%s_i.adr(%%u downto %%u)) %%s);\n" % slaveIfName
+                           
+        self.wbs1_1     = ["   r_a1 <= r_a0;\n",
+                           "   r_s <= %s_i.sel;\n" % slaveIfName,
                            "   r_w <= %s_i.we;\n" % slaveIfName] 
       
-        self.enable     =  "   r_e <= %s_i.cyc and %s_i.stb and (not %%s(0));\n\n" % (slaveIfName, slaveIfName)
-        self.wbs2       = ["if(r_e = '1') then\n",
+        self.enable     = ["   r_e <= (%s_i.cyc and %s_i.stb and (not s_stall));\n\n" % (slaveIfName, slaveIfName)]
+                          
+        self.wbs2       = ["r_e_wait <= (r_e_wait or r_e) and not s_valid;\n",
+                           "\n", 
+                           "if(r_e = '1') then\n",
                            "   if(r_w = '1') then\n",
                            "      -- WISHBONE WRITE ACTIONS\n",
-                           "      case r_a is\n"]
+                           "      case r_a0 is\n"]
     
         self.wbs3       = ["   end case;\n",
                            "else\n",
                            "   -- WISHBONE READ ACTIONS\n",
-                           "   case r_a is\n"]  
+                           "   case r_a0 is\n"]  
 
-        self.wbs4       = ["               end case;\n",
-                           "            end if; -- r_w\n",
-                           "         end if; -- r_e\n",
-                           "      end if; -- rst\n",
+        self.wbs4       = ["      end case;\n",
+                           "   end if; -- r_w\n",
+                           "end if; -- r_e\n",
+                           "\n"
+                           ]
+                           
+        self.out0       = ["r_ack    <= s_e and      s_valid and not r_error(0);\n",
+                           "r_err    <= s_e and      s_valid and     r_error(0);\n",
+                           "%s_o.ack <= r_ack;\n" % slaveIfName,
+                           "%s_o.err <= r_err;\n" % slaveIfName,         
+                           "\n",
+                           "case r_a1 is\n"]
+                         
+        self.outOthers  = "when others => %s_o.dat <= (others => 'X');\n" % slaveIfName                 
+                         
+        self.out1       = ["end case;\n",
+                           "\n"]
+                           
+        self.wbs5       = ["      end if; -- rst\n",
                            "   end if; -- clk edge\n",
                            "end process;\n\n"]
+                           
+                           
         
                            
         self.wbsPageSelect      = "r_p <= to_integer(unsigned(r_%s));\n\n"  #pageSelect Register
                           
-        self.wbOthers           = ["when others => r_error <= '1';\n"]                   
+        self.fsmOthers           = "when others => r_error <= \"1\";\n"                   
 
                              
         self.wbs_reg_o          = "signal r_%s : t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
