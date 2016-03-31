@@ -49,7 +49,7 @@ class Register(object):
         self.customStrD = customD
 
     def hasReset(self):
-        if self.rstvec is not None:
+        if (self.rstvec is not None) or self.isPulsed():
             return True
         return False
 

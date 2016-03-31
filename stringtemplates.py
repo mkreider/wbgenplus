@@ -219,7 +219,7 @@ class registerVhdlStr(object):
         self.portsignameout = 's_' + name + "_i"
         self.portsigvalidin = 's_' + name + "_V_i"
         self.portnameout    = name + clkdomainSuffix + "_o"
-        self.declaration    = "signal %%s : %s; -- %s\n" % (self.dtype, description)
+        self.declaration    = "signal %%s : %s := %s; -- %s\n" % (self.dtype, self.resetvector, description)
         self.port           = "%%s : %%s %s; -- %s\n" % (self.dtype, description)
         
         
