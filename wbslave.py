@@ -364,12 +364,7 @@ class wbslave(object):
     
     def _getMaxAdrWidth(self):
         hiAdr = self._getLastAddress()
-        #if there's only a single register, hiAdr would be 0. Doesnt work with log2, change to highest non-aligned value
-        if(hiAdr == 0):
-            msbIdx = 0
-        else:
-            msbIdx = (math.ceil(math.log( hiAdr ) / math.log( 2 )))
-        return msbIdx+1    
+        return len(bin(hiAdr).lstrip('-0b'))
 
     def getFsmList(self):
         s = []
