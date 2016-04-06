@@ -14,6 +14,7 @@ from stringtemplates import wbsCStr as wbsC
 
 from textformatting import beautify as adj
 from textformatting import setColsIndent as iN
+from textformatting import setColIndent as i1
 #from textformatting import commentLine as cline
 from textformatting import commentBox as cbox
 
@@ -48,8 +49,9 @@ class wbslave(object):
 
         #create flow control
   
-        self.addIntReg("error", "Error control", "1",      "p", self.clocks[0], 0)
-        tmpReg = self._createIntReg(self.name + "_stall", "flow control", "1", "d", self.clocks[0], 0)
+        self.addIntReg("error", "Error", "1",      "p", self.clocks[0], 0)
+        self.addIntReg("error", "Error control", "1",      "xd", self.clocks[0])
+        tmpReg = self._createIntReg("stall", "flow control", "1", "xd", self.clocks[0])
         self.stallReg = self._addReg(tmpReg)
         # add custom assignments etc
         #tmpStrD = {'setdef' : [self.v.wbsStall1 % (tmpReg.v.regname, tmpReg.v.regname, tmpReg.v.portsignamein)],
@@ -258,6 +260,23 @@ class wbslave(object):
         return s
         
 
+    def getSkidPad(self):
+        s = []
+        maxAdr = self._getMaxAdrWidth()
+        msbIdx = maxAdr-1
+        lsbIdx = (math.ceil(math.log( self.dataWidth/8 ) / math.log( 2 )))
+        if lsbIdx > 0:
+            padding = '& "%s"' % ('0' * int(lsbIdx))
+        else:
+            padding = ''            
+        
+        s += self.v.skidpad0
+        s += [self.v.skidpadAdr0 % (maxAdr-2)]
+        s += self.v.skidpad1
+        s += [self.v.skidpadAdr1 % (msbIdx, lsbIdx)]
+        s += self.v.skidpad2
+        return iN(s, 1)
+
     def getValidMux(self):
         s = []
         s += self.v.validmux0    
@@ -302,7 +321,9 @@ class wbslave(object):
 
     def getDeclarationList(self):
         s = []
-        s += self.v.IntSigs    
+        s += self.v.IntSigs
+        s += [self.v.IntSigsAdr % (int(self._getMaxAdrWidth())-2)]
+        s += [self.v.IntSigsAdrExt % (int(self._getMaxAdrWidth()))]
         for reg in self.registers:
             s += reg.getStrSignalDeclaration()
           
@@ -340,16 +361,21 @@ class wbslave(object):
         s.append(self.v.fsmOthers)    
         return s
 
-
-    def getFsmList(self):
-        s = []
-
+    
+    def _getMaxAdrWidth(self):
         hiAdr = self._getLastAddress()
         #if there's only a single register, hiAdr would be 0. Doesnt work with log2, change to highest non-aligned value
         if(hiAdr == 0):
             msbIdx = 0
         else:
             msbIdx = (math.ceil(math.log( hiAdr ) / math.log( 2 )))
+        return msbIdx+1    
+
+    def getFsmList(self):
+        s = []
+
+            
+        msbIdx = self._getMaxAdrWidth()-1
         lsbIdx = (math.ceil(math.log( self.dataWidth/8 ) / math.log( 2 )))
         if lsbIdx > 0:
             padding = '& "%s"' % ('0' * int(lsbIdx))
@@ -357,20 +383,21 @@ class wbslave(object):
             padding = ''
         adrMsk = 2**msbIdx-1
         print "%s" % ('*' * 80)
-        print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.registers), hiAdr, adrMsk, msbIdx-1, lsbIdx)
+        print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.registers), self._getLastAddress(), adrMsk, msbIdx-1, lsbIdx)
         print "\n%s" % ('*' * 80)
-
+         
         s +=  iN(self.v.wbs0, 1)
         s += adj(self.getResetList(), ['<='], 4)
-        tmpV = self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1 + self.v.enable
-        s += iN(tmpV, 3)
+        #tmpV = self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1 + self.v.enable
+        s += iN(self.v.wbs1_0, 3)
+        s += iN(self.v.wbs1_1, 4)        
         s += adj(self.getSetList(), ['= "', '<=', '--'], 4)
         s +=  iN(self._getPageSelect(), 4)
         s +=  iN(self.v.wbs2, 4)
         s += adj(self._getFsmWriteList(), ['=>', '<=', 'v_d', "--"], 7)
 
 
-        s +=  iN(self.v.wbs3, 5)
+        s +=  iN(self.v.wbs3, 4)
         s += adj(self._getFsmReadList(), ['=>'], 7)
         
         s +=  iN(self.v.wbs4, 4)

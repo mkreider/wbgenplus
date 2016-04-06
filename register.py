@@ -73,7 +73,10 @@ class Register(object):
             return True
         return False
 
-  
+    def isAux(self):
+        if(self.flags.find('x') > -1):
+            return True
+        return False
 
     def isPaged(self):
         if(self.flags.find('m') > -1):
@@ -141,8 +144,8 @@ class Register(object):
 
     def getStrSignalDeclaration(self):
         s = []
-               
-        s.append(self.v.declarationReg)
+        if not self.isAux():       
+            s.append(self.v.declarationReg)
         if self.isDrive():
             s.append(self.v.declarationPortSigIn)
         

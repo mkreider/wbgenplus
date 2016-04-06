@@ -6,7 +6,7 @@ Created on Fri Nov 14 10:35:39 2014
 """
 import math
 
-_TAB_SIZE_ = 3
+_TAB_SIZE_ = 2
 
 def is_sequence(arg):
     return (not hasattr(arg, "strip") and

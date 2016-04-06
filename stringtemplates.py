@@ -5,7 +5,28 @@ Created on Mon Oct 19 16:58:20 2015
 @author: mkreider
 """
 import datetime
+from textformatting import setColIndent as i1
 
+
+def il0(slist):
+    return slist
+
+def il1(slist):
+    return i1(slist, 1)
+    
+def il2(slist):
+    return i1(slist, 2)
+
+def il3(slist):
+    return i1(slist, 3)
+
+def il4(slist):
+    return i1(slist, 4)
+
+def il5(slist):
+    return i1(slist, 5)
+
+    
 
 class wbsCStr(object):
    
@@ -266,10 +287,10 @@ class wbsVhdlStrRegister(object):
         self.wbValid            = "%s(0) when c_" + "%s%%s, -- %s\n" #regname + op, #slice, registerName, #slice        
         self.wbDrive            = "if %s = \"1\" then %s <= %s; end if; -- %s\n" #validsignal, register, input
         self.wbOut          = "when c_" + "%s%%s => " + slaveIfName + "_o.dat <= std_logic_vector(resize(unsigned(%s%%s), " + slaveIfName + "_o.dat'length));  -- %s\n" #regname + op, #slice, registerName, #slice        
-        self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, r_d, r_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
+        self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, s_d, s_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
         
         self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= mget(%s, v_p)%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
-        self.wbWriteMatrix      = "when c_" + "%s%%s => mset(%s, f_wb_wr(mget(%s, r_p)%%s, r_d, r_s, \"%%s\"), r_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
+        self.wbWriteMatrix      = "when c_" + "%s%%s => mset(%s, f_wb_wr(mget(%s, r_p)%%s, s_d, s_s, \"%%s\"), r_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
         
         self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
         self.stub               = "signal s_" + slaveIfName + "_%s : %s := (others => '0'); -- %s\n"
@@ -304,15 +325,41 @@ class wbsVhdlStrGeneral(object):
         #################################################################################        
         #Strings galore
         
-    
+        self.skidpad0    = [il0("sp : wb_skidpad\n"),
+                           il0("generic map(\n")]
+                           
+        self.skidpadAdr0 = il1("g_adrbits   => %u\n")
+        self.skidpad1    = [
+                           il0(")\n"),
+                           il0("Port map(\n"),
+                           il1("clk_i        => %s,\n" % (wbsVhdlStrGeneral.clkportname % clocks[0])),
+                           il1("rst_n_i      => %s,\n" % (wbsVhdlStrGeneral.rstportname % clocks[0])),             
+                           il1("push_i       => s_push,\n"),
+                           il1("pop_i        => s_pop,\n"),
+                           il1("full_o       => s_full,\n"),
+                           il1("empty_o      => s_empty,\n")]
+        self.skidpadAdr1 = il1("adr_i        => %s_i.adr(%%u downto %%u),\n" % slaveIfName)
+        self.skidpad2    = [                   
+                           il1("dat_i        => %s_i.dat,\n" % slaveIfName),
+                           il1("sel_i        => %s_i.sel,\n" % slaveIfName),  
+                           il1("we_i         => %s_i.we,\n" % slaveIfName),
+                           il1("adr_o        => s_a,\n"),
+                           il1("dat_o        => s_d,\n"),
+                           il1("sel_o        => s_s,\n"),
+                           il1("we_o         => s_w\n"),
+                           il0(");\n\n")]
         
-        self.validmux0  = ["validmux: with r_a0 select\n",
+        
+        self.validmux0  = ["validmux: with to_integer(unsigned(s_a_ext)) select\n",
                            "s_valid <= \n"]
         self.validmux1  = ["'1' when others;\n",
                            "\n"]
         
-        self.flowctrl = ["s_stall <= (s_e and not  s_valid) or r_%s_stall(0);\n" % slaveIfName,
-                         "s_e <= r_e or r_e_wait;\n",   
+        self.flowctrl = ["s_a_ext <= s_a & \"00\";\n",
+                         "s_stall <= s_full;\n",
+                         "s_push  <= slave_i.cyc and slave_i.stb and not s_stall;\n -- push if wb op not stalled\n",
+                         "s_e     <= not (s_empty or r_e_wait or stall_i(0)) ;-- op enable when skidpad not empty and not waiting for completion\n",
+                         "s_pop   <= (s_e or r_e_wait) and s_valid; -- if op enabled or waiting for completion, pop on valid from entity\n",   
                      
                          "%s_o.stall    <= s_stall;\n" % slaveIfName,
                          "\n"]     
@@ -328,84 +375,78 @@ class wbsVhdlStrGeneral(object):
         self.slaveSigs = ["signal s_%s_i : t_wishbone_slave_in;\n" % slaveIfName,
                           "signal s_%s_o : t_wishbone_slave_out;\n" % slaveIfName]
                           
-        self.IntSigs =    ["signal s_e, r_e : std_logic;\n",
-                           "signal r_e_wait : std_logic;\n",                            
-                           "signal r_w : std_logic;\n",
-                           "signal r_a0, r_a1, r_p : natural;\n",
-                           "signal r_d : std_logic_vector(%s-1 downto 0);\n" % self.dataWidth,
-                           "signal r_s : std_logic_vector(%u-1 downto 0);\n" % ((int(self.dataWidth))/8),
+        self.IntSigs  =   ["signal s_pop, s_push : std_logic;\n",
+                           "signal s_empty, s_full : std_logic;\n",
+                           "signal r_e_wait : std_logic;\n",
                            "signal s_stall : std_logic;\n",               
                            "signal s_valid : std_logic;\n",
                            "signal r_ack : std_logic;\n", 
-                           "signal r_err : std_logic;\n",
-                           "\n"     
+                           "signal r_err : std_logic;\n",                             
+                           "signal s_e, s_w : std_logic;\n",
+                           "signal s_d : std_logic_vector(%s-1 downto 0);\n" % self.dataWidth,
+                           "signal s_s : std_logic_vector(%u-1 downto 0);\n" % ((int(self.dataWidth))/8),
                           ]
+        self.IntSigsAdr = "signal s_a : std_logic_vector(%u-1 downto 0);\n"                  
+        self.IntSigsAdrExt = "signal s_a_ext, r_a_ext : std_logic_vector(%u-1 downto 0);\n"        
         
         self.slaveInst = ["%s_i => %s_i,\n" % (slaveIfName, slaveIfName),
                           "%s_o => %s_o" % (slaveIfName, slaveIfName)]         
         
-        self.wbs0       = ["%s : process(%s)\n" % (slaveIfName, (wbsVhdlStrGeneral.clkportname % clocks[0]) ),
-
-                           "begin\n",
-                           "   if rising_edge(%s) then\n" % (wbsVhdlStrGeneral.clkportname % clocks[0]),
-                           "      if(%s = '0') then\n" % (wbsVhdlStrGeneral.rstportname % clocks[0]),
-                           "         r_e      <= '0';\n", 
-                           "         r_e_wait <= '0';\n",
-                           "         r_a0     <=  0;\n"] 
+        self.wbs0       = [il0("%s : process(%s)\n" % (slaveIfName, (wbsVhdlStrGeneral.clkportname % clocks[0]) )),
+                           il0("begin\n"),
+                           il1("if rising_edge(%s) then\n" % (wbsVhdlStrGeneral.clkportname % clocks[0])),
+                           il2("if(%s = '0') then\n" % (wbsVhdlStrGeneral.rstportname % clocks[0])),
+                           il3("r_e_wait <= '0';\n"),
+                           il3("r_a_ext  <=  (others => '0');\n")] 
        
-        self.wbs1_0     = ["else\n",
-
-                           "\n",
-                           "   -- short names\n",
-                           "   r_d <= %s_i.dat;\n" % slaveIfName]
-        self.wbs1_adr   = "   r_a0 <= to_integer(unsigned(%s_i.adr(%%u downto %%u)) %%s);\n" % slaveIfName
+        self.wbs1_0     = ["else\n"]
                            
-        self.wbs1_1     = ["   r_a1 <= r_a0;\n",
-                           "   r_s <= %s_i.sel;\n" % slaveIfName,
-                           "   r_w <= %s_i.we;\n" % slaveIfName] 
-      
-        self.enable     = ["   r_e <= (%s_i.cyc and %s_i.stb and (not s_stall));\n\n" % (slaveIfName, slaveIfName)]
-                          
-        self.wbs2       = ["r_e_wait <= (r_e_wait or r_e) and not s_valid;\n",
-                           "\n", 
-                           "if(r_e = '1') then\n",
-                           "   if(r_w = '1') then\n",
-                           "      -- WISHBONE WRITE ACTIONS\n",
-                           "      case r_a0 is\n"]
-    
-        self.wbs3       = ["   end case;\n",
-                           "else\n",
-                           "   -- WISHBONE READ ACTIONS\n",
-                           "   case r_a0 is\n"]  
-
-        self.wbs4       = ["      end case;\n",
-                           "   end if; -- r_w\n",
-                           "end if; -- r_e\n",
-                           "\n"
-                           ]
-                           
-        self.out0       = ["r_ack    <= s_e and      s_valid and not r_error(0);\n",
-                           "r_err    <= s_e and      s_valid and     r_error(0);\n",
+        self.wbs1_1     = ["r_a_ext  <= s_a_ext;\n",
+                           "r_e_wait <= (r_e_wait or s_e) and not s_valid;\n",
+                           "r_ack    <= s_pop and not (error_i(0) or r_error(0));\n",
+                           "r_err    <= s_pop and     (error_i(0) or r_error(0));\n",
                            "%s_o.ack <= r_ack;\n" % slaveIfName,
                            "%s_o.err <= r_err;\n" % slaveIfName,         
                            "\n",
-                           "case r_a1 is\n"]
+        
+                                
+                           
+                           ] 
+      
+        self.wbs2       = [il0("\n"), 
+                           il0("if(s_e = '1') then\n"),
+                           il1("if(s_w = '1') then\n"),
+                           il2("-- WISHBONE WRITE ACTIONS\n"),
+                           il2("case to_integer(unsigned(s_a_ext)) is\n")]
+    
+        self.wbs3       = [il2("end case;\n"),
+                           il1("else\n"),
+                           il2("-- WISHBONE READ ACTIONS\n"),
+                           il2("case to_integer(unsigned(s_a_ext)) is\n")]  
+
+        self.wbs4       = [il2("end case;\n"),
+                           il1("end if; -- s_w\n"),
+                           il0("end if; -- s_e\n"),
+                           "\n"
+                           ]
+                           
+        self.out0       = ["case to_integer(unsigned(r_a_ext)) is\n"]
                          
         self.outOthers  = "when others => %s_o.dat <= (others => 'X');\n" % slaveIfName                 
                          
-        self.out1       = ["end case;\n",
+        self.out1       = ["end case;\n\n",
                            "\n"]
                            
-        self.wbs5       = ["      end if; -- rst\n",
-                           "   end if; -- clk edge\n",
-                           "end process;\n\n"]
+        self.wbs5       = [il2("end if; -- rst\n"),
+                           il1("end if; -- clk edge\n"),
+                           il0("end process;\n\n")]
                            
                            
         
                            
         self.wbsPageSelect      = "r_p <= to_integer(unsigned(r_%s));\n\n"  #pageSelect Register
                           
-        self.fsmOthers           = "when others => r_error <= \"1\";\n"                   
+        self.fsmOthers          = "when others => r_error <= \"1\";\n"                   
 
                              
         self.wbs_reg_o          = "signal r_%s : t_%s_regs_o;\n" % (slaveIfName, slaveIfName)
@@ -491,7 +532,7 @@ class gVhdlStr(object):
                            "use ieee.std_logic_1164.all;\n",
                            "use ieee.numeric_std.all;\n",
                            "use work.wishbone_pkg.all;\n",
-                           "use work.matrix_pkg.all;\n",
+                           "use work.wbgenplus_pkg.all;\n",
                            "use work.genram_pkg.all;\n"]
         self.pkg        =  "use work.%s%%s_pkg.all;\n\n" % unitname                   
            

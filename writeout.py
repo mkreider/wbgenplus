@@ -164,6 +164,9 @@ class writeout(object):
         
         fo.write(v.archStart)
     
+        for line in slave.getSkidPad():
+            fo.write(line)    
+    
         for line in slave.getValidMux():
             fo.write(line)
             
