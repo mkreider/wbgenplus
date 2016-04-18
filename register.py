@@ -216,15 +216,24 @@ class Register(object):
 
 
     def getStrSet(self):
-        s = []        
-        if self.customStrD.has_key('setdef'):
-            s += self.customStrD['setdef']    
-        else:
-            if self.isPulsed():
-                s.append(self.v.wbPulseZero)
-        if self.customStrD.has_key('set'):
-            s += self.customStrD['set']        
+        s = []
+        if not self.isPulsed():        
+            if self.customStrD.has_key('setdef'):
+                s += self.customStrD['setdef']    
+            elif self.customStrD.has_key('set'):
+                s += self.customStrD['set']        
         return s
+        
+    def getStrFlagPulse(self):
+        s = []
+        if self.isPulsed():            
+            if self.customStrD.has_key('setdef'):
+                s += self.customStrD['setdef']    
+            else:
+                s.append(self.v.wbPulseZero)
+            if self.customStrD.has_key('set'):
+                s += self.customStrD['set']        
+        return s   
 
     #implement in derived class
     def getLastAdr(self):
@@ -323,19 +332,41 @@ class WbRegister(Register):
             return self.startAdr
     
     def getStrSet(self):
-        s = []        
-        if self.customStrD.has_key('setdef'):
-            s += self.customStrD['setdef']    
-        else:
-            if self.isDrive():
-                s.append(self.v.wbDrive)
-                
-            if self.isWrite() and self.isPulsed():
-                s.append(self.v.wbPulseZero)
-        if self.customStrD.has_key('set'):
-            s += self.customStrD['set']        
+        s = [] 
+        if not self.isPulsed(): 
+            if self.customStrD.has_key('setdef'):
+                s += self.customStrD['setdef']    
+            else:
+                if self.isDrive():
+                    s.append(self.v.wbDrive)
+            if self.customStrD.has_key('set'):
+                s += self.customStrD['set']        
         return s        
-            
+    
+    def getStrFlagPulse(self):
+        s = [] 
+        if self.isPulsed(): 
+            if self.customStrD.has_key('setdef'):
+                s += self.customStrD['setdef']    
+            else:
+                if self.isWrite():
+                    s.append(self.v.wbPulseZero)    
+                if self.isDrive():
+                    s.append(self.v.wbDrive)
+            if self.customStrD.has_key('set'):
+                s += self.customStrD['set']        
+        return s     
+    
+    def getStrReset(self):
+        s = []
+        if self.customStrD.has_key('resetdef'):
+            s += self.customStrD['resetdef']    
+        else:
+            s.append(self.v.reset)
+        if self.customStrD.has_key('reset'):
+            s += self.customStrD['reset'] 
+        return s    
+        
     def getStrAddress(self, language="VHDL", lastAdr=0, maxWidth=0):
         s = []
         adrHi = lastAdr

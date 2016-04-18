@@ -261,8 +261,9 @@ class registerVhdlStr(object):
         self.cConstRegAdr       = "#define %%s_" + self.name.upper() + "%s 0x%s //%s, %s b, " + description + "\n" 
         self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s, %%s b, %s\n" % (self.name.lower(), description) #name, adrVal, adrVal, rw, msk, desc
         self.pythonConstAdrReg  = "0x%%s : '%s%%s', # %%s, %%s b, %s\n" % (self.name.lower(), description) #name, adrVal, adrVal, rw, msk, desc              
+        self.pythonVal          = "'%s' : %%s, # %s\n" % (self.name.lower(), description)             
+        self.pythonFlag         = "'%s' : '%%s', # %s\n" % (self.name.lower(), description) 
         
-  
         #Flow control
         self.wbStall            = wbsStr.wbStall
         self.wbValid            = wbsStr.wbValid % (self.portsigvalidin, self.name,  "")
@@ -355,12 +356,17 @@ class wbsVhdlStrGeneral(object):
         self.validmux1  = ["'1' when others;\n",
                            "\n"]
         
-        self.flowctrl = ["s_a_ext <= s_a & \"00\";\n",
+        self.flowctrl = [#only check valid if entity saw flag without stall
+                         "s_valid_ok <= r_valid_check and s_valid;\n",
+                         #prolong enable
+                         "s_e_p  <= r_e or r_e_wait;\n",
+                         "s_a_ext <= s_a & \"00\";\n",
                          "s_stall <= s_full;\n",
-                         "s_push  <= slave_i.cyc and slave_i.stb and not s_stall;\n -- push if wb op not stalled\n",
-                         "s_e     <= not (s_empty or r_e_wait or stall_i(0)) ;-- op enable when skidpad not empty and not waiting for completion\n",
-                         "s_pop   <= (s_e or r_e_wait) and s_valid; -- if op enabled or waiting for completion, pop on valid from entity\n",   
-                     
+                         "s_push  <= slave_i.cyc and slave_i.stb and not s_stall;\n",
+                         #-- op enable when skidpad not empty and not waiting for op completion
+                         "s_e     <= not (s_empty or s_e_p);\n",
+                         #pop if operation went out, entity saw flag without stall and replied valid    
+                         "s_pop   <= s_valid_ok;\n",
                          "%s_o.stall    <= s_stall;\n" % slaveIfName,
                          "\n"]     
 
@@ -375,20 +381,24 @@ class wbsVhdlStrGeneral(object):
         self.slaveSigs = ["signal s_%s_i : t_wishbone_slave_in;\n" % slaveIfName,
                           "signal s_%s_o : t_wishbone_slave_out;\n" % slaveIfName]
                           
-        self.IntSigs  =   ["signal s_pop, s_push : std_logic;\n",
+        self.IntSigs  =   ["signal s_pop, s_push   : std_logic;\n",
                            "signal s_empty, s_full : std_logic;\n",
-                           "signal r_e_wait : std_logic;\n",
+                           "signal r_e_wait, s_e_p : std_logic;\n",
                            "signal s_stall : std_logic;\n",               
-                           "signal s_valid : std_logic;\n",
+                           "signal s_valid,\n",
+                           "       s_valid_ok,\n",
+                           "       r_valid_check : std_logic;\n",
                            "signal r_ack : std_logic;\n", 
                            "signal r_err : std_logic;\n",                             
-                           "signal s_e, s_w : std_logic;\n",
+                           "signal s_e, r_e, s_w : std_logic;\n",
                            "signal s_d : std_logic_vector(%s-1 downto 0);\n" % self.dataWidth,
                            "signal s_s : std_logic_vector(%u-1 downto 0);\n" % ((int(self.dataWidth))/8),
                           ]
         self.IntSigsAdr = "signal s_a : std_logic_vector(%u-1 downto 0);\n"                  
-        self.IntSigsAdrExt = "signal s_a_ext, r_a_ext : std_logic_vector(%u-1 downto 0);\n"        
-        
+        self.IntSigsAdrExt0 = ["signal s_a_ext,\n",
+                               "       r_a_ext0,\n",
+                              ]     
+        self.IntSigsAdrExt1 =  "       r_a_ext1 : std_logic_vector(%u-1 downto 0);\n"
         self.slaveInst = ["%s_i => %s_i,\n" % (slaveIfName, slaveIfName),
                           "%s_o => %s_o" % (slaveIfName, slaveIfName)]         
         
@@ -396,23 +406,31 @@ class wbsVhdlStrGeneral(object):
                            il0("begin\n"),
                            il1("if rising_edge(%s) then\n" % (wbsVhdlStrGeneral.clkportname % clocks[0])),
                            il2("if(%s = '0') then\n" % (wbsVhdlStrGeneral.rstportname % clocks[0])),
-                           il3("r_e_wait <= '0';\n"),
-                           il3("r_a_ext  <=  (others => '0');\n")] 
+                           il3("r_e           <= '0';\n"),
+                           il3("r_e_wait      <= '0';\n"),
+                           il3("r_valid_check <= '0';\n")] 
        
         self.wbs1_0     = ["else\n"]
                            
-        self.wbs1_1     = ["r_a_ext  <= s_a_ext;\n",
-                           "r_e_wait <= (r_e_wait or s_e) and not s_valid;\n",
+        self.wbs1_1     = ["r_e <= s_e;\n",
+                           "r_a_ext0 <= s_a_ext;\n",
+                           "r_a_ext1 <= r_a_ext0;\n", #  -- need extra cycle for valid check, register 1x more
+                           #-- enable is prolonged until 'check valid' and valid are both high
+                           "r_e_wait <= s_e_p and not s_valid_ok;\n",
+                           #-- 'check valid' goes high if the entity saw a flag without stall and goes low if valid is high                           
+                           "r_valid_check <= (r_valid_check or (s_e_p and not stall_i(0))) and not s_valid_ok;\n",
                            "r_ack    <= s_pop and not (error_i(0) or r_error(0));\n",
                            "r_err    <= s_pop and     (error_i(0) or r_error(0));\n",
                            "%s_o.ack <= r_ack;\n" % slaveIfName,
                            "%s_o.err <= r_err;\n" % slaveIfName,         
                            "\n",
+                           ]    
+        #only clear flags if not stalled
+        self.wbs1_2     = ["\n",
+                           "if stall_i = \"0\" then\n"] 
+        self.wbs1_3     = ["end if;\n",
+                           "\n"] 
         
-                                
-                           
-                           ] 
-      
         self.wbs2       = [il0("\n"), 
                            il0("if(s_e = '1') then\n"),
                            il1("if(s_w = '1') then\n"),
@@ -430,7 +448,7 @@ class wbsVhdlStrGeneral(object):
                            "\n"
                            ]
                            
-        self.out0       = ["case to_integer(unsigned(r_a_ext)) is\n"]
+        self.out0       = ["case to_integer(unsigned(r_a_ext1)) is\n"]
                          
         self.outOthers  = "when others => %s_o.dat <= (others => 'X');\n" % slaveIfName                 
                          

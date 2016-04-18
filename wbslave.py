@@ -224,7 +224,25 @@ class wbslave(object):
         s = []
         for reg in self.registers:
             s += reg.getStrAddress("pythonreverse", self._getLastAddress(), self.getMaxBitWidth())
-        return adj(s, [':'], 0)    
+        return adj(s, [':'], 0)
+        
+        
+    def getFlagListPython(self):
+        s = []
+        for reg in self.registers:
+            if isinstance(reg, WbRegister):    
+                s += [reg.v.pythonFlag % (reg.flags)]
+        return adj(s, [':'], 0)
+        
+    def getValueListPython(self):
+        s = []
+        for reg in self.registers:
+            if isinstance(reg, WbRegister):
+                rst = '0'
+                if reg.rstvec is not None:
+                    rst = reg.rstvec         
+                s += [reg.v.pythonVal % (rst)]
+        return adj(s, [':'], 0)      
 
     def getAddressListC(self):
         s = []
@@ -323,7 +341,8 @@ class wbslave(object):
         s = []
         s += self.v.IntSigs
         s += [self.v.IntSigsAdr % (int(self._getMaxAdrWidth())-2)]
-        s += [self.v.IntSigsAdrExt % (int(self._getMaxAdrWidth()))]
+        s += self.v.IntSigsAdrExt0
+        s += [self.v.IntSigsAdrExt1 % (int(self._getMaxAdrWidth()))]
         for reg in self.registers:
             s += reg.getStrSignalDeclaration()
           
@@ -334,9 +353,13 @@ class wbslave(object):
         s = []
         for reg in self.registers:
             s += reg.getStrSet()
-            
         return sorted(s)
 
+    def getFlagPulseList(self):
+        s = []
+        for reg in self.registers:
+            s += reg.getStrFlagPulse()
+        return sorted(s)    
 
     def getResetList(self):
         s = []
@@ -385,7 +408,11 @@ class wbslave(object):
         s += adj(self.getResetList(), ['<='], 4)
         #tmpV = self.v.wbs1_0 + [self.v.wbs1_adr % (msbIdx-1, lsbIdx, padding)] + self.v.wbs1_1 + self.v.enable
         s += iN(self.v.wbs1_0, 3)
-        s += iN(self.v.wbs1_1, 4)        
+        s += adj(self.v.wbs1_1, ['<='], 4)
+        
+        s += iN(self.v.wbs1_2, 4)
+        s += adj(self.getFlagPulseList(), ['= "', '<=', '--'], 5)    
+        s += iN(self.v.wbs1_3, 4)
         s += adj(self.getSetList(), ['= "', '<=', '--'], 4)
         s +=  iN(self._getPageSelect(), 4)
         s +=  iN(self.v.wbs2, 4)

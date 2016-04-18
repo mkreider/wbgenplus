@@ -198,13 +198,19 @@ class writeout(object):
         tmp = []        
         
         s.append("class %s (object):\n" % self.unitname)
-        tmp.append("%s = {\n" % slave.name)
+        tmp.append("ifname = '%s'\n\n" % slave.name)    
+        tmp.append("adrDict = {\n")
         tmp += slave.getAddressListPython()
-        tmp.append("}\n")
-        tmp.append("%s_reverse = {\n" % slave.name)
+        tmp.append("}\n\n")
+        tmp.append("adrDict_reverse = {\n")
         tmp += slave.getAddressListPythonReverse()
-        tmp.append("}\n")            
-        
+        tmp.append("}\n\n")            
+        tmp.append("flagDict = {\n")
+        tmp += slave.getFlagListPython()
+        tmp.append("}\n\n")
+        tmp.append("valDict = {\n")
+        tmp += slave.getValueListPython()
+        tmp.append("}\n")             
         tmp = iN(tmp, 1)
         s += tmp
         
