@@ -219,15 +219,15 @@ class registerVhdlStr(object):
         if (pages != 0):        
             self.dtype          = "matrix(%s%s-1 downto 0, %s%s-1 downto 0)" % (genPagePrefix, pages, genWidthPrefix, width)
             self.reset          = "%s <= mrst(%s);\n" % (self.regname, self.regname)
-            self.wbOut      = wbsStr.wbOut % (self.regname, self.name, "") # Slice
-            self.wbRead         = wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
+            self.wbOut          = wbsStr.wbOutMatrix % (self.regname, self.name, "") # Slice
+            self.wbRead         = wbsStr.wbRead % (self.name)  #wbsStr.wbReadMatrix % (self.name, self.regname, "") # Slice
             self.wbWrite        = wbsStr.wbWriteMatrix % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero    = "%s <= mrst(%s);\n" % (self.regname, self.regname)
             self.setHigh        = "%s <= mrst(%s, %s);\n" % (self.regname, self.regname, (self.others % '1'))
         else:
             self.dtype = "std_logic_vector(%s%s-1 downto 0)" % (genWidthPrefix, width)
             self.reset                  = "%s <= %s;\n" % (self.regname, self.resetvector)
-            self.wbOut              = wbsStr.wbOut % (self.name, self.regname, "")  # Slice
+            self.wbOut                  = wbsStr.wbOut % (self.name, self.regname, "")  # Slice
             self.wbRead                 = wbsStr.wbRead % (self.name) 
             self.wbWrite                = wbsStr.wbWrite % (self.name, self.regname, self.regname, "") # Slice, Slice
             self.wbPulseZero            = "%s <= %s;\n" % (self.regname,  (self.others % '0'))
@@ -287,10 +287,11 @@ class wbsVhdlStrRegister(object):
         self.wbRead             = "when c_" + "%s%%s => null;\n" #regname, #op
         self.wbValid            = "%s(0) when c_" + "%s%%s, -- %s\n" #regname + op, #slice, registerName, #slice        
         self.wbDrive            = "if %s = \"1\" then %s <= %s; end if; -- %s\n" #validsignal, register, input
-        self.wbOut          = "when c_" + "%s%%s => " + slaveIfName + "_o.dat <= std_logic_vector(resize(unsigned(%s%%s), " + slaveIfName + "_o.dat'length));  -- %s\n" #regname + op, #slice, registerName, #slice        
+        self.wbOut              = "when c_" + "%s%%s => " + slaveIfName + "_o.dat <= std_logic_vector(resize(unsigned(%s%%s), " + slaveIfName + "_o.dat'length));  -- %s\n" #regname + op, #slice, registerName, #slice        
         self.wbWrite            = "when c_" + "%s%%s => %s%%s <= f_wb_wr(%s%%s, s_d, s_s, \"%%s\"); -- %s\n" #registerName, #op, #slice, registerName, #slice, #opmode, description
         
         self.wbReadMatrix       = "when c_" + "%s%%s => " + slaveIfName + "_o.dat(%%s) <= mget(%s, v_p)%%s; -- %s\n" #regname, #op, #slice, registerName, #slice, description
+        self.wbOutMatrix        = "when c_" + "%s%%s => " + slaveIfName + "_o.dat <= std_logic_vector(resize(unsigned(mget(%s, v_p)%%s), " + slaveIfName + "_o.dat'length));  -- %s\n" #regname + op, #slice, registerName, #slice        
         self.wbWriteMatrix      = "when c_" + "%s%%s => mset(%s, f_wb_wr(mget(%s, r_p)%%s, s_d, s_s, \"%%s\"), r_p); -- %s\n" #registerName, registerName, (set/clr/owr), desc
         
         self.vhdlConstRegAdr    = "constant c_" + "%s%%s : natural := 16#%%s#; -- %%s, %%s b, %s\n" #name, adrVal, adrVal, rw, msk, desc
