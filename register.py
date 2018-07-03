@@ -386,7 +386,7 @@ class WbRegister(Register):
             elif(op.find('_RW') > -1):
                 rw = 'rw'
 
-            adrIdx = 0
+            adrIdx = len(adrList) -1
             for adrLine in adrList:
                 #if this reg has multiple words, add the index to the name
                 if(len(adrList) > 1):
@@ -407,7 +407,7 @@ class WbRegister(Register):
                 else:
                     print "<%s> is not a valid output language!" % language
 
-                adrIdx += 1
+                adrIdx -= 1
             opIdx += 1
 
         return s
@@ -420,7 +420,7 @@ class WbRegister(Register):
             (op, adrList) = opLine
             if((op == "_GET") or (op == "_RW")):
                 #this is sliced
-                adrIdx = 0
+                adrIdx = len(adrList) -1
                 for adrLine in adrList:
                     (msk, adr) = adrLine
 
@@ -437,8 +437,9 @@ class WbRegister(Register):
                     if len(adrList) > 1:
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
-                    adrIdx += 1
-                    s.append(self.v.wbOut % (op + enum,regSlice ))
+                    adrIdx -= 1
+                    s.append(self.v.wbOut % (op + enum,regSlice ))    
+                    
                    
         return s
         
@@ -449,13 +450,14 @@ class WbRegister(Register):
                 (op, adrList) = opLine
                 if((op == "_GET") or (op == "_RW")):
                     #this is sliced
-                    adrIdx = 0
+                    adrIdx = len(adrList) -1
                     for adrLine in adrList:
                         (msk, adr) = adrLine
                         enum = ""
                         if len(adrList) > 1:
                             enum = "_%s" % adrIdx
-                        adrIdx += 1
+                        adrIdx -= 1
+
                         s.append(self.v.wbValid % (op + enum))
         return s   
 
@@ -469,7 +471,7 @@ class WbRegister(Register):
             if(op != "_GET"):
 
                 #this is sliced
-                adrIdx=0
+                adrIdx = len(adrList) -1
                 for adrLine in adrList:
                     (msk, adr) = adrLine
                     sliceWidth       = msk
@@ -489,7 +491,7 @@ class WbRegister(Register):
                        s.append(self.v.wbWrite % (op + enum, regSlice, registerVhdlStr.wrModes[op]))
                     else:
                        s.append(self.v.wbWrite % (op + enum, firstSlice, regSlice, registerVhdlStr.wrModes[op]))             
-                    adrIdx += 1
+                    adrIdx -= 1
                     #matrix assignment works differently
 
                     if self.customStrD.has_key('write'):
@@ -503,14 +505,15 @@ class WbRegister(Register):
             (op, adrList) = opLine
             if((op == "_GET") or (op == "_RW")):
                 #this is sliced
-                adrIdx = 0
+                adrIdx = len(adrList) -1
                 for adrLine in adrList:
                    
                     enum = ""
                     if len(adrList) > 1:
         
                         enum = "_%s" % adrIdx
-                    adrIdx += 1
+                    adrIdx -= 1
+                    print self.v.wbRead
                     s.append(self.v.wbRead % (op + enum))
                     if self.customStrD.has_key('read'):
                         s += self.customStrD['read']
