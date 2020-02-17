@@ -363,7 +363,7 @@ class wbsVhdlStrGeneral(object):
                          "s_e_p  <= r_e or r_e_wait;\n",
                          "s_a_ext <= s_a & \"00\";\n",
                          "s_stall <= s_full;\n",
-                         "s_push  <= slave_i.cyc and slave_i.stb and not s_stall;\n",
+                         "s_push  <= %s_i.cyc and %s_i.stb and not s_stall;\n" % (slaveIfName, slaveIfName),
                          #-- op enable when skidpad not empty and not waiting for op completion
                          "s_e     <= not (s_empty or s_e_p);\n",
                          #pop if operation went out, entity saw flag without stall and replied valid    
