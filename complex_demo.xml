@@ -1,16 +1,12 @@
 <wbdevice author="M. Kreider" version="0.0.1">
    
    <clockdomain name="sys"></clockdomain>
-   <clockdomain name="ref"></clockdomain>
 
    <generic name="channels" type="natural" default="16" comment="Input channels"></generic> 
     
    <slaveinterface name="data" data="32" type="pipelined" pages="channels">          
-      <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="Complex slave Data"></sdb>
+      <sdb vendorID="GSI" productID="0x12040D01" version="1" date="auto" name="Wishbone DMA Master"></sdb>
       <registers>
-           <reg   name="status"     read="yes"  drive="yes" bits="channels" clock="ref"                                                   comment="tlu 'timestamps pending' bit per channel"></reg>
-           <reg   name="cmd"                    write="yes" bits="16"       clock="ref"                                                   comment="Cmd for tlu controller"></reg>
-
            <reg   name="ch_qty"     read="yes"              mask="0b11111"    reset="channels"                                            comment="Individually controllable flag bits"></reg>
            <reg   name="ch_sel"     read="yes"  write="yes" bits="8"          selector="yes" address="0x20"                               comment="Channel select register"></reg>
            <reg   name="clear_fifo"             write="yes" bits="1"          paged="yes"    address="0x100" autostall='yes' pulse='yes'  comment="Clears Fifo"></reg>
