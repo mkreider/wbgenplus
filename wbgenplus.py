@@ -39,7 +39,7 @@ def parseXMLNew(xmlIn, now, unitname):
     genMiscD    = dict()
     
     if (len(xmldoc.getElementsByTagName('wbdevice'))==0):
-        print "No <wbdevice> tag found"
+        print("No <wbdevice> tag found")
         sys.exit(2)
         
     author   = xmldoc.getElementsByTagName('wbdevice')[0].getAttribute('author')
@@ -53,7 +53,7 @@ def parseXMLNew(xmlIn, now, unitname):
             if(clock.hasAttribute("name")):
                 clockList += [clock.getAttribute("name")]
             else:
-                print "Clock must have a name!"
+                print("Clock must have a name!")
                 sys.exit(2)
     else:
         clockList += ["sys"]        
@@ -61,7 +61,7 @@ def parseXMLNew(xmlIn, now, unitname):
     
     generics = xmldoc.getElementsByTagName('generic')
    
-    print "Found %u generics\n" % len(generics)   
+    print("Found %u generics\n" % len(generics))   
     for generic in generics:
         genName = generic.getAttribute('name')
         genType = generic.getAttribute('type')
@@ -72,7 +72,7 @@ def parseXMLNew(xmlIn, now, unitname):
         if(genType == 'natural'):
             aux = str2int(genVal)
             if(aux == None):            
-                print "Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal)
+                print("Generic <%s>'s numeric value <%s> is invalid" % (genName, genVal))
             else:        
                 genVal = aux
                 genIntD[genName] = [ genType , genVal, genDesc ]
@@ -84,24 +84,24 @@ def parseXMLNew(xmlIn, now, unitname):
  
         
     slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
-    print "Found %u slave interfaces\n" % len(slaveIfList)    
+    print("Found %u slave interfaces\n" % len(slaveIfList))    
     for slaveIf in slaveIfList:
         
         name    = slaveIf.getAttribute('name')
         ifWidth = str2int(slaveIf.getAttribute('data'))
-        print "Slave <%s>: %u Bit wordsize" % (name, ifWidth)
+        print("Slave <%s>: %u Bit wordsize" % (name, ifWidth))
         pages  = slaveIf.getAttribute('pages')
         #check integer generic list
         genericPages = (pages in genIntD)
         if(not genericPages):        
             aux = str2int(pages)
             if(aux == None):            
-                print "Slave <%s>: Pages' numeric value <%s> is invalid. Defaulting to 0" % (name, pages)
+                print("Slave <%s>: Pages' numeric value <%s> is invalid. Defaulting to 0" % (name, pages))
                 pages = 0
             else:        
                 pages = aux
         else:
-            print "Slave <%s>: Using supplied generic <%s> for memory pages " % (name, pages)
+            print("Slave <%s>: Using supplied generic <%s> for memory pages " % (name, pages))
             
         #sdb record
         vendId = None
@@ -110,33 +110,33 @@ def parseXMLNew(xmlIn, now, unitname):
         
         sdb = slaveIf.getElementsByTagName('sdb')
         if len(sdb) == 1:
-            print "Slave <%s>: Generating SDB record" % (name)              
+            print("Slave <%s>: Generating SDB record" % (name))              
             vendId      = sdb[0].getAttribute('vendorID')
             prodId      = sdb[0].getAttribute('productID')
             #check vendors
-            if dictVendId.has_key(vendId):
-                print "Slave <%s>: Known Vendor ID <%s> found" % (name, vendId)            
+            if vendId in dictVendId:
+                print("Slave <%s>: Known Vendor ID <%s> found" % (name, vendId))            
                 vendId = dictVendId[vendId]
                  
             else:
                 aux = str2int(vendId)
                 if(aux == None):            
-                    print "Slave <%s>: Invalid Vendor ID <%s>!" % (name, vendId)
+                    print("Slave <%s>: Invalid Vendor ID <%s>!" % (name, vendId))
                     sys.exit(2)
                 else:
                     vendId = aux                
-                    print "Slave <%s>: Unknown Vendor ID <%016x>" % (name, vendId)                
+                    print("Slave <%s>: Unknown Vendor ID <%016x>" % (name, vendId))                
                     
             
             aux = str2int(prodId)
             if(aux == None):            
-                    print "Slave <%s>: Invalid Product ID <%s>!" % (name, prodId)
+                    print("Slave <%s>: Invalid Product ID <%s>!" % (name, prodId))
             else:
                 prodId = aux     
                     
             sdbname     = sdb[0].getAttribute('name')
             if(len(sdbname) > 19):
-                print "Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname))
+                print("Slave <%s>: Sdb name <%s> is too long. It has %u chars, allowed are 19" % (name, sdbname, len(sdbname)))
                 sys.exit(2)
         
         tmpSlave    = wbs(unitname, version, now, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList, genIntD, genMiscD, 'g_') 
@@ -149,13 +149,13 @@ def parseXMLNew(xmlIn, now, unitname):
             if reg.hasAttribute('name'):            
                 regname = reg.getAttribute('name')
             else:
-                print "Register must have a name!"
+                print("Register must have a name!")
                 sys.exit(2)
             
             if reg.hasAttribute('comment'):      
                 regdesc = reg.getAttribute('comment')
             else:        
-                print "Register must have a comment!"
+                print("Register must have a comment!")
                 sys.exit(2)
             
             regadr = None       
@@ -163,9 +163,9 @@ def parseXMLNew(xmlIn, now, unitname):
                 regadr = reg.getAttribute('address')            
                 aux = str2int(regadr)
                 if(aux == None):            
-                    print "Slave <%s>: Register <%s>'s supplied address <0x%x> is invalid, defaulting to auto" % (name, regname, regadr)
+                    print("Slave <%s>: Register <%s>'s supplied address <0x%x> is invalid, defaulting to auto" % (name, regname, regadr))
                 regadr = aux            
-                print "Slave <%s>: Register <%s> using supplied address <0x%x>, enumerating from there" % (name, regname, regadr)
+                print("Slave <%s>: Register <%s> using supplied address <0x%x>, enumerating from there" % (name, regname, regadr))
                 
             regflags    = str()
             if reg.hasAttribute('read'):
@@ -199,7 +199,7 @@ def parseXMLNew(xmlIn, now, unitname):
             regclk = clockList[0]                
             if reg.hasAttribute('clock'):
                 regclk = reg.getAttribute('clock')
-                print "Slave <%s>: Register <%s> is in clockdomain %s and will be synced" % (name, regname, regclk)
+                print("Slave <%s>: Register <%s> is in clockdomain %s and will be synced" % (name, regname, regclk))
             
             if reg.hasAttribute('bits'):      
                 regbits    = reg.getAttribute('bits')
@@ -207,24 +207,24 @@ def parseXMLNew(xmlIn, now, unitname):
                 if(not genericBits):
                     aux = str2int(regbits)
                     if aux is None:
-                        print "Slave <%s>: Register <%s>'s supplied bitwidth <%s> is invalid, defaulting to %x" % (name, regname, regbits, ifWidth)
+                        print("Slave <%s>: Register <%s>'s supplied bitwidth <%s> is invalid, defaulting to %x" % (name, regname, regbits, ifWidth))
                         regbits = ifWidth
                     else:
                         regbits = aux
                 else:
-                     print "Slave <%s>: Register <%s>'s using supplied generic width <%s>" % (name, regname, regbits)
+                     print("Slave <%s>: Register <%s>'s using supplied generic width <%s>" % (name, regname, regbits))
          
             elif reg.hasAttribute('mask'):      
                 regmsk  = reg.getAttribute('mask')
                 aux     = str2int(regmsk)
                 if(aux is None):
                     regbits = ifWidth
-                    print "Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, regbits)
+                    print("Slave <%s>: Register <%s>'s supplied mask <%s> is invalid, defaulting to %x" % (name, regname, regmsk, regbits))
                 else:
                     #convert bitmask to bitwidth
                     regbits = mskWidth(aux)
             else:        
-                print "Slave <%s>: No bitwidth or bitmask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, ifWidth)
+                print("Slave <%s>: No bitwidth or bitmask for Register <%s> supplied, defaulting to 0x%x" % (name, regname, ifWidth))
                 regbits = ifWidth
 
             rstvec = None    
@@ -235,7 +235,7 @@ def parseXMLNew(xmlIn, now, unitname):
 
                 if(aux in genIntD):
                     (_, val, _) = genIntD[aux]
-                    print "Slave <%s>: Register <%s>'s Reset using supplied generic value <%s>" % (name, regname, val)
+                    print("Slave <%s>: Register <%s>'s Reset using supplied generic value <%s>" % (name, regname, val))
                     rstvec = aux
                 #elif(aux in genMiscD):
                 else:    
@@ -245,10 +245,10 @@ def parseXMLNew(xmlIn, now, unitname):
                             rstvec = aux
                         else:
                             rstvec = tmp
-                        print "Slave <%s>: Register <%s>'s Reset using supplied value <%s>" % (name, regname, aux)
+                        print("Slave <%s>: Register <%s>'s Reset using supplied value <%s>" % (name, regname, aux))
                     
                     else:
-                        print "Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val)
+                        print("Slave <%s>: Register <%s>'s Reset value <%s> is invalid, defaulting to zereos." % (name, regname, val))
                       
                       
             tmpSlave.addWbReg(regname, regdesc, regbits, regflags, regclk, rstvec, regadr)
@@ -256,11 +256,11 @@ def parseXMLNew(xmlIn, now, unitname):
             #x.addSimpleReg('NEXT2',     0xfff,  'rm',   "WTF")
             if(isinstance(pages, int)):
                 if((selector != '') and (pages > 0)):    
-                    print "Slave <%s>: Register <%s> has <%s> memory pages. Selector register is <%s>" % (name, regname, pages, selector)    
+                    print("Slave <%s>: Register <%s> has <%s> memory pages. Selector register is <%s>" % (name, regname, pages, selector))    
                     tmpSlave.selector = selector    
                     tmpSlave.pages      = pages
             elif(selector != ''):
-                    print "Slave <%s>: Register <%s> has <%s> memory pages. Selector register is <%s>" % (name, regname, pages, selector)                   
+                    print("Slave <%s>: Register <%s> has <%s> memory pages. Selector register is <%s>" % (name, regname, pages, selector))                   
                     tmpSlave.selector = selector    
                     tmpSlave.pages      = pages    
        
@@ -285,15 +285,15 @@ def main():
              
     def usage():
         for line in s.helpText:        
-            print line
+            print(line)
     
     def manual():
         for line in s.detailedHelpText:        
-            print line            
+            print(line)            
     
     def version():
         for line in s.versionText:        
-            print line 
+            print(line) 
                     
     xmlIn = ""  
     log = False
@@ -312,9 +312,9 @@ def main():
         
     try:
         opts, args = getopt.getopt(sys.argv[sIdx:], "hlqf", ["help", "log", "quiet", "force", "version"])
-    except getopt.GetoptError, err:
+    except getopt.GetoptError as err:
         # print help information and exit:
-        print str(err) # will print something like "option -a not recognized"
+        print(str(err)) # will print something like "option -a not recognized"
         sys.exit(2)    
     
     needFile = True
@@ -339,7 +339,7 @@ def main():
             optFound = True        
             log = True
         else:
-            print "unhandled option %s" % option
+            print("unhandled option %s" % option)
             sys.exit(2) 
     
     
@@ -354,15 +354,15 @@ def main():
                 mypath += './'
                 
             now = datetime.datetime.now()
-            print "f: %s p: %s" % (myfile, mypath)
+            print("f: %s p: %s" % (myfile, mypath))
             
             unitname = os.path.splitext(myfile)[0]        
             #path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
             
-            print "input/output dir: %s" % mypath
-            print "Trying to parse:  %s" % myfile
-            print "Unit:             %s" % unitname
-            print "\n%s" % ('*' * 80)
+            print("input/output dir: %s" % mypath)
+            print("Trying to parse:  %s" % myfile)
+            print("Unit:             %s" % unitname)
+            print("\n%s" % ('*' * 80))
                         
             [author, version, email, slaves] = parseXMLNew(xmlIn, now, unitname)
             wo = writeout(unitname, myfile, mypath, author, email, version, now)
@@ -377,16 +377,17 @@ def main():
                 wo.writeHdrC(slave)
             
             #writeTbVhd(fileTbVhd)
-            print "\n%s" % ('*' * 80) 
-            print "\nDone!"
+            print("\n%s" % ('*' * 80)) 
+            print("\nDone!")
         else:
-            print "\nFile not found: %s" % xmlIn
+            print("\nFile not found: %s" % xmlIn)
     
     
 
 
 if __name__ == "__main__":
     main()
+
 
 
 
