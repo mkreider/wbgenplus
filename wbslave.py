@@ -394,15 +394,33 @@ class wbslave(object):
 
             
         msbIdx = self._getMaxAdrWidth()-1
+        print("test" + str(msbIdx))
         lsbIdx = (math.ceil(math.log( self.dataWidth/8 ) / math.log( 2 )))
         if lsbIdx > 0:
             padding = '& "%s"' % ('0' * int(lsbIdx))
         else:
             padding = ''
+        
+        #formatting edge case for single register
+        if msbIdx < 0:
+            msbIdx = 0
+
         adrMsk = 2**msbIdx-1
+<<<<<<< Updated upstream
         print "%s" % ('*' * 80)
         print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.registers), self._getLastAddress(), adrMsk, msbIdx-1, lsbIdx)
         print "\n%s" % ('*' * 80)
+=======
+        
+        #formatting edge case for single register
+        if msbIdx == 0:
+            msbIdx = 1
+            lsbIdx = 0
+
+        print("%s" % ('*' * 80))
+        print("Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.registers), self._getLastAddress(), adrMsk, msbIdx-1, lsbIdx))
+        print("\n%s" % ('*' * 80))
+>>>>>>> Stashed changes
          
         s +=  iN(self.v.wbs0, 1)
         s += adj(self.getResetList(), ['<='], 4)
