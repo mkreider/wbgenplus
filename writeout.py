@@ -77,15 +77,6 @@ class writeout(object):
             fo.write(line)
             
         fo.write(v.entityEnd)
-        
-        fo.write(v.archDecl)
-        
-    
-   
-        
-        fo.write(v.archStart)
-            
-        fo.write(v.archEnd)
                 
         fo.write(v.archDecl)
         for line in slave.getStubSignalList():
