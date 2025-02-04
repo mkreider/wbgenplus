@@ -9,9 +9,9 @@ import math
 _TAB_SIZE_ = 2
 
 def is_sequence(arg):
-    return (not hasattr(arg, "strip") and
-            hasattr(arg, "__getitem__") or
-            hasattr(arg, "__iter__"))
+    return ( not hasattr(arg, "strip") and
+            (hasattr(arg, "__getitem__") or
+             hasattr(arg, "__iter__")))
 
 def srepr(arg):
     if is_sequence(arg):
@@ -22,7 +22,7 @@ def setColIndent(sLine, level, tabsize=_TAB_SIZE_):
     #provide a solution for list
     line = ""
     s = ""    
-    if(is_sequence(sLine)):    
+    if(is_sequence(sLine)):
         #print sLine        
         for line in sLine:
             setColIndent(line, level, tabsize)

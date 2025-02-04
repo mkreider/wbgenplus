@@ -113,17 +113,17 @@ class Register(object):
 
     def isGenericPaged(self):
         if self.isPaged():
-            if(self.genIntD.has_key(self.pages)):
+            if(self.pages in self.genIntD):
                 return True
         return False
 
     def isGenericWidth(self):
-        if(self.genIntD.has_key(self.width)):
+        if(self.width in self.genIntD):
             return True
         return False
 
     def isGenericReset(self):
-        if(self.genIntD.has_key(self.rstvec)):
+        if(self.rstvec in self.genIntD):
             return True
         return False
 
@@ -149,7 +149,7 @@ class Register(object):
         if self.isDrive():
             s.append(self.v.declarationPortSigIn)
         
-        if self.customStrD.has_key('signal'):
+        if 'signal' in self.customStrD:
             s += self.customStrD['signal'] 
 
         s.append
@@ -164,13 +164,13 @@ class Register(object):
         if self.isDrive():
             s.append(self.v.declarationPortIn)
             
-        if self.customStrD.has_key('port'):
+        if 'port' in self.customStrD:
             s += self.customStrD['port']    
         return s
 
     def getStrAssignment(self):
         s = []
-        if self.customStrD.has_key('assigndef'):
+        if 'assigndef' in self.customStrD:
             s += self.customStrD['assigndef']
         else:
             if self.isDrive():
@@ -178,7 +178,7 @@ class Register(object):
             
             if self.isWrite():
                 s.append(wbsVG.assignTemplate % (self.v.portnameout, self.v.regname))
-        if self.customStrD.has_key('assign'):
+        if 'assign' in self.customStrD:
             s += self.customStrD['assign']
         return s    
     
@@ -205,12 +205,12 @@ class Register(object):
 
     def getStrReset(self):
         s = []
-        if self.customStrD.has_key('resetdef'):
+        if 'resetdef' in self.customStrD:
             s += self.customStrD['resetdef']    
         else:
             if self.hasReset():
                 s.append(self.v.reset)
-        if self.customStrD.has_key('reset'):
+        if 'reset' in self.customStrD:
             s += self.customStrD['reset'] 
         return s
 
@@ -218,20 +218,20 @@ class Register(object):
     def getStrSet(self):
         s = []
         if not self.isPulsed():        
-            if self.customStrD.has_key('setdef'):
+            if 'setdef' in self.customStrD:
                 s += self.customStrD['setdef']    
-            elif self.customStrD.has_key('set'):
+            elif 'set' in self.customStrD:
                 s += self.customStrD['set']        
         return s
         
     def getStrFlagPulse(self):
         s = []
         if self.isPulsed():            
-            if self.customStrD.has_key('setdef'):
+            if 'setdef' in self.customStrD:
                 s += self.customStrD['setdef']    
             else:
                 s.append(self.v.wbPulseZero)
-            if self.customStrD.has_key('set'):
+            if 'set' in self.customStrD:
                 s += self.customStrD['set']        
         return s   
 
@@ -334,36 +334,36 @@ class WbRegister(Register):
     def getStrSet(self):
         s = [] 
         if not self.isPulsed(): 
-            if self.customStrD.has_key('setdef'):
+            if 'setdef' in self.customStrD:
                 s += self.customStrD['setdef']    
             else:
                 if self.isDrive():
                     s.append(self.v.wbDrive)
-            if self.customStrD.has_key('set'):
+            if 'set' in self.customStrD:
                 s += self.customStrD['set']        
         return s        
     
     def getStrFlagPulse(self):
         s = [] 
         if self.isPulsed(): 
-            if self.customStrD.has_key('setdef'):
+            if 'setdef' in self.customStrD:
                 s += self.customStrD['setdef']    
             else:
                 if self.isWrite():
                     s.append(self.v.wbPulseZero)    
                 if self.isDrive():
                     s.append(self.v.wbDrive)
-            if self.customStrD.has_key('set'):
+            if 'set' in self.customStrD:
                 s += self.customStrD['set']        
         return s     
     
     def getStrReset(self):
         s = []
-        if self.customStrD.has_key('resetdef'):
+        if 'resetdef' in self.customStrD:
             s += self.customStrD['resetdef']    
         else:
             s.append(self.v.reset)
-        if self.customStrD.has_key('reset'):
+        if 'reset' in self.customStrD:
             s += self.customStrD['reset'] 
         return s    
         
@@ -405,7 +405,7 @@ class WbRegister(Register):
                 elif(lang.lower() == "pythonreverse"):
                     s.append(self.v.pythonConstAdrReg    % (adrx % adr, str(op + idx).lower(), rw, bitwidth))    
                 else:
-                    print "<%s> is not a valid output language!" % language
+                    print("<%s> is not a valid output language!" % language)
 
                 adrIdx += 1
             opIdx += 1
@@ -492,7 +492,7 @@ class WbRegister(Register):
                     adrIdx += 1
                     #matrix assignment works differently
 
-                    if self.customStrD.has_key('write'):
+                    if 'write' in self.customStrD:
                         s += self.customStrD['write']    
                 opIdx += 1
         return s
@@ -512,7 +512,7 @@ class WbRegister(Register):
                         enum = "_%s" % adrIdx
                     adrIdx += 1
                     s.append(self.v.wbRead % (op + enum))
-                    if self.customStrD.has_key('read'):
+                    if 'read' in self.customStrD:
                         s += self.customStrD['read']
                  
                     
