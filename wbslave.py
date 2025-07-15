@@ -159,7 +159,7 @@ class wbslave(object):
                 if(startAdr >= lastadr + self.offs):
                     return startAdr
                 else:
-                    print "ERROR: Wrong address specified for Register %s: %08x must be greater %08x!" % (regname, int(startAdr), int(lastadr) + int(self.offs))
+                    print("ERROR: Wrong address specified for Register %s: %08x must be greater %08x!" % (regname, int(startAdr), int(lastadr) + int(self.offs)))
                     exit(2)
             else:
                 #find the last valid address (skip internal registers)
@@ -400,9 +400,9 @@ class wbslave(object):
         else:
             padding = ''
         adrMsk = 2**msbIdx-1
-        print "%s" % ('*' * 80)
-        print "Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.registers), self._getLastAddress(), adrMsk, msbIdx-1, lsbIdx)
-        print "\n%s" % ('*' * 80)
+        print("%s" % ('*' * 80))
+        print("Slave <%s>: Found %u register names, last Adr is %08x, Adr Range is %08x, = %u downto %u\n" % (self.name, len(self.registers), self._getLastAddress(), adrMsk, msbIdx-1, lsbIdx))
+        print("\n%s" % ('*' * 80))
          
         s +=  iN(self.v.wbs0, 1)
         s += adj(self.getResetList(), ['<='], 4)
@@ -447,5 +447,6 @@ class wbslave(object):
             return ["\n"]
         else:
             return [self.v.wbsPageSelect % self.selector]
+
 
 

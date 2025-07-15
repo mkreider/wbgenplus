@@ -38,14 +38,14 @@ class writeout(object):
         filename        = self.unitname                  + ".vhd"       
         
         if os.path.isfile(self.mypath + filename):
-            print "!!! Outer entity %s already exists !!!\n" % filename
+            print("!!! Outer entity %s already exists !!!\n" % filename)
             if not force:
-                print "I don't want to accidentally trash your work. To force overwrite, use '-f' or '--force' option"
+                print("I don't want to accidentally trash your work. To force overwrite, use '-f' or '--force' option")
                 return
             else:
-                print "Overwrite forced"
+                print("Overwrite forced")
                 
-        print "Generating stub entity           %s" % filename        
+        print("Generating stub entity           %s" % filename)        
         fo = open(self.mypath + filename, "w")
         v = gVhdlStr(self.unitname, self.filename, self.author, self.email, self.version, self.date)
     
@@ -108,7 +108,7 @@ class writeout(object):
         #filenames for various output files
         filename     = self.autoUnitName              + ".vhd"
     
-        print "Generating WishBone core entity  %s" % filename 
+        print("Generating WishBone core entity  %s" % filename) 
         
         fo = open(self.mypath + filename, "w")
         v = gVhdlStr(self.autoUnitName, filename, self.author, self.email, self.version, self.date)
@@ -181,7 +181,7 @@ class writeout(object):
         #filenames for various output files
         filename     = self.autoUnitName              + ".py"
     
-        print "Generating Pyhton WB address dictionary for use in testbenches  %s" % filename 
+        print("Generating Pyhton WB address dictionary for use in testbenches  %s" % filename) 
         
         fo = open(self.mypath + filename, "w")
         
@@ -217,7 +217,7 @@ class writeout(object):
     
         filename      = self.autoUnitName  + "_pkg"    + ".vhd"
 
-        print "Generating WishBone inner core package %s" % filename    
+        print("Generating WishBone inner core package %s" % filename)    
         
         fo = open(self.mypath + '/' + filename, "w")
         
@@ -286,7 +286,7 @@ class writeout(object):
         
         filename        = self.unitname      + "_regs"   + ".h"      
     
-        print "Generating C Header file         %s\n" % filename    
+        print("Generating C Header file         %s\n" % filename)    
         
         fo = open(self.mypath + filename, "w")
         

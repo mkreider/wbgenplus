@@ -5,6 +5,7 @@ Created on Mon Oct 19 16:58:20 2015
 @author: mkreider
 """
 import datetime
+import math
 from textformatting import setColIndent as i1
 
 
@@ -135,7 +136,7 @@ class syncVhdlStr(object):
                                        "%s <= %s;\n"      % ((portO % full), self.full),
                                        "%s <= %s;\n\n"      % (self.push, (portI % push))]
         else:
-            print "ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name)
+            print("ERROR: Port direction <%s> of Register <%s> is unknown. Choose <in> or <out>" % (direction, self.name))
                 
  
         self.syncSigsDeclaration  += [decl % (self.push), 
@@ -190,10 +191,10 @@ class registerVhdlStr(object):
                    self.resetvector = self.hex2slv % tmpRst                    
                else:
                    if len(tmpRst)*4 > 32:
-                       print "Register <%s>'s Resetvector <%s> length <%s> is not a multiple of four AND is longer than 32 bit. Sorry, can't convert that" % (name, reset, width)
+                       print("Register <%s>'s Resetvector <%s> length <%s> is not a multiple of four AND is longer than 32 bit. Sorry, can't convert that" % (name, reset, width))
                        exit(2)
                    else:    
-                       print "Register <%s>'s Resetvector <%s> has the wrong bitlength (is %s, should be %s). Converting" % (name, reset, len(tmpRst)*4, width)                    
+                       print("Register <%s>'s Resetvector <%s> has the wrong bitlength (is %s, should be %s). Converting" % (name, reset, len(tmpRst)*4, width))                    
                        self.resetvector = self.ghex2slv % tmpRst 
                    
            elif(str(reset).find('0b') > -1):
@@ -598,7 +599,7 @@ class sysIfStr(object):
         self.detailedHelpText = ['%s' % ("*" * 80),
                         '**                                                                            **',                    
                         '**                          wbgenplus Manual V%s                             **' % version,                    
-                        ('**' + '%s%s%s' + '**') % ((" " * ((76-len(creator))/2)), creator, (" " * ((76-len(creator))/2 + (76-len(creator))%2))),
+                        ('**' + '%s%s%s' + '**') % ((" " * math.floor((76-len(creator))/2)), creator, (" " * math.floor((76-len(creator))/2 + (76-len(creator))%2))),
                         '%s\n' % ("*" * 80),
                         'wbgenplus autogenerates wishbone devices for FPGAs in VHDL from a single XML file.',
                         'In VHDL, it builds the core logic, a package for register records and SDB entries',
