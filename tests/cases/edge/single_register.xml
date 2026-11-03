@@ -1,0 +1,9 @@
+<wbdevice author="T" email="t@x" version="0.0.1">
+   <clockdomain name="sys"></clockdomain>
+   <slaveinterface name="ctrl" data="32" type="pipelined" pages="0">
+      <sdb vendorID="GSI" productID="0x12345678" version="1" date="auto" name="SINGLE_REGISTER"></sdb>
+      <registers>
+         <reg name="value" read="yes" write="yes" bits="8" comment="only register"></reg>
+      </registers>
+   </slaveinterface>
+</wbdevice>

@@ -386,8 +386,11 @@ class wbslave(object):
 
     
     def _getMaxAdrWidth(self):
-        hiAdr = self._getLastAddress()
-        return len(bin(hiAdr).lstrip('-0b'))
+        # Byte address width needed to cover the last byte of the last register,
+        # but at least one word-address bit above the byte-lane bits.
+        lsbBits = (self.offs - 1).bit_length()
+        lastByte = self._getLastAddress() + self.offs - 1
+        return max(lastByte.bit_length(), lsbBits + 1)
 
     def getFsmList(self):
         s = []
@@ -435,7 +438,7 @@ class wbslave(object):
         s = []
         if self.sdbname is not None:    
             adrx = ("%016x")
-            align = 1<<(self._getLastAddress()-1).bit_length()
+            align = 1 << self._getMaxAdrWidth()
             s += self.v.sdb0
             s.append(self.v.sdbAddrFirst % (adrx % int(self.startaddress)))
             s.append(self.v.sdbAddrLast  % (adrx % ( int(align-1) )))
