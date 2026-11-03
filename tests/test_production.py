@@ -24,12 +24,7 @@ PROD_DIRS = {
     "prio":    "modules/prioq2",
 }
 
-KNOWN = {
-    ("dm_diag", "auto"):     "1.13: word order of multi-word registers (prod is high word first)",
-    ("dm_diag", "auto_pkg"): "1.13: word order of multi-word registers (prod is high word first)",
-    ("eca_tap", "auto"):     "1.13: word order of multi-word registers (prod is high word first)",
-    ("eca_tap", "auto_pkg"): "1.13: word order of multi-word registers (prod is high word first)",
-}
+KNOWN = {}
 
 _IGNORE = re.compile(r"@date|@copyright|^\s*date\s+=>")
 

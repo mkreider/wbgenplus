@@ -138,14 +138,14 @@ begin
 
   validmux: with to_integer(unsigned(s_a_ext)) select
   s_valid <= 
-  s_cnt_msg_V_i(0)  when c_cnt_msg_GET_0,   -- 
   s_cnt_msg_V_i(0)  when c_cnt_msg_GET_1,   -- 
-  s_diff_acc_V_i(0) when c_diff_acc_GET_0,  -- 
+  s_cnt_msg_V_i(0)  when c_cnt_msg_GET_0,   -- 
   s_diff_acc_V_i(0) when c_diff_acc_GET_1,  -- 
-  s_diff_min_V_i(0) when c_diff_min_GET_0,  -- 
+  s_diff_acc_V_i(0) when c_diff_acc_GET_0,  -- 
   s_diff_min_V_i(0) when c_diff_min_GET_1,  -- 
-  s_diff_max_V_i(0) when c_diff_max_GET_0,  -- 
+  s_diff_min_V_i(0) when c_diff_min_GET_0,  -- 
   s_diff_max_V_i(0) when c_diff_max_GET_1,  -- 
+  s_diff_max_V_i(0) when c_diff_max_GET_0,  -- 
   s_cnt_late_V_i(0) when c_cnt_late_GET,    -- 
   '1'               when others;
   
@@ -231,14 +231,14 @@ begin
             -- WISHBONE READ ACTIONS
             case to_integer(unsigned(s_a_ext)) is
               when c_capture_RW     => null;
-              when c_cnt_msg_GET_0  => null;
               when c_cnt_msg_GET_1  => null;
-              when c_diff_acc_GET_0 => null;
+              when c_cnt_msg_GET_0  => null;
               when c_diff_acc_GET_1 => null;
-              when c_diff_min_GET_0 => null;
+              when c_diff_acc_GET_0 => null;
               when c_diff_min_GET_1 => null;
-              when c_diff_max_GET_0 => null;
+              when c_diff_min_GET_0 => null;
               when c_diff_max_GET_1 => null;
+              when c_diff_max_GET_0 => null;
               when c_cnt_late_GET   => null;
               when c_offset_late_RW => null;
               when others           => r_error <= "1";
@@ -248,14 +248,14 @@ begin
         
         case to_integer(unsigned(r_a_ext1)) is
           when c_capture_RW     => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_capture), ctrl_o.dat'length));                  -- 
-          when c_cnt_msg_GET_0  => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_cnt_msg(31 downto 0)), ctrl_o.dat'length));     -- 
           when c_cnt_msg_GET_1  => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_cnt_msg(63 downto 32)), ctrl_o.dat'length));    -- 
-          when c_diff_acc_GET_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_acc(31 downto 0)), ctrl_o.dat'length));    -- 
+          when c_cnt_msg_GET_0  => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_cnt_msg(31 downto 0)), ctrl_o.dat'length));     -- 
           when c_diff_acc_GET_1 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_acc(63 downto 32)), ctrl_o.dat'length));   -- 
-          when c_diff_min_GET_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_min(31 downto 0)), ctrl_o.dat'length));    -- 
+          when c_diff_acc_GET_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_acc(31 downto 0)), ctrl_o.dat'length));    -- 
           when c_diff_min_GET_1 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_min(63 downto 32)), ctrl_o.dat'length));   -- 
-          when c_diff_max_GET_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_max(31 downto 0)), ctrl_o.dat'length));    -- 
+          when c_diff_min_GET_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_min(31 downto 0)), ctrl_o.dat'length));    -- 
           when c_diff_max_GET_1 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_max(63 downto 32)), ctrl_o.dat'length));   -- 
+          when c_diff_max_GET_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_diff_max(31 downto 0)), ctrl_o.dat'length));    -- 
           when c_cnt_late_GET   => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_cnt_late), ctrl_o.dat'length));                 -- 
           when c_offset_late_RW => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_offset_late), ctrl_o.dat'length));              -- 
           when others           => ctrl_o.dat <= (others => 'X');

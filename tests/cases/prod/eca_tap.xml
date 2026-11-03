@@ -2,7 +2,7 @@
    
    <clockdomain name="sys"></clockdomain>
    
-   <slaveinterface name="ctrl" data="32" type="pipelined">          
+   <slaveinterface name="ctrl" wordorder="high" data="32" type="pipelined">          
       <sdb vendorID="GSI" productID="0x0eca07a2" version="1" date="auto" name="ECA-Tap"></sdb>
       <registers>
           

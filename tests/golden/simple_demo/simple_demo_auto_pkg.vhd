@@ -42,8 +42,8 @@ package simple_demo_auto_pkg is
   constant c_mode_GET   : natural := 16#04#;  -- ro,            8 b, Mode
   constant c_mode_CLR   : natural := 16#08#;  -- wo,            8 b, Mode
   constant c_mode_SET   : natural := 16#0c#;  -- wo,            8 b, Mode
-  constant c_scpad_RW_0 : natural := 16#10#;  -- rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
-  constant c_scpad_RW_1 : natural := 16#14#;  -- rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
+  constant c_scpad_RW_1 : natural := 16#10#;  -- rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
+  constant c_scpad_RW_0 : natural := 16#14#;  -- rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
   constant c_count_GET  : natural := 16#18#;  -- ro,           16 b, Shows Data Input Counter
 
   --| Component --------------------- simple_demo_auto ----------------------------------------|

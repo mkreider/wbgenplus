@@ -5,7 +5,7 @@
    <generic name="channels" type="natural" default="16" comment="Input channels"></generic>
    <generic name="flags" type="natural" default="4" comment="Flag bits"></generic>
     
-   <slaveinterface name="slave" data="32" type="pipelined" pages="channels">          
+   <slaveinterface name="slave" wordorder="high" data="32" type="pipelined" pages="channels">          
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="Intermediate slave"></sdb>
       <registers>
            <reg   name="status"     read="yes"  drive="yes" bits="channels"                                                               comment="'timestamps pending' bit per channel"></reg>

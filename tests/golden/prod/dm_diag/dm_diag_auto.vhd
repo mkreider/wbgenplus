@@ -177,24 +177,24 @@ begin
 
   validmux: with to_integer(unsigned(s_a_ext)) select
   s_valid <= 
-  s_time_dif_pos_V_i(0)         when c_time_dif_pos_GET_0,          -- 
   s_time_dif_pos_V_i(0)         when c_time_dif_pos_GET_1,          -- 
-  s_time_dif_pos_ts_V_i(0)      when c_time_dif_pos_ts_GET_0,       -- 
+  s_time_dif_pos_V_i(0)         when c_time_dif_pos_GET_0,          -- 
   s_time_dif_pos_ts_V_i(0)      when c_time_dif_pos_ts_GET_1,       -- 
-  s_time_dif_neg_V_i(0)         when c_time_dif_neg_GET_0,          -- 
+  s_time_dif_pos_ts_V_i(0)      when c_time_dif_pos_ts_GET_0,       -- 
   s_time_dif_neg_V_i(0)         when c_time_dif_neg_GET_1,          -- 
-  s_time_dif_neg_ts_V_i(0)      when c_time_dif_neg_ts_GET_0,       -- 
+  s_time_dif_neg_V_i(0)         when c_time_dif_neg_GET_0,          -- 
   s_time_dif_neg_ts_V_i(0)      when c_time_dif_neg_ts_GET_1,       -- 
-  s_wr_lock_cnt_V_i(0)          when c_wr_lock_cnt_GET_0,           -- 
+  s_time_dif_neg_ts_V_i(0)      when c_time_dif_neg_ts_GET_0,       -- 
   s_wr_lock_cnt_V_i(0)          when c_wr_lock_cnt_GET_1,           -- 
-  s_wr_lock_loss_last_ts_V_i(0) when c_wr_lock_loss_last_ts_GET_0,  -- 
+  s_wr_lock_cnt_V_i(0)          when c_wr_lock_cnt_GET_0,           -- 
   s_wr_lock_loss_last_ts_V_i(0) when c_wr_lock_loss_last_ts_GET_1,  -- 
-  s_wr_lock_acqu_last_ts_V_i(0) when c_wr_lock_acqu_last_ts_GET_0,  -- 
+  s_wr_lock_loss_last_ts_V_i(0) when c_wr_lock_loss_last_ts_GET_0,  -- 
   s_wr_lock_acqu_last_ts_V_i(0) when c_wr_lock_acqu_last_ts_GET_1,  -- 
+  s_wr_lock_acqu_last_ts_V_i(0) when c_wr_lock_acqu_last_ts_GET_0,  -- 
   s_stall_streak_max_V_i(0)     when c_stall_streak_max_GET,        -- 
   s_stall_cnt_V_i(0)            when c_stall_cnt_GET,               -- 
-  s_stall_max_ts_V_i(0)         when c_stall_max_ts_GET_0,          -- 
   s_stall_max_ts_V_i(0)         when c_stall_max_ts_GET_1,          -- 
+  s_stall_max_ts_V_i(0)         when c_stall_max_ts_GET_0,          -- 
   '1'                           when others;
   
   s_valid_ok      <=  r_valid_check and s_valid;
@@ -298,8 +298,8 @@ begin
             case to_integer(unsigned(s_a_ext)) is
               when c_reset_OWR                      => r_reset                                    <= f_wb_wr(r_reset, s_d, s_s, "owr");                                   -- 
               when c_enable_RW                      => r_enable                                   <= f_wb_wr(r_enable, s_d, s_s, "owr");                                  -- 
-              when c_time_observation_interval_RW_0 => r_time_observation_interval(31 downto 0)   <= f_wb_wr(r_time_observation_interval(31 downto 0), s_d, s_s, "owr");  -- 
               when c_time_observation_interval_RW_1 => r_time_observation_interval(63 downto 32)  <= f_wb_wr(r_time_observation_interval(63 downto 32), s_d, s_s, "owr"); -- 
+              when c_time_observation_interval_RW_0 => r_time_observation_interval(31 downto 0)   <= f_wb_wr(r_time_observation_interval(31 downto 0), s_d, s_s, "owr");  -- 
               when c_stall_observation_interval_RW  => r_stall_observation_interval               <= f_wb_wr(r_stall_observation_interval, s_d, s_s, "owr");              -- 
               when c_stall_stat_select_RW           => r_stall_stat_select                        <= f_wb_wr(r_stall_stat_select, s_d, s_s, "owr");                       -- 
               r_stall_stat_select_WR                                                              <= (others     => '1');
@@ -309,29 +309,29 @@ begin
             -- WISHBONE READ ACTIONS
             case to_integer(unsigned(s_a_ext)) is
               when c_enable_RW                      => null;
-              when c_time_observation_interval_RW_0 => null;
               when c_time_observation_interval_RW_1 => null;
-              when c_time_dif_pos_GET_0             => null;
+              when c_time_observation_interval_RW_0 => null;
               when c_time_dif_pos_GET_1             => null;
-              when c_time_dif_pos_ts_GET_0          => null;
+              when c_time_dif_pos_GET_0             => null;
               when c_time_dif_pos_ts_GET_1          => null;
-              when c_time_dif_neg_GET_0             => null;
+              when c_time_dif_pos_ts_GET_0          => null;
               when c_time_dif_neg_GET_1             => null;
-              when c_time_dif_neg_ts_GET_0          => null;
+              when c_time_dif_neg_GET_0             => null;
               when c_time_dif_neg_ts_GET_1          => null;
-              when c_wr_lock_cnt_GET_0              => null;
+              when c_time_dif_neg_ts_GET_0          => null;
               when c_wr_lock_cnt_GET_1              => null;
-              when c_wr_lock_loss_last_ts_GET_0     => null;
+              when c_wr_lock_cnt_GET_0              => null;
               when c_wr_lock_loss_last_ts_GET_1     => null;
-              when c_wr_lock_acqu_last_ts_GET_0     => null;
+              when c_wr_lock_loss_last_ts_GET_0     => null;
               when c_wr_lock_acqu_last_ts_GET_1     => null;
+              when c_wr_lock_acqu_last_ts_GET_0     => null;
               when c_stall_observation_interval_RW  => null;
               when c_stall_stat_select_RW           => null;
               r_stall_stat_select_RD <= (others     => '1');
               when c_stall_streak_max_GET           => null;
               when c_stall_cnt_GET                  => null;
-              when c_stall_max_ts_GET_0             => null;
               when c_stall_max_ts_GET_1             => null;
+              when c_stall_max_ts_GET_0             => null;
               when others                           => r_error <= "1";
             end case;
           end if; -- s_w
@@ -339,28 +339,28 @@ begin
         
         case to_integer(unsigned(r_a_ext1)) is
           when c_enable_RW                      => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_enable), ctrl_o.dat'length));                                   -- 
-          when c_time_observation_interval_RW_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_observation_interval(31 downto 0)), ctrl_o.dat'length));   -- 
           when c_time_observation_interval_RW_1 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_observation_interval(63 downto 32)), ctrl_o.dat'length));  -- 
-          when c_time_dif_pos_GET_0             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_pos(31 downto 0)), ctrl_o.dat'length));                -- 
+          when c_time_observation_interval_RW_0 => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_observation_interval(31 downto 0)), ctrl_o.dat'length));   -- 
           when c_time_dif_pos_GET_1             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_pos(63 downto 32)), ctrl_o.dat'length));               -- 
-          when c_time_dif_pos_ts_GET_0          => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_pos_ts(31 downto 0)), ctrl_o.dat'length));             -- 
+          when c_time_dif_pos_GET_0             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_pos(31 downto 0)), ctrl_o.dat'length));                -- 
           when c_time_dif_pos_ts_GET_1          => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_pos_ts(63 downto 32)), ctrl_o.dat'length));            -- 
-          when c_time_dif_neg_GET_0             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_neg(31 downto 0)), ctrl_o.dat'length));                -- 
+          when c_time_dif_pos_ts_GET_0          => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_pos_ts(31 downto 0)), ctrl_o.dat'length));             -- 
           when c_time_dif_neg_GET_1             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_neg(63 downto 32)), ctrl_o.dat'length));               -- 
-          when c_time_dif_neg_ts_GET_0          => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_neg_ts(31 downto 0)), ctrl_o.dat'length));             -- 
+          when c_time_dif_neg_GET_0             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_neg(31 downto 0)), ctrl_o.dat'length));                -- 
           when c_time_dif_neg_ts_GET_1          => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_neg_ts(63 downto 32)), ctrl_o.dat'length));            -- 
-          when c_wr_lock_cnt_GET_0              => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_cnt(31 downto 0)), ctrl_o.dat'length));                 -- 
+          when c_time_dif_neg_ts_GET_0          => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_time_dif_neg_ts(31 downto 0)), ctrl_o.dat'length));             -- 
           when c_wr_lock_cnt_GET_1              => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_cnt(63 downto 32)), ctrl_o.dat'length));                -- 
-          when c_wr_lock_loss_last_ts_GET_0     => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_loss_last_ts(31 downto 0)), ctrl_o.dat'length));        -- 
+          when c_wr_lock_cnt_GET_0              => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_cnt(31 downto 0)), ctrl_o.dat'length));                 -- 
           when c_wr_lock_loss_last_ts_GET_1     => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_loss_last_ts(63 downto 32)), ctrl_o.dat'length));       -- 
-          when c_wr_lock_acqu_last_ts_GET_0     => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_acqu_last_ts(31 downto 0)), ctrl_o.dat'length));        -- 
+          when c_wr_lock_loss_last_ts_GET_0     => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_loss_last_ts(31 downto 0)), ctrl_o.dat'length));        -- 
           when c_wr_lock_acqu_last_ts_GET_1     => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_acqu_last_ts(63 downto 32)), ctrl_o.dat'length));       -- 
+          when c_wr_lock_acqu_last_ts_GET_0     => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_wr_lock_acqu_last_ts(31 downto 0)), ctrl_o.dat'length));        -- 
           when c_stall_observation_interval_RW  => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_stall_observation_interval), ctrl_o.dat'length));               -- 
           when c_stall_stat_select_RW           => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_stall_stat_select), ctrl_o.dat'length));                        -- 
           when c_stall_streak_max_GET           => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_stall_streak_max), ctrl_o.dat'length));                         -- 
           when c_stall_cnt_GET                  => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_stall_cnt), ctrl_o.dat'length));                                -- 
-          when c_stall_max_ts_GET_0             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_stall_max_ts(31 downto 0)), ctrl_o.dat'length));                -- 
           when c_stall_max_ts_GET_1             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_stall_max_ts(63 downto 32)), ctrl_o.dat'length));               -- 
+          when c_stall_max_ts_GET_0             => ctrl_o.dat <= std_logic_vector(resize(unsigned(r_stall_max_ts(31 downto 0)), ctrl_o.dat'length));                -- 
           when others                           => ctrl_o.dat <= (others => 'X');
         end case;
 

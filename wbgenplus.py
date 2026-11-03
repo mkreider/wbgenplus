@@ -140,6 +140,15 @@ def parseXMLNew(xmlIn, now, unitname):
                 sys.exit(2)
         
         tmpSlave    = wbs(unitname, version, now, name, 0, '', pages, ifWidth, vendId, prodId, sdbname, clockList, genIntD, genMiscD, 'g_') 
+
+        # word order of registers wider than the bus: must be explicit, see checks after the register loop
+        wordorder = None
+        if slaveIf.hasAttribute('wordorder'):
+            wordorder = slaveIf.getAttribute('wordorder')
+            if wordorder not in ('high', 'low'):
+                print("ERROR: Slave <%s>: wordorder <%s> is invalid. Choose <high> (high word at the lowest address) or <low>" % (name, wordorder))
+                sys.exit(2)
+        tmpSlave.wordorder = wordorder
         
         selector = ""
         #name, adr, pages, selector
@@ -264,6 +273,11 @@ def parseXMLNew(xmlIn, now, unitname):
                     tmpSlave.selector = selector    
                     tmpSlave.pages      = pages    
        
+        multi = tmpSlave.getMultiWordRegNames()
+        if multi and wordorder is None:
+            print("ERROR: Slave <%s>: register(s) <%s> are wider than the %u bit bus. Add wordorder=\"high\" or wordorder=\"low\" to <slaveinterface>" % (name, ", ".join(multi), ifWidth))
+            sys.exit(2)
+
         ifList.append(tmpSlave)
     return [author, version, email, ifList]
 

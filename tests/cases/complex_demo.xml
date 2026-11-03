@@ -5,7 +5,7 @@
 
    <generic name="channels" type="natural" default="16" comment="Input channels"></generic> 
     
-   <slaveinterface name="data" data="32" type="pipelined" pages="channels">          
+   <slaveinterface name="data" wordorder="high" data="32" type="pipelined" pages="channels">          
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="Complex slave Data"></sdb>
       <registers>
            <reg   name="status"     read="yes"  drive="yes" bits="channels" clock="ref"                                                   comment="tlu 'timestamps pending' bit per channel"></reg>

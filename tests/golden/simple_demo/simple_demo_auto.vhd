@@ -133,8 +133,8 @@ begin
   validmux: with to_integer(unsigned(s_a_ext)) select
   s_valid <= 
   s_status_V_i(0) when c_status_GET,  -- 
-  s_scpad_V_i(0)  when c_scpad_RW_0,  -- 
   s_scpad_V_i(0)  when c_scpad_RW_1,  -- 
+  s_scpad_V_i(0)  when c_scpad_RW_0,  -- 
   s_count_V_i(0)  when c_count_GET,   -- 
   '1'             when others;
   
@@ -211,9 +211,9 @@ begin
               r_mode_WR                                       <= (others  => '1');
               when c_mode_SET       => r_mode                 <= f_wb_wr(r_mode, s_d, s_s, "set");                -- 
               r_mode_WR                                       <= (others  => '1');
-              when c_scpad_RW_0     => r_scpad(31 downto 0)   <= f_wb_wr(r_scpad(31 downto 0), s_d, s_s, "owr");  -- 
-              r_scpad_WR                                      <= (others => '1');
               when c_scpad_RW_1     => r_scpad(63 downto 32)  <= f_wb_wr(r_scpad(63 downto 32), s_d, s_s, "owr"); -- 
+              r_scpad_WR                                      <= (others => '1');
+              when c_scpad_RW_0     => r_scpad(31 downto 0)   <= f_wb_wr(r_scpad(31 downto 0), s_d, s_s, "owr");  -- 
               r_scpad_WR                                      <= (others => '1');
               when others           => r_error                <= "1";
             end case;
@@ -223,9 +223,9 @@ begin
               when c_status_GET     => null;
               when c_mode_GET       => null;
               r_mode_RD <= (others  => '1');
-              when c_scpad_RW_0     => null;
-              r_scpad_RD <= (others => '1');
               when c_scpad_RW_1     => null;
+              r_scpad_RD <= (others => '1');
+              when c_scpad_RW_0     => null;
               r_scpad_RD <= (others => '1');
               when c_count_GET      => null;
               when others           => r_error <= "1";
@@ -236,8 +236,8 @@ begin
         case to_integer(unsigned(r_a_ext1)) is
           when c_status_GET => slave_o.dat  <= std_logic_vector(resize(unsigned(r_status), slave_o.dat'length));                -- 
           when c_mode_GET   => slave_o.dat  <= std_logic_vector(resize(unsigned(r_mode), slave_o.dat'length));                  -- 
-          when c_scpad_RW_0 => slave_o.dat  <= std_logic_vector(resize(unsigned(r_scpad(31 downto 0)), slave_o.dat'length));    -- 
           when c_scpad_RW_1 => slave_o.dat  <= std_logic_vector(resize(unsigned(r_scpad(63 downto 32)), slave_o.dat'length));   -- 
+          when c_scpad_RW_0 => slave_o.dat  <= std_logic_vector(resize(unsigned(r_scpad(31 downto 0)), slave_o.dat'length));    -- 
           when c_count_GET  => slave_o.dat  <= std_logic_vector(resize(unsigned(r_count), slave_o.dat'length));                 -- 
           when others       => slave_o.dat  <= (others => 'X');
         end case;

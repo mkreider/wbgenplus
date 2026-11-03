@@ -18,8 +18,8 @@
   #define SIMPLE_DEMO_MODE_GET   0x04  //ro,            8 b, Mode
   #define SIMPLE_DEMO_MODE_CLR   0x08  //wo,            8 b, Mode
   #define SIMPLE_DEMO_MODE_SET   0x0c  //wo,            8 b, Mode
-  #define SIMPLE_DEMO_SCPAD_RW_0 0x10  //rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
-  #define SIMPLE_DEMO_SCPAD_RW_1 0x14  //rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
+  #define SIMPLE_DEMO_SCPAD_RW_1 0x10  //rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
+  #define SIMPLE_DEMO_SCPAD_RW_0 0x14  //rw,           32 b, Scratchpad. Can be modified from Bus or outer entity
   #define SIMPLE_DEMO_COUNT_GET  0x18  //ro,           16 b, Shows Data Input Counter
 
 #endif

@@ -4,7 +4,7 @@
 
   <generic name="statusbits" type="natural" default="16" comment="Number of bits in status register"></generic>
  
-   <slaveinterface name="slave" data="32" type="pipelined">          
+   <slaveinterface name="slave" wordorder="high" data="32" type="pipelined">          
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="A simple slave"></sdb>
       <registers>
            <reg   name="status" read="yes"              drive="yes" bits="statusbits"                     comment="Shows if the devices are rdy/busy"></reg>

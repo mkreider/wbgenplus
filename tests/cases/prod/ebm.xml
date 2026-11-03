@@ -4,7 +4,7 @@
 
   <generic name="adr_bits_hi" type="natural" default="10" comment="Number of high address bits"></generic>
  
-   <slaveinterface name="slave" data="32" type="pipelined">          
+   <slaveinterface name="slave" wordorder="low" data="32" type="pipelined">          
       <registers>
            <reg   name="clear"                 write="yes" bits="1"  pulse="yes"            comment="Clears EBM buffers"></reg>
            <reg   name="flush"                 write="yes" bits="1"  pulse="yes"            comment="Send stored data as an EB packet"></reg>

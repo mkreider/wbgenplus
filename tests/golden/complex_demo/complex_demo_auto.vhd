@@ -145,8 +145,8 @@ begin
   validmux: with to_integer(unsigned(s_a_ext)) select
   s_valid <= 
   s_status_V_i(0) when c_status_GET,    -- 
-  s_ts_out_V_i(0) when c_ts_out_GET_0,  -- 
   s_ts_out_V_i(0) when c_ts_out_GET_1,  -- 
+  s_ts_out_V_i(0) when c_ts_out_GET_0,  -- 
   s_cnt_V_i(0)    when c_cnt_GET,       -- 
   '1'             when others;
   
@@ -257,9 +257,9 @@ begin
               when c_status_GET       => null;
               when c_ch_qty_GET       => null;
               when c_ch_sel_RW        => null;
-              when c_ts_out_GET_0     => null;
-              r_ts_out_RD <= (others  => '1');
               when c_ts_out_GET_1     => null;
+              r_ts_out_RD <= (others  => '1');
+              when c_ts_out_GET_0     => null;
               r_ts_out_RD <= (others  => '1');
               when c_cnt_GET          => null;
               when c_ts_flags_RW      => null;
@@ -272,8 +272,8 @@ begin
           when c_status_GET     => data_o.dat <= std_logic_vector(resize(unsigned(r_status), data_o.dat'length));                         -- 
           when c_ch_qty_GET     => data_o.dat <= std_logic_vector(resize(unsigned(r_ch_qty), data_o.dat'length));                         -- 
           when c_ch_sel_RW      => data_o.dat <= std_logic_vector(resize(unsigned(r_ch_sel), data_o.dat'length));                         -- 
-          when c_r_ts_out_GET_0 => data_o.dat <= std_logic_vector(resize(unsigned(mget(ts_out, v_p)(31 downto 0)), data_o.dat'length));   -- 
           when c_r_ts_out_GET_1 => data_o.dat <= std_logic_vector(resize(unsigned(mget(ts_out, v_p)(63 downto 32)), data_o.dat'length));  -- 
+          when c_r_ts_out_GET_0 => data_o.dat <= std_logic_vector(resize(unsigned(mget(ts_out, v_p)(31 downto 0)), data_o.dat'length));   -- 
           when c_r_cnt_GET      => data_o.dat <= std_logic_vector(resize(unsigned(mget(cnt, v_p)), data_o.dat'length));                   -- 
           when c_r_ts_flags_RW  => data_o.dat <= std_logic_vector(resize(unsigned(mget(ts_flags, v_p)), data_o.dat'length));              -- 
           when others           => data_o.dat <= (others => 'X');

@@ -42,8 +42,8 @@ package intermediate_demo_auto_pkg is
   constant c_ch_qty_GET     : natural := 16#004#; -- ro,          5 b, Individually controllable flag bits
   constant c_ch_sel_RW      : natural := 16#020#; -- rw,          8 b, Channel select register
   constant c_clear_fifo_OWR : natural := 16#100#; -- wo,          1 b, Clears Fifo
-  constant c_ts_out_GET_0   : natural := 16#104#; -- ro,         32 b, Timestamp fifos in. Use RD flag to pop
-  constant c_ts_out_GET_1   : natural := 16#108#; -- ro,         32 b, Timestamp fifos in. Use RD flag to pop
+  constant c_ts_out_GET_1   : natural := 16#104#; -- ro,         32 b, Timestamp fifos in. Use RD flag to pop
+  constant c_ts_out_GET_0   : natural := 16#108#; -- ro,         32 b, Timestamp fifos in. Use RD flag to pop
   constant c_ts_cnt_GET     : natural := 16#10c#; -- ro,         16 b, Shows channel timestamp count
   constant c_ts_flags_RW    : natural := 16#110#; -- rw,    g_flags b, timestamp channel flagbits
 

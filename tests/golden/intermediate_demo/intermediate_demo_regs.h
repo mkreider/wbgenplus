@@ -18,8 +18,8 @@
   #define INTERMEDIATE_DEMO_CH_QTY_GET     0x004 //ro,          5 b, Individually controllable flag bits
   #define INTERMEDIATE_DEMO_CH_SEL_RW      0x020 //rw,          8 b, Channel select register
   #define INTERMEDIATE_DEMO_CLEAR_FIFO_OWR 0x100 //wo,          1 b, Clears Fifo
-  #define INTERMEDIATE_DEMO_TS_OUT_GET_0   0x104 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
-  #define INTERMEDIATE_DEMO_TS_OUT_GET_1   0x108 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
+  #define INTERMEDIATE_DEMO_TS_OUT_GET_1   0x104 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
+  #define INTERMEDIATE_DEMO_TS_OUT_GET_0   0x108 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
   #define INTERMEDIATE_DEMO_TS_CNT_GET     0x10c //ro,         16 b, Shows channel timestamp count
   #define INTERMEDIATE_DEMO_TS_FLAGS_RW    0x110 //rw,    g_flags b, timestamp channel flagbits
 

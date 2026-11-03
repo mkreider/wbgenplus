@@ -266,6 +266,7 @@ class WbRegister(Register):
         self.awidth     = adrBits
         self.startAdr   = sAdr
         self.offs       = offs
+        self.wordorder  = None   # 'high' | 'low', set by wbslave; only matters for multi-word registers
         self.opList     = []
         #add operations according to WbRegister flags
         adr = sAdr
@@ -322,6 +323,20 @@ class WbRegister(Register):
             adr += self.offs
         self.opList.append([op, adrList])
 
+
+    def isMultiWord(self):
+        return any(len(adrList) > 1 for (_, adrList) in self.opList)
+
+    def _words(self, adrList):
+        """Yield (wordIdx, sliceWidth, adr) in ascending address order.
+
+        Word i holds bits [i*dwidth + width-1 : i*dwidth]. With wordorder 'high' the
+        highest word sits at the lowest address, with 'low' the lowest word does.
+        """
+        n = len(adrList)
+        for pos, (_, adr) in enumerate(adrList):
+            idx = (n - 1 - pos) if (n > 1 and self.wordorder == 'high') else pos
+            yield idx, adrList[idx][0], adr
 
     def getLastAdr(self):
         if len(self.opList) > 0:
@@ -386,14 +401,12 @@ class WbRegister(Register):
             elif(op.find('_RW') > -1):
                 rw = 'rw'
 
-            adrIdx = 0
-            for adrLine in adrList:
+            for adrIdx, myslice, adr in self._words(adrList):
                 #if this reg has multiple words, add the index to the name
                 if(len(adrList) > 1):
                     idx = '_%u' % adrIdx
                 else:
                     idx = ''
-                (myslice, adr) = adrLine
                 bitwidth = bitS % (self.getGenWidthPrefix() + str(myslice))
                 
                 if(lang.lower() == "c"):
@@ -406,8 +419,6 @@ class WbRegister(Register):
                     s.append(self.v.pythonConstAdrReg    % (adrx % adr, str(op + idx).lower(), rw, bitwidth))    
                 else:
                     print("<%s> is not a valid output language!" % language)
-
-                adrIdx += 1
             opIdx += 1
 
         return s
@@ -420,10 +431,7 @@ class WbRegister(Register):
             (op, adrList) = opLine
             if((op == "_GET") or (op == "_RW")):
                 #this is sliced
-                adrIdx = 0
-                for adrLine in adrList:
-                    (msk, adr) = adrLine
-
+                for adrIdx, msk, adr in self._words(adrList):
                     sliceWidth       = msk
                     if self.isGenericWidth():
                         curSlice         = "%s downto %u" % (self.getGenWidthPrefix() + sliceWidth + "-1", 0)
@@ -437,7 +445,6 @@ class WbRegister(Register):
                     if len(adrList) > 1:
                         regSlice         = "(%s)" % curSlice
                         enum = "_%s" % adrIdx
-                    adrIdx += 1
                     s.append(self.v.wbOut % (op + enum,regSlice ))
                    
         return s
@@ -449,13 +456,10 @@ class WbRegister(Register):
                 (op, adrList) = opLine
                 if((op == "_GET") or (op == "_RW")):
                     #this is sliced
-                    adrIdx = 0
-                    for adrLine in adrList:
-                        (msk, adr) = adrLine
+                    for adrIdx, _, _ in self._words(adrList):
                         enum = ""
                         if len(adrList) > 1:
                             enum = "_%s" % adrIdx
-                        adrIdx += 1
                         s.append(self.v.wbValid % (op + enum))
         return s   
 
@@ -465,13 +469,10 @@ class WbRegister(Register):
         opIdx = 0
         for opLine in self.opList:
             (op, adrList) = opLine
-            adrIdx = 0
             if(op != "_GET"):
 
                 #this is sliced
-                adrIdx=0
-                for adrLine in adrList:
-                    (msk, adr) = adrLine
+                for adrIdx, msk, adr in self._words(adrList):
                     sliceWidth       = msk
                     if self.isGenericWidth():
                         curSlice         = "%s downto %u" % (self.getGenWidthPrefix() + sliceWidth + "-1", 0)
@@ -489,7 +490,6 @@ class WbRegister(Register):
                        s.append(self.v.wbWrite % (op + enum, regSlice, registerVhdlStr.wrModes[op]))
                     else:
                        s.append(self.v.wbWrite % (op + enum, firstSlice, regSlice, registerVhdlStr.wrModes[op]))             
-                    adrIdx += 1
                     #matrix assignment works differently
 
                     if 'write' in self.customStrD:
@@ -503,14 +503,10 @@ class WbRegister(Register):
             (op, adrList) = opLine
             if((op == "_GET") or (op == "_RW")):
                 #this is sliced
-                adrIdx = 0
-                for adrLine in adrList:
-                   
+                for adrIdx, _, _ in self._words(adrList):
                     enum = ""
                     if len(adrList) > 1:
-        
                         enum = "_%s" % adrIdx
-                    adrIdx += 1
                     s.append(self.v.wbRead % (op + enum))
                     if 'read' in self.customStrD:
                         s += self.customStrD['read']

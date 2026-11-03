@@ -13,4 +13,11 @@ These are verbatim copies of the wbgenplus v2 inputs used in production, taken o
 
 `eca_ac_wbm.xml` is left out on purpose: it was written for the v1 generator (2014), which used attributes such as `weflag` that v2 does not support.
 
-Do not edit these files. They pin the current behaviour. A fix that needs a changed input gets a separate case.
+**Only change from the originals:** `wordorder` was added to `<slaveinterface>`, because it has been mandatory for registers wider than the bus since finding 1.13. The values reproduce the committed production outputs:
+
+| File | wordorder | Reason |
+|---|---|---|
+| dm_diag.xml, eca_tap.xml | `high` | generated between b228faf (2018-07) and dc5f889 (2020-02) |
+| prio.xml, ebm.xml | `low` | generated before 2018-07 |
+
+The other files have no multi-word registers and are unchanged. Make no other edits; a fix that needs a changed input gets its own case.

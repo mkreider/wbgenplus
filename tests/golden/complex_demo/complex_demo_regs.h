@@ -19,8 +19,8 @@
   #define COMPLEX_DEMO_CH_QTY_GET     0x008 //ro,          5 b, Individually controllable flag bits
   #define COMPLEX_DEMO_CH_SEL_RW      0x020 //rw,          8 b, Channel select register
   #define COMPLEX_DEMO_CLEAR_FIFO_OWR 0x100 //wo,          1 b, Clears Fifo
-  #define COMPLEX_DEMO_TS_OUT_GET_0   0x104 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
-  #define COMPLEX_DEMO_TS_OUT_GET_1   0x108 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
+  #define COMPLEX_DEMO_TS_OUT_GET_1   0x104 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
+  #define COMPLEX_DEMO_TS_OUT_GET_0   0x108 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
   #define COMPLEX_DEMO_CNT_GET        0x10c //ro,         16 b, Shows channel timestamp count
   #define COMPLEX_DEMO_TS_FLAGS_RW    0x110 //rw,         32 b, timestamp channel flagbits
 

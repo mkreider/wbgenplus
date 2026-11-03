@@ -39,6 +39,7 @@ class wbslave(object):
         self.sdbDeviceID    = sdbDeviceID
         self.sdbname        = sdbname
         self.offs           = int(math.ceil(ifwidth/8))
+        self.wordorder      = None   # 'high' | 'low'; set by the parser
         #Fill in string templates
         self.genIntD    = genIntD
         self.genMiscD   = genMiscD
@@ -64,8 +65,13 @@ class wbslave(object):
 
 
     def _createWbReg(self, name, desc, bits, flags, clkdomain="sys", rstvec=None, startAdr=None):
-        return WbRegister(self.dataWidth, self.addressWidth, self._getAddress(startAdr, name), self.offs,
+        reg = WbRegister(self.dataWidth, self.addressWidth, self._getAddress(startAdr, name), self.offs,
                           self.vreg, self.genIntD, name, desc, flags, bits, rstvec, self.pages, self.clocks[0], clkdomain)
+        reg.wordorder = self.wordorder
+        return reg
+
+    def getMultiWordRegNames(self):
+        return [r.name for r in self.registers if getattr(r, 'isMultiWord', lambda: False)()]
 
 
 

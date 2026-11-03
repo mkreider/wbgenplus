@@ -1,0 +1,11 @@
+<wbdevice author="T" email="t@x" version="0.0.1">
+   <clockdomain name="sys"></clockdomain>
+   <slaveinterface name="ctrl" wordorder="low" data="32" type="pipelined" pages="0">
+      <sdb vendorID="GSI" productID="0x12345678" version="1" date="auto" name="WIDE_LOW"></sdb>
+      <registers>
+         <reg name="first" read="yes" write="yes" bits="8" comment="before"></reg>
+         <reg name="wide" read="yes" write="yes" bits="48" comment="48 bit, not a multiple of the bus width"></reg>
+         <reg name="stat" read="yes" drive="yes" bits="64" comment="64 bit, driven"></reg>
+      </registers>
+   </slaveinterface>
+</wbdevice>
