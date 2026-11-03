@@ -38,19 +38,19 @@ use work.wbgenplus_pkg.all;
 use work.genram_pkg.all;
 package eca_tap_auto_pkg is
 
-  constant c_reset_OWR      : natural := 16#0000000000000000000000000#; -- wo,  1 b, Resets ECA-Tap
-  constant c_clear_OWR      : natural := 16#0000000000000000000000004#; -- wo,  4 b, b3: clear late count, b2: clear count/accu, b1: clear max, b0: clear min
-  constant c_capture_RW     : natural := 16#0000000000000000000000008#; -- rw,  1 b, Enable/Disable Capture
-  constant c_cnt_msg_GET_0  : natural := 16#000000000000000000000000c#; -- ro, 32 b, Message Count
-  constant c_cnt_msg_GET_1  : natural := 16#0000000000000000000000010#; -- ro, 32 b, Message Count
-  constant c_diff_acc_GET_0 : natural := 16#0000000000000000000000014#; -- ro, 32 b, Accumulated differences (dl - ts)
-  constant c_diff_acc_GET_1 : natural := 16#0000000000000000000000018#; -- ro, 32 b, Accumulated differences (dl - ts)
-  constant c_diff_min_GET_0 : natural := 16#000000000000000000000001c#; -- ro, 32 b, Minimum difference
-  constant c_diff_min_GET_1 : natural := 16#0000000000000000000000020#; -- ro, 32 b, Minimum difference
-  constant c_diff_max_GET_0 : natural := 16#0000000000000000000000024#; -- ro, 32 b, Maximum difference
-  constant c_diff_max_GET_1 : natural := 16#0000000000000000000000028#; -- ro, 32 b, Maximum difference
-  constant c_cnt_late_GET   : natural := 16#000000000000000000000002c#; -- ro, 32 b, Late Message Count
-  constant c_offset_late_RW : natural := 16#0000000000000000000000030#; -- rw, 32 b, Offset on difference. Controls condition for Late Message Counter increment
+  constant c_reset_OWR      : natural := 16#00#;  -- wo,  1 b, Resets ECA-Tap
+  constant c_clear_OWR      : natural := 16#04#;  -- wo,  4 b, b3: clear late count, b2: clear count/accu, b1: clear max, b0: clear min
+  constant c_capture_RW     : natural := 16#08#;  -- rw,  1 b, Enable/Disable Capture
+  constant c_cnt_msg_GET_0  : natural := 16#0c#;  -- ro, 32 b, Message Count
+  constant c_cnt_msg_GET_1  : natural := 16#10#;  -- ro, 32 b, Message Count
+  constant c_diff_acc_GET_0 : natural := 16#14#;  -- ro, 32 b, Accumulated differences (dl - ts)
+  constant c_diff_acc_GET_1 : natural := 16#18#;  -- ro, 32 b, Accumulated differences (dl - ts)
+  constant c_diff_min_GET_0 : natural := 16#1c#;  -- ro, 32 b, Minimum difference
+  constant c_diff_min_GET_1 : natural := 16#20#;  -- ro, 32 b, Minimum difference
+  constant c_diff_max_GET_0 : natural := 16#24#;  -- ro, 32 b, Maximum difference
+  constant c_diff_max_GET_1 : natural := 16#28#;  -- ro, 32 b, Maximum difference
+  constant c_cnt_late_GET   : natural := 16#2c#;  -- ro, 32 b, Late Message Count
+  constant c_offset_late_RW : natural := 16#30#;  -- rw, 32 b, Offset on difference. Controls condition for Late Message Counter increment
 
   --| Component ----------------------- eca_tap_auto ------------------------------------------|
   component eca_tap_auto is

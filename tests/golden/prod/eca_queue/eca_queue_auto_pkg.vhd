@@ -38,20 +38,20 @@ use work.wbgenplus_pkg.all;
 use work.genram_pkg.all;
 package eca_queue_auto_pkg is
 
-  constant c_queue_id_GET     : natural := 16#0000000000000000000000000#; -- ro,  8 b, The index of a_channel_o from the ECA to which this queue is connected (set channel_select=queue_id+1)
-  constant c_pop_OWR          : natural := 16#0000000000000000000000004#; -- wo,  1 b, Pop action from the channel's queue
-  constant c_flags_GET        : natural := 16#0000000000000000000000008#; -- ro,  5 b, Error flags for this action(0=late, 1=early, 2=conflict, 3=delayed, 4=valid)
-  constant c_num_GET          : natural := 16#000000000000000000000000c#; -- ro,  8 b, Subchannel target
-  constant c_event_id_hi_GET  : natural := 16#0000000000000000000000010#; -- ro, 32 b, Event ID (high word)
-  constant c_event_id_lo_GET  : natural := 16#0000000000000000000000014#; -- ro, 32 b, Event ID (low word)
-  constant c_param_hi_GET     : natural := 16#0000000000000000000000018#; -- ro, 32 b, Parameter (high word)
-  constant c_param_lo_GET     : natural := 16#000000000000000000000001c#; -- ro, 32 b, Parameter (low word)
-  constant c_tag_GET          : natural := 16#0000000000000000000000020#; -- ro, 32 b, Tag from the condition
-  constant c_tef_GET          : natural := 16#0000000000000000000000024#; -- ro, 32 b, Timing extension field
-  constant c_deadline_hi_GET  : natural := 16#0000000000000000000000028#; -- ro, 32 b, Deadline (high word)
-  constant c_deadline_lo_GET  : natural := 16#000000000000000000000002c#; -- ro, 32 b, Deadline (low word)
-  constant c_executed_hi_GET  : natural := 16#0000000000000000000000030#; -- ro, 32 b, Actual execution time (high word)
-  constant c_executed_lo_GET  : natural := 16#0000000000000000000000034#; -- ro, 32 b, Actual execution time (low word)
+  constant c_queue_id_GET     : natural := 16#00#;  -- ro,  8 b, The index of a_channel_o from the ECA to which this queue is connected (set channel_select=queue_id+1)
+  constant c_pop_OWR          : natural := 16#04#;  -- wo,  1 b, Pop action from the channel's queue
+  constant c_flags_GET        : natural := 16#08#;  -- ro,  5 b, Error flags for this action(0=late, 1=early, 2=conflict, 3=delayed, 4=valid)
+  constant c_num_GET          : natural := 16#0c#;  -- ro,  8 b, Subchannel target
+  constant c_event_id_hi_GET  : natural := 16#10#;  -- ro, 32 b, Event ID (high word)
+  constant c_event_id_lo_GET  : natural := 16#14#;  -- ro, 32 b, Event ID (low word)
+  constant c_param_hi_GET     : natural := 16#18#;  -- ro, 32 b, Parameter (high word)
+  constant c_param_lo_GET     : natural := 16#1c#;  -- ro, 32 b, Parameter (low word)
+  constant c_tag_GET          : natural := 16#20#;  -- ro, 32 b, Tag from the condition
+  constant c_tef_GET          : natural := 16#24#;  -- ro, 32 b, Timing extension field
+  constant c_deadline_hi_GET  : natural := 16#28#;  -- ro, 32 b, Deadline (high word)
+  constant c_deadline_lo_GET  : natural := 16#2c#;  -- ro, 32 b, Deadline (low word)
+  constant c_executed_hi_GET  : natural := 16#30#;  -- ro, 32 b, Actual execution time (high word)
+  constant c_executed_lo_GET  : natural := 16#34#;  -- ro, 32 b, Actual execution time (low word)
 
   --| Component ---------------------- eca_queue_auto -----------------------------------------|
   component eca_queue_auto is

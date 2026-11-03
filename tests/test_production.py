@@ -29,9 +29,7 @@ KNOWN = {
     ("dm_diag", "auto_pkg"): "1.13: word order of multi-word registers (prod is high word first)",
     ("eca_tap", "auto"):     "1.13: word order of multi-word registers (prod is high word first)",
     ("eca_tap", "auto_pkg"): "1.13: word order of multi-word registers (prod is high word first)",
-    ("oled",    "auto_pkg"): "1.15: address constants zero-padded to 75 digits (py3 float division); "
-                             "1.16: SDB addr_last 0x0f excludes last register at 0x10",
-    ("prio",    "auto_pkg"): "1.15: address constants zero-padded (py3 float division)",
+    ("oled",    "auto_pkg"): "1.16: SDB addr_last 0x0f excludes last register at 0x10",
 }
 
 _IGNORE = re.compile(r"@date|@copyright|^\s*date\s+=>")

@@ -38,25 +38,25 @@ use work.wbgenplus_pkg.all;
 use work.genram_pkg.all;
 package prio_auto_pkg is
 
-  constant c_reset_OWR          : natural := 16#00000#; -- wo,          1 b, Resets the Priority Queue
-  constant c_mode_GET           : natural := 16#00004#; -- ro,          3 b, b2: Time limit, b1: Msg limit, b0 enable
-  constant c_mode_CLR           : natural := 16#00008#; -- wo,          3 b, b2: Time limit, b1: Msg limit, b0 enable
-  constant c_mode_SET           : natural := 16#0000c#; -- wo,          3 b, b2: Time limit, b1: Msg limit, b0 enable
-  constant c_clear_OWR          : natural := 16#00010#; -- wo,          1 b, Clears counters and status
-  constant c_st_full_GET        : natural := 16#00014#; -- ro, g_channels b, Channel Full flag (n..0) 
-  constant c_st_late_GET        : natural := 16#00018#; -- ro,          1 b, Late message detected
-  constant c_ebm_adr_RW         : natural := 16#0001c#; -- rw,         32 b, Etherbone Master address
-  constant c_eca_adr_RW         : natural := 16#00020#; -- rw,         32 b, Event Condition Action Unit address
-  constant c_tx_max_msgs_RW     : natural := 16#00024#; -- rw,          8 b, Max msgs per packet
-  constant c_tx_max_wait_RW     : natural := 16#00028#; -- rw,         32 b, Max wait time for non empty packet
-  constant c_tx_rate_limit_RW   : natural := 16#0002c#; -- rw,         32 b, Max msgs per milliseconds
-  constant c_offs_late_RW_0     : natural := 16#00030#; -- rw,         32 b, Time offset before message is late
-  constant c_offs_late_RW_1     : natural := 16#00034#; -- rw,         32 b, Time offset before message is late
-  constant c_cnt_late_GET       : natural := 16#00038#; -- ro,         32 b, Sum of all late messages
-  constant c_ts_late_GET_0      : natural := 16#0003c#; -- ro,         32 b, First late Timestamp
-  constant c_ts_late_GET_1      : natural := 16#00040#; -- ro,         32 b, First late Timestamp
-  constant c_cnt_out_all_GET_0  : natural := 16#00044#; -- ro,         32 b, Sum of all outgoing messages
-  constant c_cnt_out_all_GET_1  : natural := 16#00048#; -- ro,         32 b, Sum of all outgoing messages
+  constant c_reset_OWR          : natural := 16#00#;  -- wo,          1 b, Resets the Priority Queue
+  constant c_mode_GET           : natural := 16#04#;  -- ro,          3 b, b2: Time limit, b1: Msg limit, b0 enable
+  constant c_mode_CLR           : natural := 16#08#;  -- wo,          3 b, b2: Time limit, b1: Msg limit, b0 enable
+  constant c_mode_SET           : natural := 16#0c#;  -- wo,          3 b, b2: Time limit, b1: Msg limit, b0 enable
+  constant c_clear_OWR          : natural := 16#10#;  -- wo,          1 b, Clears counters and status
+  constant c_st_full_GET        : natural := 16#14#;  -- ro, g_channels b, Channel Full flag (n..0) 
+  constant c_st_late_GET        : natural := 16#18#;  -- ro,          1 b, Late message detected
+  constant c_ebm_adr_RW         : natural := 16#1c#;  -- rw,         32 b, Etherbone Master address
+  constant c_eca_adr_RW         : natural := 16#20#;  -- rw,         32 b, Event Condition Action Unit address
+  constant c_tx_max_msgs_RW     : natural := 16#24#;  -- rw,          8 b, Max msgs per packet
+  constant c_tx_max_wait_RW     : natural := 16#28#;  -- rw,         32 b, Max wait time for non empty packet
+  constant c_tx_rate_limit_RW   : natural := 16#2c#;  -- rw,         32 b, Max msgs per milliseconds
+  constant c_offs_late_RW_0     : natural := 16#30#;  -- rw,         32 b, Time offset before message is late
+  constant c_offs_late_RW_1     : natural := 16#34#;  -- rw,         32 b, Time offset before message is late
+  constant c_cnt_late_GET       : natural := 16#38#;  -- ro,         32 b, Sum of all late messages
+  constant c_ts_late_GET_0      : natural := 16#3c#;  -- ro,         32 b, First late Timestamp
+  constant c_ts_late_GET_1      : natural := 16#40#;  -- ro,         32 b, First late Timestamp
+  constant c_cnt_out_all_GET_0  : natural := 16#44#;  -- ro,         32 b, Sum of all outgoing messages
+  constant c_cnt_out_all_GET_1  : natural := 16#48#;  -- ro,         32 b, Sum of all outgoing messages
 
   --| Component ------------------------- prio_auto -------------------------------------------|
   component prio_auto is

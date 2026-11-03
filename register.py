@@ -371,7 +371,7 @@ class WbRegister(Register):
         s = []
         adrHi = lastAdr
         idxHi = mskWidth(adrHi) -1
-        adrx = ("%0" + str((idxHi+1+3)/4) + "x")
+        adrx = ("%0" + str((idxHi+1+3)//4) + "x")
         bitS = ("%" + str(maxWidth) + "s")
 
         lang = str(language)

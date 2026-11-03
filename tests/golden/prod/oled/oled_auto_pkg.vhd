@@ -38,11 +38,11 @@ use work.wbgenplus_pkg.all;
 use work.genram_pkg.all;
 package oled_auto_pkg is
 
-  constant c_reset_OWR    : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000000#; -- wo,  1 b, Resets the OLED display
-  constant c_col_offs_RW  : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000004#; -- rw,  8 b, first visible pixel column. 0x23 for old, 0x30 for new controllers. default is 0x30
-  constant c_uart_OWR     : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000008#; -- wo,  8 b, UART input FIFO. Ascii b7..0
-  constant c_char_OWR     : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000000c#; -- wo, 20 b, Char input FIFO. Row b14..12, Col b11..8, Ascii b7..0
-  constant c_raw_OWR      : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000010#; -- wo, 20 b, Raw  input FIFO. Disp RAM Adr b18..8, Pixel (Col) b7..0
+  constant c_reset_OWR    : natural := 16#0#;   -- wo,  1 b, Resets the OLED display
+  constant c_col_offs_RW  : natural := 16#4#;   -- rw,  8 b, first visible pixel column. 0x23 for old, 0x30 for new controllers. default is 0x30
+  constant c_uart_OWR     : natural := 16#8#;   -- wo,  8 b, UART input FIFO. Ascii b7..0
+  constant c_char_OWR     : natural := 16#c#;   -- wo, 20 b, Char input FIFO. Row b14..12, Col b11..8, Ascii b7..0
+  constant c_raw_OWR      : natural := 16#10#;  -- wo, 20 b, Raw  input FIFO. Disp RAM Adr b18..8, Pixel (Col) b7..0
 
   --| Component ------------------------- oled_auto -------------------------------------------|
   component oled_auto is

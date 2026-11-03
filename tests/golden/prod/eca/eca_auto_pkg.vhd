@@ -38,63 +38,63 @@ use work.wbgenplus_pkg.all;
 use work.genram_pkg.all;
 package eca_auto_pkg is
 
-  constant c_channels_GET               : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000000#; -- ro,  8 b, Number of channels implemented by the ECA, including the internal IO channel #0
-  constant c_search_capacity_GET        : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000004#; -- ro, 16 b, Total number of search table entries per active page
-  constant c_walker_capacity_GET        : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000008#; -- ro, 16 b, Total number of walker table entries per active page
-  constant c_latency_GET                : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000000c#; -- ro, 32 b, Delay in ticks (typically nanoseconds) between an event's arrival at the ECA and its earliest possible execution as an action
-  constant c_offset_bits_GET            : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000010#; -- ro,  8 b, Actions scheduled for execution with a delay in ticks exceeding offset_bits are executed early
-  constant c_flip_active_OWR            : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000014#; -- wo,  1 b, Flip the active search and walker tables with the inactive tables
-  constant c_time_hi_GET                : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000018#; -- ro, 32 b, Ticks (nanoseconds) since Jan 1, 1970 (high word)
-  constant c_time_lo_GET                : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000001c#; -- ro, 32 b, Ticks (nanoseconds) since Jan 1, 1970 (low word)
-  constant c_search_select_RW           : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000020#; -- rw, 16 b, Read/write this record in the inactive search table
-  constant c_search_rw_first_RW         : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000024#; -- rw, 16 b, Scratch register to be written to search_ro_first
-  constant c_search_rw_event_hi_RW      : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000028#; -- rw, 32 b, Scratch register to be written to search_ro_event_hi
-  constant c_search_rw_event_lo_RW      : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000002c#; -- rw, 32 b, Scratch register to be written to search_ro_event_lo
-  constant c_search_write_OWR           : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000030#; -- wo,  1 b, Store the scratch registers to the inactive search table record search_select
-  constant c_search_ro_first_GET        : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000034#; -- ro, 16 b, The first walker entry to execute if an event matches this record in the search table
-  constant c_search_ro_event_hi_GET     : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000038#; -- ro, 32 b, Event IDs greater than or equal to this value match this search table record (high word)
-  constant c_search_ro_event_lo_GET     : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000003c#; -- ro, 32 b, Event IDs greater than or equal to this value match this search table record (low word)
-  constant c_walker_select_RW           : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000040#; -- rw, 16 b, Read/write this record in the inactive walker table
-  constant c_walker_rw_next_RW          : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000044#; -- rw, 16 b, Scratch register to be written to walker_ro_next
-  constant c_walker_rw_offset_hi_RW     : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000048#; -- rw, 32 b, Scratch register to be written to walker_ro_offset_hi
-  constant c_walker_rw_offset_lo_RW     : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000004c#; -- rw, 32 b, Scratch register to be written to walker_ro_offset_lo
-  constant c_walker_rw_tag_RW           : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000050#; -- rw, 32 b, Scratch register to be written to walker_ro_tag
-  constant c_walker_rw_flags_RW         : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000054#; -- rw,  4 b, Scratch register to be written to walker_ro_flags
-  constant c_walker_rw_channel_RW       : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000058#; -- rw,  8 b, Scratch register to be written to walker_ro_channel
-  constant c_walker_rw_num_RW           : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000005c#; -- rw,  8 b, Scratch register to be written to walker_ro_num
-  constant c_walker_write_OWR           : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000060#; -- wo,  1 b, Store the scratch registers to the inactive walker table record walker_select
-  constant c_walker_ro_next_GET         : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000064#; -- ro, 16 b, The next walker entry to execute after this record (0xffff = end of list)
-  constant c_walker_ro_offset_hi_GET    : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000068#; -- ro, 32 b, The resulting action's deadline is the event timestamp plus this offset (high word)
-  constant c_walker_ro_offset_lo_GET    : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000006c#; -- ro, 32 b, The resulting action's deadline is the event timestamp plus this offset (low word)
-  constant c_walker_ro_tag_GET          : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000070#; -- ro, 32 b, The resulting actions's tag
-  constant c_walker_ro_flags_GET        : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000074#; -- ro,  4 b, Execute the resulting action even if it suffers from the errors set in this flag register
-  constant c_walker_ro_channel_GET      : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000078#; -- ro,  8 b, The channel to which the resulting action will be sent
-  constant c_walker_ro_num_GET          : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000007c#; -- ro,  8 b, The subchannel to which the resulting action will be sent
-  constant c_channel_select_RW          : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000080#; -- rw,  8 b, Read/clear this channel
-  constant c_channel_num_select_RW      : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000084#; -- rw,  8 b, Read/clear this subchannel
-  constant c_channel_code_select_RW     : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000088#; -- rw,  2 b, Read/clear this error condition (0=late, 1=early, 2=conflict, 3=delayed)
-  constant c_channel_type_GET           : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000090#; -- ro, 32 b, Type of the selected channel (0=io, 1=linux, 2=wbm, ...)
-  constant c_channel_max_num_GET        : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000094#; -- ro,  8 b, Total number of subchannels supported by the selected channel
-  constant c_channel_capacity_GET       : natural := 16#000000000000000000000000000000000000000000000000000000000000000000000000098#; -- ro, 16 b, Total number of actions which may be enqueued by the selected channel at a time
-  constant c_channel_msi_set_enable_OWR : natural := 16#00000000000000000000000000000000000000000000000000000000000000000000000009c#; -- wo,  1 b, Turn on/off MSI messages for the selected channel
-  constant c_channel_msi_get_enable_GET : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000a0#; -- ro,  1 b, Check if MSI messages are enabled for the selected channel
-  constant c_channel_msi_set_target_OWR : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000a4#; -- wo, 32 b, Set the destination MSI address for the selected channel (only possible while it has MSIs disabled)
-  constant c_channel_msi_get_target_GET : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000a8#; -- ro, 32 b, Get the destination MSI address for the selected channel
-  constant c_channel_mostfull_ack_GET   : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000ac#; -- ro, 32 b, Read the selected channel's fill status (used_now<<16 | used_most), MSI=(6<<16) will be sent if used_most changes
-  constant c_channel_mostfull_clear_GET : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000b0#; -- ro, 32 b, Read and clear the selected channel's fill status (used_now<<16 | used_most), MSI=(6<<16) will be sent if used_most changes
-  constant c_channel_valid_count_GET    : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000b4#; -- ro, 32 b, Read and clear the number of actions output by the selected subchannel, MSI=(4<<16|num) will be sent when the count becomes non-zero
-  constant c_channel_overflow_count_GET : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000b8#; -- ro, 32 b, Read and clear the number of actions which could not be enqueued to the selected full channel which were destined for the selected subchannel, MSI=(5<<16|num) will be sent when the count becomes non-zero
-  constant c_channel_failed_count_GET   : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000bc#; -- ro, 32 b, Read and clear the number of actions with the selected error code which were destined for the selected subchannel, MSI=(code<<16|num) will be sent when the count becomes non-zero
-  constant c_channel_event_id_hi_GET    : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000c0#; -- ro, 32 b, The event ID of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
-  constant c_channel_event_id_lo_GET    : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000c4#; -- ro, 32 b, The event ID of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
-  constant c_channel_param_hi_GET       : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000c8#; -- ro, 32 b, The parameter of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
-  constant c_channel_param_lo_GET       : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000cc#; -- ro, 32 b, The parameter of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
-  constant c_channel_tag_GET            : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000d0#; -- ro, 32 b, The tag of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read
-  constant c_channel_tef_GET            : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000d4#; -- ro, 32 b, The TEF of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read
-  constant c_channel_deadline_hi_GET    : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000d8#; -- ro, 32 b, The deadline of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
-  constant c_channel_deadline_lo_GET    : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000dc#; -- ro, 32 b, The deadline of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
-  constant c_channel_executed_hi_GET    : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000e0#; -- ro, 32 b, The actual execution time of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
-  constant c_channel_executed_lo_GET    : natural := 16#0000000000000000000000000000000000000000000000000000000000000000000000000e4#; -- ro, 32 b, The actual execution time of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
+  constant c_channels_GET               : natural := 16#00#;  -- ro,  8 b, Number of channels implemented by the ECA, including the internal IO channel #0
+  constant c_search_capacity_GET        : natural := 16#04#;  -- ro, 16 b, Total number of search table entries per active page
+  constant c_walker_capacity_GET        : natural := 16#08#;  -- ro, 16 b, Total number of walker table entries per active page
+  constant c_latency_GET                : natural := 16#0c#;  -- ro, 32 b, Delay in ticks (typically nanoseconds) between an event's arrival at the ECA and its earliest possible execution as an action
+  constant c_offset_bits_GET            : natural := 16#10#;  -- ro,  8 b, Actions scheduled for execution with a delay in ticks exceeding offset_bits are executed early
+  constant c_flip_active_OWR            : natural := 16#14#;  -- wo,  1 b, Flip the active search and walker tables with the inactive tables
+  constant c_time_hi_GET                : natural := 16#18#;  -- ro, 32 b, Ticks (nanoseconds) since Jan 1, 1970 (high word)
+  constant c_time_lo_GET                : natural := 16#1c#;  -- ro, 32 b, Ticks (nanoseconds) since Jan 1, 1970 (low word)
+  constant c_search_select_RW           : natural := 16#20#;  -- rw, 16 b, Read/write this record in the inactive search table
+  constant c_search_rw_first_RW         : natural := 16#24#;  -- rw, 16 b, Scratch register to be written to search_ro_first
+  constant c_search_rw_event_hi_RW      : natural := 16#28#;  -- rw, 32 b, Scratch register to be written to search_ro_event_hi
+  constant c_search_rw_event_lo_RW      : natural := 16#2c#;  -- rw, 32 b, Scratch register to be written to search_ro_event_lo
+  constant c_search_write_OWR           : natural := 16#30#;  -- wo,  1 b, Store the scratch registers to the inactive search table record search_select
+  constant c_search_ro_first_GET        : natural := 16#34#;  -- ro, 16 b, The first walker entry to execute if an event matches this record in the search table
+  constant c_search_ro_event_hi_GET     : natural := 16#38#;  -- ro, 32 b, Event IDs greater than or equal to this value match this search table record (high word)
+  constant c_search_ro_event_lo_GET     : natural := 16#3c#;  -- ro, 32 b, Event IDs greater than or equal to this value match this search table record (low word)
+  constant c_walker_select_RW           : natural := 16#40#;  -- rw, 16 b, Read/write this record in the inactive walker table
+  constant c_walker_rw_next_RW          : natural := 16#44#;  -- rw, 16 b, Scratch register to be written to walker_ro_next
+  constant c_walker_rw_offset_hi_RW     : natural := 16#48#;  -- rw, 32 b, Scratch register to be written to walker_ro_offset_hi
+  constant c_walker_rw_offset_lo_RW     : natural := 16#4c#;  -- rw, 32 b, Scratch register to be written to walker_ro_offset_lo
+  constant c_walker_rw_tag_RW           : natural := 16#50#;  -- rw, 32 b, Scratch register to be written to walker_ro_tag
+  constant c_walker_rw_flags_RW         : natural := 16#54#;  -- rw,  4 b, Scratch register to be written to walker_ro_flags
+  constant c_walker_rw_channel_RW       : natural := 16#58#;  -- rw,  8 b, Scratch register to be written to walker_ro_channel
+  constant c_walker_rw_num_RW           : natural := 16#5c#;  -- rw,  8 b, Scratch register to be written to walker_ro_num
+  constant c_walker_write_OWR           : natural := 16#60#;  -- wo,  1 b, Store the scratch registers to the inactive walker table record walker_select
+  constant c_walker_ro_next_GET         : natural := 16#64#;  -- ro, 16 b, The next walker entry to execute after this record (0xffff = end of list)
+  constant c_walker_ro_offset_hi_GET    : natural := 16#68#;  -- ro, 32 b, The resulting action's deadline is the event timestamp plus this offset (high word)
+  constant c_walker_ro_offset_lo_GET    : natural := 16#6c#;  -- ro, 32 b, The resulting action's deadline is the event timestamp plus this offset (low word)
+  constant c_walker_ro_tag_GET          : natural := 16#70#;  -- ro, 32 b, The resulting actions's tag
+  constant c_walker_ro_flags_GET        : natural := 16#74#;  -- ro,  4 b, Execute the resulting action even if it suffers from the errors set in this flag register
+  constant c_walker_ro_channel_GET      : natural := 16#78#;  -- ro,  8 b, The channel to which the resulting action will be sent
+  constant c_walker_ro_num_GET          : natural := 16#7c#;  -- ro,  8 b, The subchannel to which the resulting action will be sent
+  constant c_channel_select_RW          : natural := 16#80#;  -- rw,  8 b, Read/clear this channel
+  constant c_channel_num_select_RW      : natural := 16#84#;  -- rw,  8 b, Read/clear this subchannel
+  constant c_channel_code_select_RW     : natural := 16#88#;  -- rw,  2 b, Read/clear this error condition (0=late, 1=early, 2=conflict, 3=delayed)
+  constant c_channel_type_GET           : natural := 16#90#;  -- ro, 32 b, Type of the selected channel (0=io, 1=linux, 2=wbm, ...)
+  constant c_channel_max_num_GET        : natural := 16#94#;  -- ro,  8 b, Total number of subchannels supported by the selected channel
+  constant c_channel_capacity_GET       : natural := 16#98#;  -- ro, 16 b, Total number of actions which may be enqueued by the selected channel at a time
+  constant c_channel_msi_set_enable_OWR : natural := 16#9c#;  -- wo,  1 b, Turn on/off MSI messages for the selected channel
+  constant c_channel_msi_get_enable_GET : natural := 16#a0#;  -- ro,  1 b, Check if MSI messages are enabled for the selected channel
+  constant c_channel_msi_set_target_OWR : natural := 16#a4#;  -- wo, 32 b, Set the destination MSI address for the selected channel (only possible while it has MSIs disabled)
+  constant c_channel_msi_get_target_GET : natural := 16#a8#;  -- ro, 32 b, Get the destination MSI address for the selected channel
+  constant c_channel_mostfull_ack_GET   : natural := 16#ac#;  -- ro, 32 b, Read the selected channel's fill status (used_now<<16 | used_most), MSI=(6<<16) will be sent if used_most changes
+  constant c_channel_mostfull_clear_GET : natural := 16#b0#;  -- ro, 32 b, Read and clear the selected channel's fill status (used_now<<16 | used_most), MSI=(6<<16) will be sent if used_most changes
+  constant c_channel_valid_count_GET    : natural := 16#b4#;  -- ro, 32 b, Read and clear the number of actions output by the selected subchannel, MSI=(4<<16|num) will be sent when the count becomes non-zero
+  constant c_channel_overflow_count_GET : natural := 16#b8#;  -- ro, 32 b, Read and clear the number of actions which could not be enqueued to the selected full channel which were destined for the selected subchannel, MSI=(5<<16|num) will be sent when the count becomes non-zero
+  constant c_channel_failed_count_GET   : natural := 16#bc#;  -- ro, 32 b, Read and clear the number of actions with the selected error code which were destined for the selected subchannel, MSI=(code<<16|num) will be sent when the count becomes non-zero
+  constant c_channel_event_id_hi_GET    : natural := 16#c0#;  -- ro, 32 b, The event ID of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
+  constant c_channel_event_id_lo_GET    : natural := 16#c4#;  -- ro, 32 b, The event ID of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
+  constant c_channel_param_hi_GET       : natural := 16#c8#;  -- ro, 32 b, The parameter of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
+  constant c_channel_param_lo_GET       : natural := 16#cc#;  -- ro, 32 b, The parameter of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
+  constant c_channel_tag_GET            : natural := 16#d0#;  -- ro, 32 b, The tag of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read
+  constant c_channel_tef_GET            : natural := 16#d4#;  -- ro, 32 b, The TEF of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read
+  constant c_channel_deadline_hi_GET    : natural := 16#d8#;  -- ro, 32 b, The deadline of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
+  constant c_channel_deadline_lo_GET    : natural := 16#dc#;  -- ro, 32 b, The deadline of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
+  constant c_channel_executed_hi_GET    : natural := 16#e0#;  -- ro, 32 b, The actual execution time of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)
+  constant c_channel_executed_lo_GET    : natural := 16#e4#;  -- ro, 32 b, The actual execution time of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)
 
   --| Component ------------------------- eca_auto --------------------------------------------|
   component eca_auto is

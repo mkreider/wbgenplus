@@ -2,43 +2,43 @@ class ebm (object):
   ifname = 'slave'
 
   adrDict = {
-  'clear_owr'     : 0x0000000000000000000000000, # wo,             1 b, Clears EBM buffers
-  'flush_owr'     : 0x0000000000000000000000004, # wo,             1 b, Send stored data as an EB packet
-  'status_get'    : 0x0000000000000000000000008, # ro,            32 b, Status. 31..16: Packet counter. b2: Error b1: busy b0: configured
-  'src_mac_rw_0'  : 0x000000000000000000000000c, # rw,            32 b, Source MAC address
-  'src_mac_rw_1'  : 0x0000000000000000000000010, # rw,            16 b, Source MAC address
-  'src_ip_rw'     : 0x0000000000000000000000014, # rw,            32 b, Source IPV4 address
-  'src_port_rw'   : 0x0000000000000000000000018, # rw,            16 b, Source port number
-  'dst_mac_rw_0'  : 0x000000000000000000000001c, # rw,            32 b, Destination MAC address
-  'dst_mac_rw_1'  : 0x0000000000000000000000020, # rw,            16 b, Destination MAC address
-  'dst_ip_rw'     : 0x0000000000000000000000024, # rw,            32 b, Destination IPV4 address
-  'dst_port_rw'   : 0x0000000000000000000000028, # rw,            16 b, Destination port number
-  'mtu_rw'        : 0x000000000000000000000002c, # rw,            16 b, Maximum packet size
-  'adr_hi_rw'     : 0x0000000000000000000000030, # rw, g_adr_bits_hi b, High Address bits inserted into WB operations
-  'eb_opt_rw'     : 0x0000000000000000000000034, # rw,            32 b, Default Record Header Options for current transaction
-  'sema_rw'       : 0x0000000000000000000000038, # rw,            32 b, Semaphore register in case multiple users want access
-  'udp_raw_rw'    : 0x000000000000000000000003c, # rw,             1 b, If this Flag is set, you can create raw udp packets by writing to udp_data
-  'udp_data_owr'  : 0x0000000000000000000000040, # wo,            16 b, Raw udp Data input
+  'clear_owr'     : 0x00, # wo,             1 b, Clears EBM buffers
+  'flush_owr'     : 0x04, # wo,             1 b, Send stored data as an EB packet
+  'status_get'    : 0x08, # ro,            32 b, Status. 31..16: Packet counter. b2: Error b1: busy b0: configured
+  'src_mac_rw_0'  : 0x0c, # rw,            32 b, Source MAC address
+  'src_mac_rw_1'  : 0x10, # rw,            16 b, Source MAC address
+  'src_ip_rw'     : 0x14, # rw,            32 b, Source IPV4 address
+  'src_port_rw'   : 0x18, # rw,            16 b, Source port number
+  'dst_mac_rw_0'  : 0x1c, # rw,            32 b, Destination MAC address
+  'dst_mac_rw_1'  : 0x20, # rw,            16 b, Destination MAC address
+  'dst_ip_rw'     : 0x24, # rw,            32 b, Destination IPV4 address
+  'dst_port_rw'   : 0x28, # rw,            16 b, Destination port number
+  'mtu_rw'        : 0x2c, # rw,            16 b, Maximum packet size
+  'adr_hi_rw'     : 0x30, # rw, g_adr_bits_hi b, High Address bits inserted into WB operations
+  'eb_opt_rw'     : 0x34, # rw,            32 b, Default Record Header Options for current transaction
+  'sema_rw'       : 0x38, # rw,            32 b, Semaphore register in case multiple users want access
+  'udp_raw_rw'    : 0x3c, # rw,             1 b, If this Flag is set, you can create raw udp packets by writing to udp_data
+  'udp_data_owr'  : 0x40, # wo,            16 b, Raw udp Data input
   }
 
   adrDict_reverse = {
-  0x0000000000000000000000000 : 'clear_owr', # wo,             1 b, Clears EBM buffers
-  0x0000000000000000000000004 : 'flush_owr', # wo,             1 b, Send stored data as an EB packet
-  0x0000000000000000000000008 : 'status_get', # ro,            32 b, Status. 31..16: Packet counter. b2: Error b1: busy b0: configured
-  0x000000000000000000000000c : 'src_mac_rw_0', # rw,            32 b, Source MAC address
-  0x0000000000000000000000010 : 'src_mac_rw_1', # rw,            16 b, Source MAC address
-  0x0000000000000000000000014 : 'src_ip_rw', # rw,            32 b, Source IPV4 address
-  0x0000000000000000000000018 : 'src_port_rw', # rw,            16 b, Source port number
-  0x000000000000000000000001c : 'dst_mac_rw_0', # rw,            32 b, Destination MAC address
-  0x0000000000000000000000020 : 'dst_mac_rw_1', # rw,            16 b, Destination MAC address
-  0x0000000000000000000000024 : 'dst_ip_rw', # rw,            32 b, Destination IPV4 address
-  0x0000000000000000000000028 : 'dst_port_rw', # rw,            16 b, Destination port number
-  0x000000000000000000000002c : 'mtu_rw', # rw,            16 b, Maximum packet size
-  0x0000000000000000000000030 : 'adr_hi_rw', # rw, g_adr_bits_hi b, High Address bits inserted into WB operations
-  0x0000000000000000000000034 : 'eb_opt_rw', # rw,            32 b, Default Record Header Options for current transaction
-  0x0000000000000000000000038 : 'sema_rw', # rw,            32 b, Semaphore register in case multiple users want access
-  0x000000000000000000000003c : 'udp_raw_rw', # rw,             1 b, If this Flag is set, you can create raw udp packets by writing to udp_data
-  0x0000000000000000000000040 : 'udp_data_owr', # wo,            16 b, Raw udp Data input
+  0x00  : 'clear_owr', # wo,             1 b, Clears EBM buffers
+  0x04  : 'flush_owr', # wo,             1 b, Send stored data as an EB packet
+  0x08  : 'status_get', # ro,            32 b, Status. 31..16: Packet counter. b2: Error b1: busy b0: configured
+  0x0c  : 'src_mac_rw_0', # rw,            32 b, Source MAC address
+  0x10  : 'src_mac_rw_1', # rw,            16 b, Source MAC address
+  0x14  : 'src_ip_rw', # rw,            32 b, Source IPV4 address
+  0x18  : 'src_port_rw', # rw,            16 b, Source port number
+  0x1c  : 'dst_mac_rw_0', # rw,            32 b, Destination MAC address
+  0x20  : 'dst_mac_rw_1', # rw,            16 b, Destination MAC address
+  0x24  : 'dst_ip_rw', # rw,            32 b, Destination IPV4 address
+  0x28  : 'dst_port_rw', # rw,            16 b, Destination port number
+  0x2c  : 'mtu_rw', # rw,            16 b, Maximum packet size
+  0x30  : 'adr_hi_rw', # rw, g_adr_bits_hi b, High Address bits inserted into WB operations
+  0x34  : 'eb_opt_rw', # rw,            32 b, Default Record Header Options for current transaction
+  0x38  : 'sema_rw', # rw,            32 b, Semaphore register in case multiple users want access
+  0x3c  : 'udp_raw_rw', # rw,             1 b, If this Flag is set, you can create raw udp packets by writing to udp_data
+  0x40  : 'udp_data_owr', # wo,            16 b, Raw udp Data input
   }
 
   flagDict = {

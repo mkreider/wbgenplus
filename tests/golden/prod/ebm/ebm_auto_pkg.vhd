@@ -38,23 +38,23 @@ use work.wbgenplus_pkg.all;
 use work.genram_pkg.all;
 package ebm_auto_pkg is
 
-  constant c_clear_OWR    : natural := 16#0000000000000000000000000#; -- wo,             1 b, Clears EBM buffers
-  constant c_flush_OWR    : natural := 16#0000000000000000000000004#; -- wo,             1 b, Send stored data as an EB packet
-  constant c_status_GET   : natural := 16#0000000000000000000000008#; -- ro,            32 b, Status. 31..16: Packet counter. b2: Error b1: busy b0: configured
-  constant c_src_mac_RW_0 : natural := 16#000000000000000000000000c#; -- rw,            32 b, Source MAC address
-  constant c_src_mac_RW_1 : natural := 16#0000000000000000000000010#; -- rw,            16 b, Source MAC address
-  constant c_src_ip_RW    : natural := 16#0000000000000000000000014#; -- rw,            32 b, Source IPV4 address
-  constant c_src_port_RW  : natural := 16#0000000000000000000000018#; -- rw,            16 b, Source port number
-  constant c_dst_mac_RW_0 : natural := 16#000000000000000000000001c#; -- rw,            32 b, Destination MAC address
-  constant c_dst_mac_RW_1 : natural := 16#0000000000000000000000020#; -- rw,            16 b, Destination MAC address
-  constant c_dst_ip_RW    : natural := 16#0000000000000000000000024#; -- rw,            32 b, Destination IPV4 address
-  constant c_dst_port_RW  : natural := 16#0000000000000000000000028#; -- rw,            16 b, Destination port number
-  constant c_mtu_RW       : natural := 16#000000000000000000000002c#; -- rw,            16 b, Maximum packet size
-  constant c_adr_hi_RW    : natural := 16#0000000000000000000000030#; -- rw, g_adr_bits_hi b, High Address bits inserted into WB operations
-  constant c_eb_opt_RW    : natural := 16#0000000000000000000000034#; -- rw,            32 b, Default Record Header Options for current transaction
-  constant c_sema_RW      : natural := 16#0000000000000000000000038#; -- rw,            32 b, Semaphore register in case multiple users want access
-  constant c_udp_raw_RW   : natural := 16#000000000000000000000003c#; -- rw,             1 b, If this Flag is set, you can create raw udp packets by writing to udp_data
-  constant c_udp_data_OWR : natural := 16#0000000000000000000000040#; -- wo,            16 b, Raw udp Data input
+  constant c_clear_OWR    : natural := 16#00#;  -- wo,             1 b, Clears EBM buffers
+  constant c_flush_OWR    : natural := 16#04#;  -- wo,             1 b, Send stored data as an EB packet
+  constant c_status_GET   : natural := 16#08#;  -- ro,            32 b, Status. 31..16: Packet counter. b2: Error b1: busy b0: configured
+  constant c_src_mac_RW_0 : natural := 16#0c#;  -- rw,            32 b, Source MAC address
+  constant c_src_mac_RW_1 : natural := 16#10#;  -- rw,            16 b, Source MAC address
+  constant c_src_ip_RW    : natural := 16#14#;  -- rw,            32 b, Source IPV4 address
+  constant c_src_port_RW  : natural := 16#18#;  -- rw,            16 b, Source port number
+  constant c_dst_mac_RW_0 : natural := 16#1c#;  -- rw,            32 b, Destination MAC address
+  constant c_dst_mac_RW_1 : natural := 16#20#;  -- rw,            16 b, Destination MAC address
+  constant c_dst_ip_RW    : natural := 16#24#;  -- rw,            32 b, Destination IPV4 address
+  constant c_dst_port_RW  : natural := 16#28#;  -- rw,            16 b, Destination port number
+  constant c_mtu_RW       : natural := 16#2c#;  -- rw,            16 b, Maximum packet size
+  constant c_adr_hi_RW    : natural := 16#30#;  -- rw, g_adr_bits_hi b, High Address bits inserted into WB operations
+  constant c_eb_opt_RW    : natural := 16#34#;  -- rw,            32 b, Default Record Header Options for current transaction
+  constant c_sema_RW      : natural := 16#38#;  -- rw,            32 b, Semaphore register in case multiple users want access
+  constant c_udp_raw_RW   : natural := 16#3c#;  -- rw,             1 b, If this Flag is set, you can create raw udp packets by writing to udp_data
+  constant c_udp_data_OWR : natural := 16#40#;  -- wo,            16 b, Raw udp Data input
 
   --| Component ------------------------- ebm_auto --------------------------------------------|
   component ebm_auto is
