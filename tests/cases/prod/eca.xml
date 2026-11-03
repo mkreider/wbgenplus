@@ -1,0 +1,86 @@
+<wbdevice author="Wesley W. Terpstra" email="w.terpstra@gsi.de" version="2.0">
+
+  <generic name="channels"        type="natural" default="1"    comment="Number of channels implemented by the ECA, including the internal IO channel #0"/>
+  <generic name="search_capacity" type="natural" default="512"  comment="Total number of search table entries per active page"/>
+  <generic name="walker_capacity" type="natural" default="256"  comment="Total number of walker table entries per active page"/>
+  <generic name="latency"         type="natural" default="4096" comment="Delay in ticks (typically nanoseconds) between an event's arrival at the ECA and its earliest possible execution as an action"/>
+  <generic name="offset_bits"     type="natural" default="32"   comment="Actions scheduled for execution with a delay in ticks exceeding offset_bits are executed early"/>
+
+  <slaveinterface name="slave" data="32" type="pipelined">
+    <sdb vendorID="GSI" productID="0xb2afc251" version="2" date="auto" name="ECA_UNIT:CONTROL" />
+    <registers>
+      <!-- Configuration registers -->
+      <reg name="channels"               read="yes" reset="channels"        bits="8"  comment="Number of channels implemented by the ECA, including the internal IO channel #0"/>
+      <reg name="search_capacity"        read="yes" reset="search_capacity" bits="16" comment="Total number of search table entries per active page"/>
+      <reg name="walker_capacity"        read="yes" reset="walker_capacity" bits="16" comment="Total number of walker table entries per active page"/>
+      <reg name="latency"                read="yes" reset="latency"         bits="32" comment="Delay in ticks (typically nanoseconds) between an event's arrival at the ECA and its earliest possible execution as an action"/>
+      <reg name="offset_bits"            read="yes" reset="offset_bits"     bits="8"  comment="Actions scheduled for execution with a delay in ticks exceeding offset_bits are executed early"/>
+
+      <!-- Global control -->
+      <reg name="flip_active"                       write="yes" pulse="yes" bits="1"  comment="Flip the active search and walker tables with the inactive tables"/>
+      <reg name="time_hi"                read="yes" drive="yes"             bits="32" comment="Ticks (nanoseconds) since Jan 1, 1970 (high word)"/>
+      <reg name="time_lo"                read="yes" drive="yes"             bits="32" comment="Ticks (nanoseconds) since Jan 1, 1970 (low word)"/>
+      
+      <!-- Search registers -->
+      <reg name="search_select"          read="yes" write="yes" flags="yes" bits="16" comment="Read/write this record in the inactive search table"/>
+      <reg name="search_rw_first"        read="yes" write="yes"             bits="16" comment="Scratch register to be written to search_ro_first"/>
+      <reg name="search_rw_event_hi"     read="yes" write="yes"             bits="32" comment="Scratch register to be written to search_ro_event_hi"/>
+      <reg name="search_rw_event_lo"     read="yes" write="yes"             bits="32" comment="Scratch register to be written to search_ro_event_lo"/>
+      <reg name="search_write"                      write="yes" pulse="yes" bits="1"  comment="Store the scratch registers to the inactive search table record search_select"/>
+      <reg name="search_ro_first"        read="yes" drive="yes"             bits="16" comment="The first walker entry to execute if an event matches this record in the search table"/>
+      <reg name="search_ro_event_hi"     read="yes" drive="yes"             bits="32" comment="Event IDs greater than or equal to this value match this search table record (high word)"/>
+      <reg name="search_ro_event_lo"     read="yes" drive="yes"             bits="32" comment="Event IDs greater than or equal to this value match this search table record (low word)"/>
+      
+      <!-- Walker registers -->
+      <reg name="walker_select"          read="yes" write="yes" flags="yes" bits="16" comment="Read/write this record in the inactive walker table"/>
+      <reg name="walker_rw_next"         read="yes" write="yes"             bits="16" comment="Scratch register to be written to walker_ro_next"/>
+      <reg name="walker_rw_offset_hi"    read="yes" write="yes"             bits="32" comment="Scratch register to be written to walker_ro_offset_hi"/>
+      <reg name="walker_rw_offset_lo"    read="yes" write="yes"             bits="32" comment="Scratch register to be written to walker_ro_offset_lo"/>
+      <reg name="walker_rw_tag"          read="yes" write="yes"             bits="32" comment="Scratch register to be written to walker_ro_tag"/>
+      <reg name="walker_rw_flags"        read="yes" write="yes"             bits="4"  comment="Scratch register to be written to walker_ro_flags"/>
+      <reg name="walker_rw_channel"      read="yes" write="yes"             bits="8"  comment="Scratch register to be written to walker_ro_channel"/>
+      <reg name="walker_rw_num"          read="yes" write="yes"             bits="8"  comment="Scratch register to be written to walker_ro_num"/>
+      <reg name="walker_write"                      write="yes" pulse="yes" bits="1"  comment="Store the scratch registers to the inactive walker table record walker_select"/>
+      <reg name="walker_ro_next"         read="yes" drive="yes"             bits="16" comment="The next walker entry to execute after this record (0xffff = end of list)"/>
+      <reg name="walker_ro_offset_hi"    read="yes" drive="yes"             bits="32" comment="The resulting action's deadline is the event timestamp plus this offset (high word)"/>
+      <reg name="walker_ro_offset_lo"    read="yes" drive="yes"             bits="32" comment="The resulting action's deadline is the event timestamp plus this offset (low word)"/>
+      <reg name="walker_ro_tag"          read="yes" drive="yes"             bits="32" comment="The resulting actions's tag"/>
+      <reg name="walker_ro_flags"        read="yes" drive="yes"             bits="4"  comment="Execute the resulting action even if it suffers from the errors set in this flag register"/>
+      <reg name="walker_ro_channel"      read="yes" drive="yes"             bits="8"  comment="The channel to which the resulting action will be sent"/>
+      <reg name="walker_ro_num"          read="yes" drive="yes"             bits="8"  comment="The subchannel to which the resulting action will be sent"/>
+      
+      <!-- Channel registers -->
+      <reg name="channel_select"         read="yes" write="yes" flags="yes" bits="8"  comment="Read/clear this channel"/>
+      <reg name="channel_num_select"     read="yes" write="yes"             bits="8"  comment="Read/clear this subchannel"/>
+      <reg name="channel_code_select"    read="yes" write="yes"             bits="2"  comment="Read/clear this error condition (0=late, 1=early, 2=conflict, 3=delayed)"/>
+      <reg name="reserved"                                                  bits="1"  comment="reserved"/>
+      
+      <!-- Top-level channel status, indexed by channel_select -->
+      <reg name="channel_type"           read="yes" drive="yes"             bits="32" comment="Type of the selected channel (0=io, 1=linux, 2=wbm, ...)"/>
+      <reg name="channel_max_num"        read="yes" drive="yes"             bits="8"  comment="Total number of subchannels supported by the selected channel"/>
+      <reg name="channel_capacity"       read="yes" drive="yes"             bits="16" comment="Total number of actions which may be enqueued by the selected channel at a time"/>
+      <reg name="channel_msi_set_enable"            write="yes" flags="yes" bits="1"  comment="Turn on/off MSI messages for the selected channel"/>
+      <reg name="channel_msi_get_enable" read="yes" drive="yes"             bits="1"  comment="Check if MSI messages are enabled for the selected channel"/>
+      <reg name="channel_msi_set_target"            write="yes" flags="yes" bits="32" comment="Set the destination MSI address for the selected channel (only possible while it has MSIs disabled)"/>
+      <reg name="channel_msi_get_target" read="yes" drive="yes"             bits="32" comment="Get the destination MSI address for the selected channel"/>
+      <reg name="channel_mostfull_ack"   read="yes" drive="yes" flags="yes" bits="32" comment="Read the selected channel's fill status (used_now&lt;&lt;16 | used_most), MSI=(6&lt;&lt;16) will be sent if used_most changes"/>
+      <reg name="channel_mostfull_clear" read="yes" drive="yes" flags="yes" bits="32" comment="Read and clear the selected channel's fill status (used_now&lt;&lt;16 | used_most), MSI=(6&lt;&lt;16) will be sent if used_most changes"/>
+      <!-- Subchannel registers, indexed by channel{,_num}_select -->
+      <reg name="channel_valid_count"    read="yes" drive="yes" flags="yes" bits="32" comment="Read and clear the number of actions output by the selected subchannel, MSI=(4&lt;&lt;16|num) will be sent when the count becomes non-zero"/>
+      <reg name="channel_overflow_count" read="yes" drive="yes" flags="yes" bits="32" comment="Read and clear the number of actions which could not be enqueued to the selected full channel which were destined for the selected subchannel, MSI=(5&lt;&lt;16|num) will be sent when the count becomes non-zero"/>
+      <!-- Subchannel error registers, indexed by channel{,_num,_code}_select -->
+      <reg name="channel_failed_count"   read="yes" drive="yes" flags="yes" bits="32" comment="Read and clear the number of actions with the selected error code which were destined for the selected subchannel, MSI=(code&lt;&lt;16|num) will be sent when the count becomes non-zero"/>
+      <reg name="channel_event_id_hi"    read="yes" drive="yes" flags="yes" bits="32" comment="The event ID of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)"/>
+      <reg name="channel_event_id_lo"    read="yes" drive="yes" flags="yes" bits="32" comment="The event ID of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)"/>
+      <reg name="channel_param_hi"       read="yes" drive="yes" flags="yes" bits="32" comment="The parameter of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)"/>
+      <reg name="channel_param_lo"       read="yes" drive="yes" flags="yes" bits="32" comment="The parameter of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)"/>
+      <reg name="channel_tag"            read="yes" drive="yes" flags="yes" bits="32" comment="The tag of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read"/>
+      <reg name="channel_tef"            read="yes" drive="yes" flags="yes" bits="32" comment="The TEF of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read"/>
+      <reg name="channel_deadline_hi"    read="yes" drive="yes" flags="yes" bits="32" comment="The deadline of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)"/>
+      <reg name="channel_deadline_lo"    read="yes" drive="yes" flags="yes" bits="32" comment="The deadline of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)"/>
+      <reg name="channel_executed_hi"    read="yes" drive="yes" flags="yes" bits="32" comment="The actual execution time of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (high word)"/>
+      <reg name="channel_executed_lo"    read="yes" drive="yes" flags="yes" bits="32" comment="The actual execution time of the first action with the selected error code on the selected subchannel, cleared when channel_failed_count is read (low word)"/>
+    </registers>
+  </slaveinterface>
+
+</wbdevice>

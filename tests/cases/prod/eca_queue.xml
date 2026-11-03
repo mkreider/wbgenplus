@@ -1,0 +1,25 @@
+<wbdevice author="Wesley W. Terpstra" email="w.terpstra@gsi.de" version="2.0">
+
+  <generic name="queue_id" type="natural" default="0" comment="The index of a_channel_o from the ECA to which this queue is connected (set channel_select=queue_id+1)"/>
+  
+  <slaveinterface name="slave" data="32" type="pipelined">
+    <sdb vendorID="GSI" productID="0xd5a3faea" version="2" date="auto" name="ECA_UNIT:QUEUE" />
+    <registers>
+      <reg name="queue_id"       read="yes" reset="queue_id" bits="8" comment="The index of a_channel_o from the ECA to which this queue is connected (set channel_select=queue_id+1)"/>
+      <reg name="pop"           write="yes" pulse="yes" bits="1"  comment="Pop action from the channel's queue"/>
+      <reg name="flags"          read="yes" drive="yes" bits="5"  comment="Error flags for this action(0=late, 1=early, 2=conflict, 3=delayed, 4=valid)"/>
+      <reg name="num"            read="yes" drive="yes" bits="8"  comment="Subchannel target"/>
+      <reg name="event_id_hi"    read="yes" drive="yes" bits="32" comment="Event ID (high word)"/>
+      <reg name="event_id_lo"    read="yes" drive="yes" bits="32" comment="Event ID (low word)"/>
+      <reg name="param_hi"       read="yes" drive="yes" bits="32" comment="Parameter (high word)"/>
+      <reg name="param_lo"       read="yes" drive="yes" bits="32" comment="Parameter (low word)"/>
+      <reg name="tag"            read="yes" drive="yes" bits="32" comment="Tag from the condition"/>
+      <reg name="tef"            read="yes" drive="yes" bits="32" comment="Timing extension field"/>
+      <reg name="deadline_hi"    read="yes" drive="yes" bits="32" comment="Deadline (high word)"/>
+      <reg name="deadline_lo"    read="yes" drive="yes" bits="32" comment="Deadline (low word)"/>
+      <reg name="executed_hi"    read="yes" drive="yes" bits="32" comment="Actual execution time (high word)"/>
+      <reg name="executed_lo"    read="yes" drive="yes" bits="32" comment="Actual execution time (low word)"/>
+    </registers>
+  </slaveinterface>
+
+</wbdevice>

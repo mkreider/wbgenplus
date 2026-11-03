@@ -1,0 +1,28 @@
+<wbdevice author="M. Kreider" version="0.2.0">
+   
+  <clockdomain name="sys"></clockdomain>
+
+  <generic name="adr_bits_hi" type="natural" default="10" comment="Number of high address bits"></generic>
+ 
+   <slaveinterface name="slave" data="32" type="pipelined">          
+      <registers>
+           <reg   name="clear"                 write="yes" bits="1"  pulse="yes"            comment="Clears EBM buffers"></reg>
+           <reg   name="flush"                 write="yes" bits="1"  pulse="yes"            comment="Send stored data as an EB packet"></reg>
+           <reg   name="status"     read="yes" drive="yes" bits="32"                        comment="Status. 31..16: Packet counter. b2: Error b1: busy b0: configured"></reg>
+           <reg   name="src_mac"    read="yes" write="yes" bits="48" reset="0xD15EA5EDBABE" comment="Source MAC address"></reg>
+           <reg   name="src_ip"     read="yes" write="yes" bits="32" reset="0xdeadbeef"     comment="Source IPV4 address"></reg>
+           <reg   name="src_port"   read="yes" write="yes" bits="16" reset="0xebd0"         comment="Source port number"></reg>
+           <reg   name="dst_mac"    read="yes" write="yes" bits="48" reset="0xffffffffffff" comment="Destination MAC address"></reg>
+           <reg   name="dst_ip"     read="yes" write="yes" bits="32" reset="0xffffffff"     comment="Destination IPV4 address"></reg>
+           <reg   name="dst_port"   read="yes" write="yes" bits="16" reset="0xebd0"         comment="Destination port number"></reg>
+           <reg   name="mtu"        read="yes" write="yes" bits="16" reset="1500"           comment="Maximum packet size"></reg>
+           <reg   name="adr_hi"     read="yes" write="yes" bits="adr_bits_hi"               comment="High Address bits inserted into WB operations"></reg>
+           <reg   name="eb_opt"     read="yes" write="yes" bits="32"                        comment="Default Record Header Options for current transaction"></reg>
+           <reg   name="sema"       read="yes" write="yes" bits="32"                        comment="Semaphore register in case multiple users want access"></reg> 
+           <reg   name="udp_raw"    read="yes" write="yes" bits="1"                         comment="If this Flag is set, you can create raw udp packets by writing to udp_data"></reg>
+           <reg   name="udp_data"              write="yes" bits="16" flags="yes"            comment="Raw udp Data input"></reg>
+      </registers>
+   </slaveinterface>
+
+</wbdevice>
+

@@ -1,0 +1,18 @@
+<wbdevice author="Wesley W. Terpstra" email="w.terpstra@gsi.de" version="2.0">
+
+  <generic name="num_inputs" type="natural" default="0" comment="Total number of inputs attached to the TLU"/>
+  
+  <slaveinterface name="slave" data="32" type="pipelined">
+    <sdb vendorID="GSI" productID="0x7c82afbc" version="2" date="auto" name="ECA_UNIT:TLU" />
+    <registers>
+      <reg name="num_inputs"   read="yes" reset="num_inputs" bits="8" comment="Total number of inputs attached to the TLU"/>
+      <reg name="input_select" read="yes" write="yes" bits="8"  comment="Write the configuration of this input"/>
+      <reg name="enable"   read="yes" write="yes" bits="1"  comment="Will this input generate timing events on an edge"/>
+      <reg name="stable"   read="yes" write="yes" bits="32" comment="Signal must be high/low for stable cycles to be counted as a valid transition"/>
+      <reg name="event_hi" read="yes" write="yes" bits="32" comment="Timing Event to generate (high word)"/>
+      <reg name="event_lo" read="yes" write="yes" bits="32" comment="Timing Event to generate (low word), lowest bit is replaced with the edge of the transition"/>
+      <reg name="write"   pulse="yes" write="yes" bits="1"  comment="Write register contents to TLU configuration"/>
+    </registers>
+  </slaveinterface>
+
+</wbdevice>
