@@ -353,7 +353,12 @@ def main():
             if not mypath:
                 mypath += './'
                 
-            now = datetime.datetime.now()
+            # Reproducible builds: honour SOURCE_DATE_EPOCH (https://reproducible-builds.org/specs/source-date-epoch/)
+            sde = os.environ.get('SOURCE_DATE_EPOCH')
+            if sde:
+                now = datetime.datetime.fromtimestamp(int(sde), datetime.timezone.utc)
+            else:
+                now = datetime.datetime.now()
             print("f: %s p: %s" % (myfile, mypath))
             
             unitname = os.path.splitext(myfile)[0]        
