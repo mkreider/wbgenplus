@@ -34,10 +34,13 @@ class writeout(object):
         
         
 
+    def _path(self, filename):
+        return os.path.join(self.mypath, filename)
+
     def writeStubVhd(self, slave, force=False):
         filename        = self.unitname                  + ".vhd"       
         
-        if os.path.isfile(self.mypath + filename):
+        if os.path.isfile(self._path(filename)):
             print("!!! Outer entity %s already exists !!!\n" % filename)
             if not force:
                 print("I don't want to accidentally trash your work. To force overwrite, use '-f' or '--force' option")
@@ -46,7 +49,7 @@ class writeout(object):
                 print("Overwrite forced")
                 
         print("Generating stub entity           %s" % filename)        
-        fo = open(self.mypath + filename, "w")
+        fo = open(self._path(filename), "w")
         v = gVhdlStr(self.unitname, self.filename, self.author, self.email, self.version, self.date)
     
         header = adj(v.header + ['\n'], [':'], 0)
@@ -101,7 +104,7 @@ class writeout(object):
             
         fo.write(v.archEnd)
         
-        fo.close
+        fo.close()
 
     def writeMainVhd(self, slave):
     
@@ -110,7 +113,7 @@ class writeout(object):
     
         print("Generating WishBone core entity  %s" % filename) 
         
-        fo = open(self.mypath + filename, "w")
+        fo = open(self._path(filename), "w")
         v = gVhdlStr(self.autoUnitName, filename, self.author, self.email, self.version, self.date)
     
         header = adj(v.header + ['\n'], [':'], 0)
@@ -174,7 +177,7 @@ class writeout(object):
         
         fo.write(v.archEnd)
         
-        fo.close
+        fo.close()
         
     def writePythonDict(self, slave):
     
@@ -183,7 +186,7 @@ class writeout(object):
     
         print("Generating Pyhton WB address dictionary for use in testbenches  %s" % filename) 
         
-        fo = open(self.mypath + filename, "w")
+        fo = open(self._path(filename), "w")
         
         s = []
         tmp = []        
@@ -210,7 +213,7 @@ class writeout(object):
         for line in s:
             fo.write(line)
         
-        fo.close        
+        fo.close()        
 
     def writePkgVhd(self, slave):
     
@@ -219,7 +222,7 @@ class writeout(object):
 
         print("Generating WishBone inner core package %s" % filename)    
         
-        fo = open(self.mypath + '/' + filename, "w")
+        fo = open(self._path(filename), "w")
         
         v = gVhdlStr(self.autoUnitName, filename, self.author, self.email, self.version, self.date)
     
@@ -276,7 +279,7 @@ class writeout(object):
         fo.write(v.packageBodyStart)
         fo.write(v.packageEnd)
         
-        fo.close
+        fo.close()
 
     
 
@@ -288,7 +291,7 @@ class writeout(object):
     
         print("Generating C Header file         %s\n" % filename)    
         
-        fo = open(self.mypath + filename, "w")
+        fo = open(self._path(filename), "w")
         
         gc     = gCStr(filename, self.unitname, self.author, self.email, self.version, self.date, slave.sdbVendorID, slave.sdbDeviceID)
         for line in gc.header:
@@ -310,7 +313,7 @@ class writeout(object):
             fo.write(line % self.unitname.upper())    
         fo.write(gc.hdrfileEnd)
         
-        fo.close
+        fo.close()
     
     
        
