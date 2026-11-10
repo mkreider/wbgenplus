@@ -1,0 +1,95 @@
+From 50feaa537b2f313713db8600228f7d6705c303c8 Mon Sep 17 00:00:00 2001
+From: Mathias Kreider <m.kreider@gsi.de>
+Date: Wed, 4 Nov 2026 11:45:22 +0100
+Subject: [PATCH 1/2] wbgenplus: state word order of multi-word registers
+ explicitly
+
+wbgenplus now requires wordorder="high|low" on <slaveinterface> when a
+slave has registers wider than its data bus. The values reproduce the
+committed *_auto*.vhd and *_regs.h unchanged:
+
+- dm_diag, eca_tap: high (generated 2018-2019 with high word first)
+- prio: low (generated 2016 with low word first)
+
+Register maps and generated files do not change.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ modules/dm_diag/dm_diag.xml | 2 +-
+ modules/eca_tap/eca_tap.xml | 2 +-
+ modules/prioq2/prio.xml     | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/modules/dm_diag/dm_diag.xml b/modules/dm_diag/dm_diag.xml
+index f2bf175eb..f5f3aeb10 100644
+--- a/modules/dm_diag/dm_diag.xml
++++ b/modules/dm_diag/dm_diag.xml
+@@ -4,7 +4,7 @@
+    
+    <generic name="cores" type="natural" default="16" comment="CPU cores"></generic>
+ 
+-   <slaveinterface name="ctrl" data="32" type="pipelined" pages="channels">          
++   <slaveinterface name="ctrl" wordorder="high" data="32" type="pipelined" pages="channels">          
+       <sdb vendorID="GSI" productID="0x18060200" version="1" date="auto" name="DM-Diagnostics"></sdb>
+       <registers>
+           <reg  name="reset"                                   write="yes"  bits="1"  pulse="yes"      comment="Resets/clears the diagnostic"></reg>
+diff --git a/modules/eca_tap/eca_tap.xml b/modules/eca_tap/eca_tap.xml
+index 607934324..2fc11ec22 100644
+--- a/modules/eca_tap/eca_tap.xml
++++ b/modules/eca_tap/eca_tap.xml
+@@ -2,7 +2,7 @@
+    
+    <clockdomain name="sys"></clockdomain>
+    
+-   <slaveinterface name="ctrl" data="32" type="pipelined">          
++   <slaveinterface name="ctrl" wordorder="high" data="32" type="pipelined">          
+       <sdb vendorID="GSI" productID="0x0eca07a2" version="1" date="auto" name="ECA-Tap"></sdb>
+       <registers>
+           
+diff --git a/modules/prioq2/prio.xml b/modules/prioq2/prio.xml
+index c6ded33bc..0db947e40 100644
+--- a/modules/prioq2/prio.xml
++++ b/modules/prioq2/prio.xml
+@@ -4,7 +4,7 @@
+    
+    <generic name="channels" type="natural" default="16" comment="Input channels"></generic>
+ 
+-   <slaveinterface name="ctrl" data="32" type="pipelined">          
++   <slaveinterface name="ctrl" wordorder="low" data="32" type="pipelined">          
+       <sdb vendorID="GSI" productID="0x10040200" version="2" date="auto" name="DM-PriorityQ-Ctrl"></sdb>
+       <registers>
+           <reg  name="reset"          write="yes"             bits="1"  pulse="yes"   comment="Resets the Priority Queue"></reg>
+-- 
+2.56.0
+
+
+From f1a109f6fbdb2154ba04a3908b99681043828a7b Mon Sep 17 00:00:00 2001
+From: Mathias Kreider <m.kreider@gsi.de>
+Date: Tue, 10 Nov 2026 17:20:46 +0100
+Subject: [PATCH 2/2] dm_diag: drop pages="channels", an undeclared generic
+
+"channels" is not declared as a generic in dm_diag.xml. wbgenplus used to
+fall back to 0 pages silently; it now reports an error. Removing the
+attribute keeps the old behaviour: the generated files do not change.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ modules/dm_diag/dm_diag.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/modules/dm_diag/dm_diag.xml b/modules/dm_diag/dm_diag.xml
+index f5f3aeb10..52313fabe 100644
+--- a/modules/dm_diag/dm_diag.xml
++++ b/modules/dm_diag/dm_diag.xml
+@@ -4,7 +4,7 @@
+    
+    <generic name="cores" type="natural" default="16" comment="CPU cores"></generic>
+ 
+-   <slaveinterface name="ctrl" wordorder="high" data="32" type="pipelined" pages="channels">          
++   <slaveinterface name="ctrl" wordorder="high" data="32" type="pipelined">          
+       <sdb vendorID="GSI" productID="0x18060200" version="1" date="auto" name="DM-Diagnostics"></sdb>
+       <registers>
+           <reg  name="reset"                                   write="yes"  bits="1"  pulse="yes"      comment="Resets/clears the diagnostic"></reg>
+-- 
+2.56.0
+

@@ -1,0 +1,30 @@
+From ec17aa7905eeda85b77abea955b56d5b4136d9e9 Mon Sep 17 00:00:00 2001
+From: Mathias Kreider <m.kreider@gsi.de>
+Date: Wed, 4 Nov 2026 11:45:22 +0100
+Subject: [PATCH] ebm: state word order of multi-word registers for wbgenplus
+
+wbgenplus now requires wordorder="high|low" on <slaveinterface> when a
+slave has registers wider than its data bus. ebm_auto*.vhd was generated
+in 2015 with low word first; wordorder="low" reproduces it unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ hdl/eb_master_core/ebm.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hdl/eb_master_core/ebm.xml b/hdl/eb_master_core/ebm.xml
+index c2a9a9a..9c560a7 100644
+--- a/hdl/eb_master_core/ebm.xml
++++ b/hdl/eb_master_core/ebm.xml
+@@ -4,7 +4,7 @@
+ 
+   <generic name="adr_bits_hi" type="natural" default="10" comment="Number of high address bits"></generic>
+  
+-   <slaveinterface name="slave" data="32" type="pipelined">          
++   <slaveinterface name="slave" wordorder="low" data="32" type="pipelined">          
+       <registers>
+            <reg   name="clear"                 write="yes" bits="1"  pulse="yes"            comment="Clears EBM buffers"></reg>
+            <reg   name="flush"                 write="yes" bits="1"  pulse="yes"            comment="Send stored data as an EB packet"></reg>
+-- 
+2.56.0
+
