@@ -594,12 +594,6 @@ class gVhdlStr(object):
 class sysIfStr(object):                   
     def __init__(self, program, creator, version="0.0", start="", update=""):               
                    
-        self.helpText = ["\nUsage: python %s <path-to-wishbone-descriptor.xml>\n" % program, 
-                        "-h    --help       Show detailed help. Lots of text, best redirect output to txt file",
-                        "-q    --quiet      No console output",
-                        "      --version    Shows version information",
-                        "-l    --log        Log build output\n"
-                        ]
     
              
         self.detailedHelpText = ['%s' % ("*" * 80),

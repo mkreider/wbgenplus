@@ -12,7 +12,9 @@ from textformatting import parseNumeral as str2int
 from textformatting import mskWidth as mskWidth 
 import os.path
 import sys
-import getopt
+import argparse
+import contextlib
+import io
 from stringtemplates import sysIfStr as sysStr
 from stringtemplates import wbsVhdlStrGeneral
 from writeout import writeout
@@ -305,120 +307,80 @@ def parseXMLNew(xmlIn, now, unitname):
     
 
         
-def main():
+def main(argv=None):
 
-    s = sysStr(sys.argv[0], myCreator, myVersion, myStart, myUpdate)             
-             
-    def usage():
-        for line in s.helpText:        
-            print(line)
-    
-    def manual():
-        for line in s.detailedHelpText:        
-            print(line)            
-    
-    def version():
-        for line in s.versionText:        
-            print(line) 
-                    
-    xmlIn = ""  
-    log = False
-    quiet = False
-    
-    if(len(sys.argv) > 1):
-        xmlIn = sys.argv[1]
-    else:
-        usage()
-        sys.exit(2)     
-    
-    if(len(sys.argv) == 2):
-        sIdx=1
-    else:
-        sIdx=2
-        
+    s = sysStr("wbgenplus.py", myCreator, myVersion, myStart, myUpdate)
+
+    class ManualAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            print("\n".join(s.detailedHelpText))
+            parser.exit(0)
+
+    class VersionAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            print("\n".join(s.versionText))
+            parser.exit(0)
+
+    parser = argparse.ArgumentParser(
+        prog="wbgenplus.py", add_help=False, allow_abbrev=False,
+        description="Generate a Wishbone slave (VHDL core, package, stub, C header, Python dict) from an XML description.")
+    parser.add_argument("xml", help="path to the XML descriptor; output files are written next to it")
+    parser.add_argument("-h", "-?", "--help", nargs=0, action=ManualAction,
+                        help="show the detailed manual, including the XML reference, and exit")
+    parser.add_argument("--version", nargs=0, action=VersionAction, help="show version information and exit")
+    parser.add_argument("-f", "--force", action="store_true", help="overwrite an existing stub entity <unit>.vhd")
+    parser.add_argument("-q", "--quiet", action="store_true", help="no progress output; errors are still shown")
+    args = parser.parse_args(argv)
+
+    xmlIn = args.xml
+    if not os.path.isfile(xmlIn):
+        print("ERROR: file not found: %s" % xmlIn, file=sys.stderr)
+        sys.exit(2)
+
+    out = io.StringIO() if args.quiet else sys.stdout
     try:
-        opts, args = getopt.getopt(sys.argv[sIdx:], "hlqf", ["help", "log", "quiet", "force", "version"])
-    except getopt.GetoptError as err:
-        # print help information and exit:
-        print(str(err)) # will print something like "option -a not recognized"
-        sys.exit(2)    
-    
-    needFile = True
-    force    = False
-    optFound = False
-    for option, argument in opts:
-        if option in ("-h", "-?", "--help"):
-            optFound = True        
-            needFile = False
-            manual()
-        elif option in ("--version"):
-            optFound = True        
-            needFile = False        
-            version()
-        elif option in ("-f", "--force"):
-            optFound = True            
-            force = True    
-        elif option in ("-q", "--quiet"):
-            optFound = True            
-            quiet = True
-        elif option in ("-l", "--log"):
-            optFound = True        
-            log = True
-        else:
-            print("unhandled option %s" % option)
-            sys.exit(2) 
-    
-    
-    if(needFile):
-        if(optFound and len(sys.argv) == 2):
-            usage()
-            sys.exit(0)
-            
-        if os.path.isfile(xmlIn):
-            mypath, myfile = os.path.split(xmlIn)        
-            if not mypath:
-                mypath += './'
-                
-            # Reproducible builds: honour SOURCE_DATE_EPOCH (https://reproducible-builds.org/specs/source-date-epoch/)
-            sde = os.environ.get('SOURCE_DATE_EPOCH')
-            if sde:
-                now = datetime.datetime.fromtimestamp(int(sde), datetime.timezone.utc)
-            else:
-                now = datetime.datetime.now()
-            print("f: %s p: %s" % (myfile, mypath))
-            
-            unitname = os.path.splitext(myfile)[0]        
-            #path    = os.path.dirname(os.path.abspath(xmlIn)) + "/"
-            
-            print("input/output dir: %s" % mypath)
-            print("Trying to parse:  %s" % myfile)
-            print("Unit:             %s" % unitname)
-            print("\n%s" % ('*' * 80))
-                        
-            try:
-                [author, version, email, slaves] = parseXMLNew(xmlIn, now, unitname)
-                wo = writeout(unitname, myfile, mypath, author, email, version, now)
+        with contextlib.redirect_stdout(out):
+            generate(xmlIn, args.force)
+    except WbgenError as e:
+        print("ERROR: %s" % e, file=sys.stderr)
+        sys.exit(2)
+    except ExpatError as e:
+        print("ERROR: %s is not well-formed XML: %s" % (xmlIn, e), file=sys.stderr)
+        sys.exit(2)
 
-                for slave in slaves:
-                    wo.writeMainVhd(slave)
-                    wo.writePkgVhd(slave)
-                    wo.writeStubVhd(slave, force)
-                    wo.writePythonDict(slave)
-                    wo.writeHdrC(slave)
-            except WbgenError as e:
-                print("ERROR: %s" % e, file=sys.stderr)
-                sys.exit(2)
-            except ExpatError as e:
-                print("ERROR: %s is not well-formed XML: %s" % (xmlIn, e), file=sys.stderr)
-                sys.exit(2)
-            
-            #writeTbVhd(fileTbVhd)
-            print("\n%s" % ('*' * 80)) 
-            print("\nDone!")
-        else:
-            print("\nFile not found: %s" % xmlIn)
-    
-    
+
+def generate(xmlIn, force=False):
+    mypath, myfile = os.path.split(xmlIn)
+    if not mypath:
+        mypath += './'
+
+    # Reproducible builds: honour SOURCE_DATE_EPOCH (https://reproducible-builds.org/specs/source-date-epoch/)
+    sde = os.environ.get('SOURCE_DATE_EPOCH')
+    if sde:
+        now = datetime.datetime.fromtimestamp(int(sde), datetime.timezone.utc)
+    else:
+        now = datetime.datetime.now()
+    print("f: %s p: %s" % (myfile, mypath))
+
+    unitname = os.path.splitext(myfile)[0]
+
+    print("input/output dir: %s" % mypath)
+    print("Trying to parse:  %s" % myfile)
+    print("Unit:             %s" % unitname)
+    print("\n%s" % ('*' * 80))
+
+    [author, version, email, slaves] = parseXMLNew(xmlIn, now, unitname)
+    wo = writeout(unitname, myfile, mypath, author, email, version, now)
+
+    for slave in slaves:
+        wo.writeMainVhd(slave)
+        wo.writePkgVhd(slave)
+        wo.writeStubVhd(slave, force)
+        wo.writePythonDict(slave)
+        wo.writeHdrC(slave)
+
+    print("\n%s" % ('*' * 80))
+    print("\nDone!")
 
 
 if __name__ == "__main__":
