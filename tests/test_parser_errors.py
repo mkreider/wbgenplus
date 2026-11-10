@@ -67,6 +67,19 @@ def test_invalid_input_is_reported(kwargs, message, tmp_path):
     assert not out, f"nothing may be written on error, got {list(out)}"
 
 
+@pytest.mark.parametrize("count", [0, 2])
+def test_exactly_one_slave_interface(count, tmp_path):
+    """Finding 1.8: several slaves would all write the same file names."""
+    p = _xml(tmp_path)
+    text = p.read_text()
+    start, end = text.index("   <slaveinterface"), text.index("</slaveinterface>") + len("</slaveinterface>\n")
+    p.write_text(text[:start] + text[start:end] * count + text[end:])
+    proc, out = run_wbgenplus(p, tmp_path / "run")
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert f"Exactly one <slaveinterface> is supported, found {count}" in proc.stderr
+    assert not out
+
+
 def test_malformed_xml_is_reported(tmp_path):
     p = _xml(tmp_path)
     p.write_text(p.read_text().replace("</wbdevice>", ""))

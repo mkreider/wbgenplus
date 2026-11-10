@@ -89,6 +89,10 @@ def parseXMLNew(xmlIn, now, unitname):
         
     slaveIfList = xmldoc.getElementsByTagName('slaveinterface')
     print("Found %u slave interfaces\n" % len(slaveIfList))    
+    # All output file names derive from the XML name, so a second slave would
+    # overwrite the first one's files (finding 1.8). No known XML has more than one.
+    if len(slaveIfList) != 1:
+        fail("Exactly one <slaveinterface> is supported, found %u" % len(slaveIfList))
     for slaveIf in slaveIfList:
         
         name    = slaveIf.getAttribute('name')
