@@ -5,6 +5,7 @@ Created on Mon Oct 19 16:58:20 2015
 @author: mkreider
 """
 import datetime
+from errors import fail
 import math
 from textformatting import setColIndent as i1
 
@@ -183,6 +184,8 @@ class registerVhdlStr(object):
         self.bin2slv    = '"%s'
         if reset is None:
             self.resetvector = registerVhdlStr.others % 0
+        elif reset == 'ones':
+            self.resetvector = registerVhdlStr.others % 1
         else: 
            self.resetvector = self.int2slv % (str(genResetPrefix) + str(reset)) 
            if(str(reset).find('0x') > -1):
@@ -191,8 +194,7 @@ class registerVhdlStr(object):
                    self.resetvector = self.hex2slv % tmpRst                    
                else:
                    if len(tmpRst)*4 > 32:
-                       print("Register <%s>'s Resetvector <%s> length <%s> is not a multiple of four AND is longer than 32 bit. Sorry, can't convert that" % (name, reset, width))
-                       exit(2)
+                       fail("Register <%s>'s reset <%s> is longer than 32 bit but does not match its width <%s> in hex digits" % (name, reset, width))
                    else:    
                        print("Register <%s>'s Resetvector <%s> has the wrong bitlength (is %s, should be %s). Converting" % (name, reset, len(tmpRst)*4, width))                    
                        self.resetvector = self.ghex2slv % tmpRst 
@@ -241,11 +243,14 @@ class registerVhdlStr(object):
         self.portsignameout = 's_' + name + "_i"
         self.portsigvalidin = 's_' + name + "_V_i"
         self.portnameout    = name + clkdomainSuffix + "_o"
-        self.declaration    = "signal %%s : %s := %s; -- %s\n" % (self.dtype, self.resetvector, description)
-        self.port           = "%%s : %%s %s; -- %s\n" % (self.dtype, description)
+        # The comment goes into templates that are %-formatted again later; escape it there.
+        # Single-stage templates (stub declarations) use the raw description.
+        descEsc             = description.replace('%', '%%')
+        self.declaration    = "signal %%s : %s := %s; -- %s\n" % (self.dtype, self.resetvector, descEsc)
+        self.port           = "%%s : %%s %s; -- %s\n" % (self.dtype, descEsc)
         
         
-        self.sl           = "signal %%s : std_logic; -- %s\n" % (description)        
+        self.sl           = "signal %%s : std_logic; -- %s\n" % (descEsc)        
         # Create all Register Declarations, the reset command, FSM read & write command and pulse generation command  
         self.declarationReg         = self.declaration % (self.regname)
         self.declarationPortSigIn   = self.declaration % (self.portsignamein)
@@ -258,12 +263,13 @@ class registerVhdlStr(object):
         
 
         #address constant
-        self.vhdlConstRegAdr    = wbsStr.vhdlConstRegAdr % (self.name, description) #address, operation, address, mask
-        self.cConstRegAdr       = "#define %%s_" + self.name.upper() + "%s 0x%s //%s, %s b, " + description + "\n" 
-        self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s, %%s b, %s\n" % (self.name.lower(), description) #name, adrVal, adrVal, rw, msk, desc
-        self.pythonConstAdrReg  = "0x%%s : '%s%%s', # %%s, %%s b, %s\n" % (self.name.lower(), description) #name, adrVal, adrVal, rw, msk, desc              
-        self.pythonVal          = "'%s' : %%s, # %s\n" % (self.name.lower(), description)             
-        self.pythonFlag         = "'%s' : '%%s', # %s\n" % (self.name.lower(), description) 
+        self.vhdlConstRegAdr    = wbsStr.vhdlConstRegAdr % (self.name, descEsc) #address, operation, address, mask
+        # C lines are formatted twice more (getStrAddress, then writeHdrC with the unit name)
+        self.cConstRegAdr       = "#define %%s_" + self.name.upper() + "%s 0x%s //%s, %s b, " + description.replace('%', '%%%%') + "\n" 
+        self.pythonConstRegAdr  = "'%s%%s' : 0x%%s, # %%s, %%s b, %s\n" % (self.name.lower(), descEsc) #name, adrVal, adrVal, rw, msk, desc
+        self.pythonConstAdrReg  = "0x%%s : '%s%%s', # %%s, %%s b, %s\n" % (self.name.lower(), descEsc) #name, adrVal, adrVal, rw, msk, desc              
+        self.pythonVal          = "'%s' : %%s, # %s\n" % (self.name.lower(), descEsc)             
+        self.pythonFlag         = "'%s' : '%%s', # %s\n" % (self.name.lower(), descEsc) 
         
         #Flow control
         self.wbStall            = wbsStr.wbStall

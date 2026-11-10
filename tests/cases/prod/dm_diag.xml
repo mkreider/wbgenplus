@@ -4,7 +4,7 @@
    
    <generic name="cores" type="natural" default="16" comment="CPU cores"></generic>
 
-   <slaveinterface name="ctrl" wordorder="high" data="32" type="pipelined" pages="channels">          
+   <slaveinterface name="ctrl" wordorder="high" data="32" type="pipelined">          
       <sdb vendorID="GSI" productID="0x18060200" version="1" date="auto" name="DM-Diagnostics"></sdb>
       <registers>
           <reg  name="reset"                                   write="yes"  bits="1"  pulse="yes"      comment="Resets/clears the diagnostic"></reg>

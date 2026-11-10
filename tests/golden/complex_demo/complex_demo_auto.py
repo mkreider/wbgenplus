@@ -10,7 +10,7 @@ class complex_demo (object):
   'ts_out_get_1'    : 0x104, # ro,         32 b, Timestamp fifos in. Use RD flag to pop
   'ts_out_get_0'    : 0x108, # ro,         32 b, Timestamp fifos in. Use RD flag to pop
   'cnt_get'         : 0x10c, # ro,         16 b, Shows channel timestamp count
-  'ts_flags_rw'     : 0x110, # rw,         32 b, timestamp channel flagbits
+  'ts_flags_rw'     : 0x110, # rw,    g_flags b, timestamp channel flagbits
   }
 
   adrDict_reverse = {
@@ -22,7 +22,7 @@ class complex_demo (object):
   0x104 : 'ts_out_get_1', # ro,         32 b, Timestamp fifos in. Use RD flag to pop
   0x108 : 'ts_out_get_0', # ro,         32 b, Timestamp fifos in. Use RD flag to pop
   0x10c : 'cnt_get', # ro,         16 b, Shows channel timestamp count
-  0x110 : 'ts_flags_rw', # rw,         32 b, timestamp channel flagbits
+  0x110 : 'ts_flags_rw', # rw,    g_flags b, timestamp channel flagbits
   }
 
   flagDict = {

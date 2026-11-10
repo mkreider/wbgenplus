@@ -3,7 +3,8 @@
    <clockdomain name="sys"></clockdomain>
    <clockdomain name="ref"></clockdomain>
 
-   <generic name="channels" type="natural" default="16" comment="Input channels"></generic> 
+   <generic name="channels" type="natural" default="16" comment="Input channels"></generic>
+   <generic name="flags" type="natural" default="4" comment="Flag bits"></generic>
     
    <slaveinterface name="data" wordorder="high" data="32" type="pipelined" pages="channels">          
       <sdb vendorID="GSI" productID="0x78412212" version="1" date="auto" name="Complex slave Data"></sdb>

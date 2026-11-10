@@ -19,6 +19,8 @@ from textformatting import setColIndent as i1
 from textformatting import commentBox as cbox
 
 
+from errors import fail
+
 class wbslave(object):
     def __init__(self, unitname, version, date, slaveIfName, startaddress, selector, pages, ifwidth, sdbVendorID, sdbDeviceID, sdbname, clocks, genIntD, genMiscD, genPrefix):
 
@@ -165,8 +167,7 @@ class wbslave(object):
                 if(startAdr >= lastadr + self.offs):
                     return startAdr
                 else:
-                    print("ERROR: Wrong address specified for Register %s: %08x must be greater %08x!" % (regname, int(startAdr), int(lastadr) + int(self.offs)))
-                    exit(2)
+                    fail("Register <%s>: address 0x%08x overlaps the previous register; it must be at least 0x%08x" % (regname, int(startAdr), int(lastadr) + int(self.offs)))
             else:
                 #find the last valid address (skip internal registers)
                 return lastadr + self.offs
@@ -316,7 +317,8 @@ class wbslave(object):
         s = []
         for key in self.genIntD:
             (gtype, default, description) = self.genIntD[key]
-            tmp.append(wbsVG.generic % (self._getGenPrefix()+key, gtype, default, description))
+            # the line is %-formatted again below, so escape % in the comment
+            tmp.append(wbsVG.generic % (self._getGenPrefix()+key, gtype, default, description.replace('%', '%%')))
         if len(tmp):
             for line in tmp[:-1]:
                 s.append(line % ";")

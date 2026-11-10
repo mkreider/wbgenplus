@@ -40,28 +40,29 @@ use work.complex_demo_auto_pkg.all;
 
 entity complex_demo_auto is
 generic(
-  g_channels  : natural := 16 --Input channels
+  g_channels  : natural := 16;  --Input channels
+  g_flags     : natural := 4    --Flag bits
 );
 Port(
-  clk_sys_i                 : std_logic;                                        -- Clock input for sys domain
-  rst_sys_n_i               : std_logic;                                        -- Reset input (active low) for sys domain
-  clk_ref_i                 : std_logic;                                        -- Clock input for ref domain
-  rst_ref_n_i               : std_logic;                                        -- Reset input (active low) for ref domain
-  status_ref_i              : in  std_logic_vector(g_channels-1 downto 0);      -- tlu 'timestamps pending' bit per channel
-  status_V_ref_i            : in  std_logic_vector(1-1 downto 0);               -- Valid flag - status
-  cmd_ref_o                 : out std_logic_vector(16-1 downto 0);              -- Cmd for tlu controller
+  clk_sys_i                 : std_logic;                                              -- Clock input for sys domain
+  rst_sys_n_i               : std_logic;                                              -- Reset input (active low) for sys domain
+  clk_ref_i                 : std_logic;                                              -- Clock input for ref domain
+  rst_ref_n_i               : std_logic;                                              -- Reset input (active low) for ref domain
+  status_ref_i              : in  std_logic_vector(g_channels-1 downto 0);            -- tlu 'timestamps pending' bit per channel
+  status_V_ref_i            : in  std_logic_vector(1-1 downto 0);                     -- Valid flag - status
+  cmd_ref_o                 : out std_logic_vector(16-1 downto 0);                    -- Cmd for tlu controller
   cmd_fifo_out_pop_ref_i    : in std_logic;
   cmd_fifo_out_empty_ref_o  : out std_logic;
-  cnt_i                     : in  matrix(g_channels-1 downto 0, 16-1 downto 0); -- Shows channel timestamp count
-  cnt_V_i                   : in  std_logic_vector(1-1 downto 0);               -- Valid flag - cnt
-  error_i                   : in  std_logic_vector(1-1 downto 0);               -- Error control
-  stall_i                   : in  std_logic_vector(1-1 downto 0);               -- flow control
-  ts_out_i                  : in  matrix(g_channels-1 downto 0, 64-1 downto 0); -- Timestamp fifos in. Use RD flag to pop
-  ts_out_V_i                : in  std_logic_vector(1-1 downto 0);               -- Valid flag - ts_out
-  ch_sel_o                  : out std_logic_vector(8-1 downto 0);               -- Channel select register
-  clear_fifo_o              : out matrix(g_channels-1 downto 0, 1-1 downto 0);  -- Clears Fifo
-  ts_flags_o                : out matrix(g_channels-1 downto 0, 32-1 downto 0); -- timestamp channel flagbits
-  ts_out_RD_o               : out std_logic_vector(1-1 downto 0);               -- Read enable flag - ts_out
+  cnt_i                     : in  matrix(g_channels-1 downto 0, 16-1 downto 0);       -- Shows channel timestamp count
+  cnt_V_i                   : in  std_logic_vector(1-1 downto 0);                     -- Valid flag - cnt
+  error_i                   : in  std_logic_vector(1-1 downto 0);                     -- Error control
+  stall_i                   : in  std_logic_vector(1-1 downto 0);                     -- flow control
+  ts_out_i                  : in  matrix(g_channels-1 downto 0, 64-1 downto 0);       -- Timestamp fifos in. Use RD flag to pop
+  ts_out_V_i                : in  std_logic_vector(1-1 downto 0);                     -- Valid flag - ts_out
+  ch_sel_o                  : out std_logic_vector(8-1 downto 0);                     -- Channel select register
+  clear_fifo_o              : out matrix(g_channels-1 downto 0, 1-1 downto 0);        -- Clears Fifo
+  ts_flags_o                : out matrix(g_channels-1 downto 0, g_flags-1 downto 0);  -- timestamp channel flagbits
+  ts_out_RD_o               : out std_logic_vector(1-1 downto 0);                     -- Read enable flag - ts_out
   
   data_i                    : in  t_wishbone_slave_in;
   data_o                    : out t_wishbone_slave_out
@@ -90,33 +91,33 @@ architecture rtl of complex_demo_auto is
   signal s_a_ext,
          r_a_ext0,
          r_a_ext1                   : std_logic_vector(9-1 downto 0);
-  signal r_error                    : std_logic_vector(1-1 downto 0)                := std_logic_vector(to_unsigned(0, 1));           -- Error
-  signal s_error_i                  : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- Error control
-  signal s_stall_i                  : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- flow control
-  signal r_status_V                 : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- Valid flag - status
-  signal s_status_V_i               : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- Valid flag - status
-  signal r_status                   : std_logic_vector(g_channels-1 downto 0)       := (others => '0');                               -- tlu 'timestamps pending' bit per channel
-  signal s_status_i                 : std_logic_vector(g_channels-1 downto 0)       := (others => '0');                               -- tlu 'timestamps pending' bit per channel
-  signal r_cmd                      : std_logic_vector(16-1 downto 0)               := (others => '0');                               -- Cmd for tlu controller
+  signal r_error                    : std_logic_vector(1-1 downto 0)                    := std_logic_vector(to_unsigned(0, 1));           -- Error
+  signal s_error_i                  : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- Error control
+  signal s_stall_i                  : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- flow control
+  signal r_status_V                 : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- Valid flag - status
+  signal s_status_V_i               : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- Valid flag - status
+  signal r_status                   : std_logic_vector(g_channels-1 downto 0)           := (others => '0');                               -- tlu 'timestamps pending' bit per channel
+  signal s_status_i                 : std_logic_vector(g_channels-1 downto 0)           := (others => '0');                               -- tlu 'timestamps pending' bit per channel
+  signal r_cmd                      : std_logic_vector(16-1 downto 0)                   := (others => '0');                               -- Cmd for tlu controller
   signal s_cmd_o                    : std_logic;
   signal s_cmd_fifo_out_push        : std_logic;
   signal s_cmd_fifo_out_pop         : std_logic;
   signal s_cmd_fifo_out_full        : std_logic;
   signal s_cmd_fifo_out_almost_full : std_logic;
   signal s_cmd_fifo_out_empty       : std_logic;
-  signal r_ch_qty                   : std_logic_vector(5-1 downto 0)                := std_logic_vector(to_unsigned(g_channels, 5));  -- Individually controllable flag bits
-  signal r_ch_sel                   : std_logic_vector(8-1 downto 0)                := (others => '0');                               -- Channel select register
-  signal r_clear_fifo               : matrix(g_channels-1 downto 0, 1-1 downto 0)   := (others => '0');                               -- Clears Fifo
-  signal r_ts_out_RD                : std_logic_vector(1-1 downto 0)                := std_logic_vector(to_unsigned(0, 1));           -- Read enable flag - ts_out
-  signal r_ts_out_V                 : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- Valid flag - ts_out
-  signal s_ts_out_V_i               : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- Valid flag - ts_out
-  signal r_ts_out                   : matrix(g_channels-1 downto 0, 64-1 downto 0)  := (others => '0');                               -- Timestamp fifos in. Use RD flag to pop
-  signal s_ts_out_i                 : matrix(g_channels-1 downto 0, 64-1 downto 0)  := (others => '0');                               -- Timestamp fifos in. Use RD flag to pop
-  signal r_cnt_V                    : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- Valid flag - cnt
-  signal s_cnt_V_i                  : std_logic_vector(1-1 downto 0)                := (others => '0');                               -- Valid flag - cnt
-  signal r_cnt                      : matrix(g_channels-1 downto 0, 16-1 downto 0)  := (others => '0');                               -- Shows channel timestamp count
-  signal s_cnt_i                    : matrix(g_channels-1 downto 0, 16-1 downto 0)  := (others => '0');                               -- Shows channel timestamp count
-  signal r_ts_flags                 : matrix(g_channels-1 downto 0, 32-1 downto 0)  := (others => '0');                               -- timestamp channel flagbits
+  signal r_ch_qty                   : std_logic_vector(5-1 downto 0)                    := std_logic_vector(to_unsigned(g_channels, 5));  -- Individually controllable flag bits
+  signal r_ch_sel                   : std_logic_vector(8-1 downto 0)                    := (others => '0');                               -- Channel select register
+  signal r_clear_fifo               : matrix(g_channels-1 downto 0, 1-1 downto 0)       := (others => '0');                               -- Clears Fifo
+  signal r_ts_out_RD                : std_logic_vector(1-1 downto 0)                    := std_logic_vector(to_unsigned(0, 1));           -- Read enable flag - ts_out
+  signal r_ts_out_V                 : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- Valid flag - ts_out
+  signal s_ts_out_V_i               : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- Valid flag - ts_out
+  signal r_ts_out                   : matrix(g_channels-1 downto 0, 64-1 downto 0)      := (others => '0');                               -- Timestamp fifos in. Use RD flag to pop
+  signal s_ts_out_i                 : matrix(g_channels-1 downto 0, 64-1 downto 0)      := (others => '0');                               -- Timestamp fifos in. Use RD flag to pop
+  signal r_cnt_V                    : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- Valid flag - cnt
+  signal s_cnt_V_i                  : std_logic_vector(1-1 downto 0)                    := (others => '0');                               -- Valid flag - cnt
+  signal r_cnt                      : matrix(g_channels-1 downto 0, 16-1 downto 0)      := (others => '0');                               -- Shows channel timestamp count
+  signal s_cnt_i                    : matrix(g_channels-1 downto 0, 16-1 downto 0)      := (others => '0');                               -- Shows channel timestamp count
+  signal r_ts_flags                 : matrix(g_channels-1 downto 0, g_flags-1 downto 0) := (others => '0');                               -- timestamp channel flagbits
 
 
 begin

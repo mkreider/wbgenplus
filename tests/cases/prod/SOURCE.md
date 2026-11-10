@@ -20,4 +20,6 @@ These are verbatim copies of the wbgenplus v2 inputs used in production, taken o
 | dm_diag.xml, eca_tap.xml | `high` | generated between b228faf (2018-07) and dc5f889 (2020-02) |
 | prio.xml, ebm.xml | `low` | generated before 2018-07 |
 
+In addition, `pages="channels"` was removed from dm_diag.xml: `channels` is not a declared generic, so the old generator silently used 0 pages, and the new one rejects it (finding 1.14). The generated output is identical.
+
 The other files have no multi-word registers and are unchanged. Make no other edits; a fix that needs a changed input gets its own case.

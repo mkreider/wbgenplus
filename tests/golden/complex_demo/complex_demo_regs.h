@@ -22,6 +22,6 @@
   #define COMPLEX_DEMO_TS_OUT_GET_1   0x104 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
   #define COMPLEX_DEMO_TS_OUT_GET_0   0x108 //ro,         32 b, Timestamp fifos in. Use RD flag to pop
   #define COMPLEX_DEMO_CNT_GET        0x10c //ro,         16 b, Shows channel timestamp count
-  #define COMPLEX_DEMO_TS_FLAGS_RW    0x110 //rw,         32 b, timestamp channel flagbits
+  #define COMPLEX_DEMO_TS_FLAGS_RW    0x110 //rw,    g_flags b, timestamp channel flagbits
 
 #endif

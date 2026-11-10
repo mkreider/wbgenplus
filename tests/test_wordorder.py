@@ -21,14 +21,14 @@ def _variant(tmp_path, src, wordorder):
 def test_missing_wordorder_is_an_error(src, tmp_path):
     proc, out = run_wbgenplus(_variant(tmp_path, src, None), tmp_path / "run")
     assert proc.returncode != 0
-    assert "wider than the 32 bit bus" in proc.stdout
+    assert "wider than the 32 bit bus" in proc.stderr
     assert not any(k.endswith(".vhd") for k in out), "no output may be written on error"
 
 
 def test_invalid_wordorder_is_an_error(tmp_path):
     proc, out = run_wbgenplus(_variant(tmp_path, "edge/wide_high", "big"), tmp_path / "run")
     assert proc.returncode != 0
-    assert "wordorder <big> is invalid" in proc.stdout
+    assert "wordorder <big> is invalid" in proc.stderr
     assert not out
 
 

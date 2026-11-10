@@ -1,0 +1,14 @@
+<wbdevice author="T" email="t@x" version="0.0.1">
+   <clockdomain name="sys"></clockdomain>
+   <generic name="lanes" type="natural" default="4" comment="lanes, 25% each"></generic>
+   <slaveinterface name="ctrl" data="32" type="pipelined">
+      <sdb vendorID="GSI" productID="0x12345679" version="1" date="auto" name="RESET_COMMENT"></sdb>
+      <registers>
+         <reg name="all_ones"  read="yes" write="yes" bits="8"  reset="ones"   comment="reset to ones, 100% sure"></reg>
+         <reg name="all_zero"  read="yes" write="yes" bits="8"  reset="zeroes" comment="reset to zeroes"></reg>
+         <reg name="hex_rst"   read="yes" write="yes" bits="16" reset="0xbeef" comment="hex reset"></reg>
+         <reg name="pct"       read="yes" drive="yes" bits="4"  flags="yes"    comment="load 50%, %s %d %% stay literal"></reg>
+         <reg name="pct_w"     write="yes" bits="lanes" pulse="yes" access="atomic" comment="atomic 10% pulse"></reg>
+      </registers>
+   </slaveinterface>
+</wbdevice>
